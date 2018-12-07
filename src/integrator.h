@@ -131,7 +131,7 @@ PSODESolver<PolyOrder, NumSegments, NX, NU>::PSODESolver(casadi::Function ODE, c
     casadi::SX LBX = casadi::SX::repmat(-casadi::SX::inf(), NX, 1);
     casadi::SX UBX = casadi::SX::repmat(casadi::SX::inf(), NX, 1);
     /** dirty hack */
-    LBX[0] = P(1,1) * 2.0;
+    //LBX[0] = P(1,1) * 2.0;
     casadi::SX lbx = casadi::SX::repmat(LBX, (NumSegments * PolyOrder + 1), 1);
     casadi::SX ubx = casadi::SX::repmat(UBX, (NumSegments * PolyOrder + 1), 1);
 

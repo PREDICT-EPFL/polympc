@@ -34,13 +34,13 @@ public:
     /** contsraints setters */
     void setLBX(const casadi::DM &_lbx)
     {
-        ARG["lbx"](casadi::Slice(0, NX * (PolyOrder * NumSegments + 1 ))) =
+        ARG["lbx"](casadi::Slice(0, (NX + 2) * (PolyOrder * NumSegments + 1 ))) =
                    casadi::SX::repmat(casadi::SX::mtimes(Scale_X, _lbx), PolyOrder * NumSegments + 1, 1);
     }
 
     void setUBX(const casadi::DM &_ubx)
     {
-        ARG["ubx"](casadi::Slice(0, NX * (PolyOrder * NumSegments + 1 ))) =
+        ARG["ubx"](casadi::Slice(0, (NX + 2) * (PolyOrder * NumSegments + 1 ))) =
                    casadi::SX::repmat(casadi::SX::mtimes(Scale_X, _ubx), PolyOrder * NumSegments + 1, 1);
     }
 

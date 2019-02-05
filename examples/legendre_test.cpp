@@ -1,4 +1,5 @@
-#include "legendre.hpp"
+//#include "legendre.hpp"
+#include "polynomials/legendre.hpp"
 #include "integrator.h"
 
 struct Integrand
@@ -95,19 +96,6 @@ int main()
     }
 
     galerkin_file.close();
-
-
-    /** compute rank-4 tensor for EVA */
-    leg.compute_m3_tensor();
-    Legendre::M3T m3t = leg._M3Tensor;
-    Eigen::Tensor<double, 3> m3chip = m3t.chip(0,3);
-    kchip = m3chip.chip(0,2);
-
-    for (int i = 0; i < m3t.dimension(3); ++i)
-    {
-        std::string name = std::to_string(i);
-        std::ofstream file_i(name);
-    }
 
 
     /** solve the system x_dot = -A x */

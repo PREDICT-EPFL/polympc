@@ -1,4 +1,5 @@
-#include "ebyshev.hpp"
+//#include "ebyshev.hpp"
+#include "polynomials/ebyshev.hpp"
 
 struct Integrand
 {

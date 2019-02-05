@@ -1,4 +1,5 @@
-#include "legendre.hpp"
+//#include "legendre.hpp"
+#include "polynomials/legendre.hpp"
 #include "integrator.h"
 
 /** uniform random variable */

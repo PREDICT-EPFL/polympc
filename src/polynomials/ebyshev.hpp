@@ -5,6 +5,8 @@
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Sparse"
 
+enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+
 template<typename Derived, int size>
 Eigen::VectorBlock<Derived, size>
 segment(Eigen::MatrixBase<Derived>& v, int start)
@@ -19,16 +21,14 @@ segment(const Eigen::MatrixBase<Derived>& v, int start)
 }
 
 
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar = double>
+/** --------------------------------------------------------------- */
+/** --------------------------------------------------------------- */
+
+template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename Scalar = double>
 class Chebyshev
 {
 private:
-    static constexpr int NUM_NODES = PolyOrder + NumSegments + 1;
+    static constexpr int NUM_NODES = PolyOrder + 1;
 
 public:
     /** constructor */
@@ -36,18 +36,17 @@ public:
     ~Chebyshev(){}
 
     /** datat types */
-    using XTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, 1>;
-    using UTYPE = Eigen::Matrix<Scalar, NUM_NODES * NU, 1>;
-    using PTYPE = Eigen::Matrix<Scalar, NUM_NODES * NP, 1>;
+    //using XTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, 1>;
+    //using UTYPE = Eigen::Matrix<Scalar, NUM_NODES * NU, 1>;
+    //using PTYPE = Eigen::Matrix<Scalar, NUM_NODES * NP, 1>;
 
     using QUADWEIGHTYPE = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
     using NODESVECTYPE  = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
     using DIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
-    using COMPDIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, NUM_NODES * NX>;
+    //using COMPDIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, NUM_NODES * NX>;
 
     /** some getters */
     DIFFMTYPE D(){return _D;}
-    COMPDIFFMTYPE CompD(){return _ComD;}
     QUADWEIGHTYPE QWeights(){return _QuadWeights;}
     NODESVECTYPE CPoints(){return _Nodes;}
 
@@ -91,59 +90,26 @@ private:
     NODESVECTYPE CollocPoints();
     /** compute clenshaw-Curtis quadrature weights */
     QUADWEIGHTYPE QuadWeights();
-    /** compute composite differentiation matrix */
-    COMPDIFFMTYPE CompDiffMatrix();
 
     /** private members */
     /** Diff matrix */
     DIFFMTYPE _D;
-    /** Composite diff matrix */
-    COMPDIFFMTYPE _ComD;
     /** Collocation points */
     NODESVECTYPE _Nodes;
     /** Quadrature weights */
     QUADWEIGHTYPE _QuadWeights;
 
     /** variables to store interpolation coefficients */
-    XTYPE _X;
-    UTYPE _U;
-    PTYPE _P;
-
-
-    /**
-    BaseClass VarX(){return _X;}
-    BaseClass VarU(){return _U;}
-    BaseClass VarP(){return _P;}
-
-    BaseClass CollocateDynamics(casadi::Function &dynamics, const double &t0, const double &tf);
-    BaseClass CollocateCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
-                            const double &t0, const double &tf);
-    BaseClass CollocateIdCost(casadi::Function &IdCost, casadi::DM data, const double &t0, const double &tf);
-
-    typedef std::function<BaseClass(BaseClass, BaseClass, BaseClass)> functor;
-    */
-    /** right hand side function of the ODE */
-    /**
-    functor _ode;
-    double _t0, _tf;
-    functor CollocateDynamics2(const functor &dynamics, const double &t0, const double &tf);
-    BaseClass collocate_dynamics(const BaseClass &X, const BaseClass &U, const BaseClass &P);
-
-private:
-
-    /** helper functions */
-    //BaseClass range(const uint &first, const uint &last, const uint &step);
+    // XTYPE _X;
+    // UTYPE _U;
+    // PTYPE _P;
 };
 
 /** @brief constructor */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Chebyshev()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
 {
+    EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
     /** initialize pseudopsectral scheme */
     _Nodes = CollocPoints();
     std::cout << "Nodal points: " << _Nodes.transpose() << "\n";
@@ -153,20 +119,15 @@ Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Chebyshev()
     //_ComD        = CompDiffMatrix();
 
     /** initialize coefficients */
-    _X = XTYPE::Zero();
-    _U = UTYPE::Zero();
-    _P = PTYPE::Zero();
+    //_X = XTYPE::Zero();
+    //_U = UTYPE::Zero();
+    //_P = PTYPE::Zero();
 }
 
 /** @brief : compute nodal points for the Chebyshev collocation scheme */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-typename Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::NODESVECTYPE
-Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::CollocPoints()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Chebyshev<PolyOrder, Qtype, Scalar>::NODESVECTYPE
+Chebyshev<PolyOrder, Qtype, Scalar>::CollocPoints()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     NODESVECTYPE grid = NODESVECTYPE::LinSpaced(PolyOrder + 1, 0, PolyOrder);
@@ -174,14 +135,9 @@ Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::CollocPoints()
 }
 
 /** @brief : compute Clenshaw-Curtis quadrature weights */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-typename Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QUADWEIGHTYPE
-Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QuadWeights()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Chebyshev<PolyOrder, Qtype, Scalar>::QUADWEIGHTYPE
+Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     NODESVECTYPE theta = NODESVECTYPE::LinSpaced(PolyOrder + 1, 0, PolyOrder);
@@ -220,14 +176,9 @@ Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QuadWeights()
 }
 
 /** @brief : Compute integrals using CC-quadrature rule */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
+template<int PolyOrder, q_type Qtype,typename Scalar>
 template<class Integrand>
-Scalar Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
+Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
     Scalar integral = 0;
     Integrand f;
@@ -242,15 +193,10 @@ Scalar Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::integrate(const Sc
 
 
 /** @brief : Compute orthogonal projection onto the Chebyshev basis using Chebyshev-Gauss quadrature*/
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
+template<int PolyOrder, q_type Qtype, typename Scalar>
 template<class Function>
-typename Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Projection
-Chebyshev<PolyOrder, NumSegments, NX, NU, NP, Scalar>::project(const Scalar &t0, const Scalar &tf)
+typename Chebyshev<PolyOrder, Qtype, Scalar>::Projection
+Chebyshev<PolyOrder, Qtype, Scalar>::project(const Scalar &t0, const Scalar &tf)
 {
     Projection proj;
     Function f;

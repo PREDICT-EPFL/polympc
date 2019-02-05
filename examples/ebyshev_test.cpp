@@ -18,7 +18,7 @@ struct Integrand
 
 int main()
 {
-    using chebyshev = Chebyshev<10,2,3,4,5>;
+    using chebyshev = Chebyshev<10, GAUSS>;
     chebyshev cheb;
 
     /** integrate value */

@@ -1,9 +1,13 @@
 //#include "ebyshev.hpp"
 #include "polynomials/ebyshev.hpp"
+#include "polynomials/projection.hpp"
 
 struct Integrand
 {
-    double operator ()(const double &x)
+    Integrand(){}
+    ~Integrand(){}
+
+    double operator ()(const double &x) const
     {
         double sgm = 3.0;
         double mu = 1.0;
@@ -18,16 +22,17 @@ struct Integrand
 
 int main()
 {
-    using chebyshev = Chebyshev<10, GAUSS>;
+    using chebyshev = Chebyshev<10, GAUSS_LOBATTO>;
     chebyshev cheb;
 
     /** integrate value */
     Integrand f;
     float result = cheb.integrate<Integrand>(1,6);
-    chebyshev::Projection proj = cheb.project<Integrand>(1,6);
+    Projection<chebyshev> proj(f, 1, 6);
+
     std::cout << "Integration resuls: " << result << "\n";
     std::cout << "Projection: " << proj.coeff.transpose() << "\n";
-
     std::cout << "f(x): " << f(4) << " fN(x): " << proj.eval(4) << "\n";
+
     return 0;
 }

@@ -38,7 +38,7 @@ MatrixType<Scalar> Tensor_to_Matrix(const Eigen::Tensor<Scalar,rank> &tensor,con
 
 int main()
 {
-    using Legendre = Legendre<8, GAUSS_LOBATTO>;
+    using Legendre = Legendre<5, GAUSS_LOBATTO>;
     Legendre leg;
     Integrand f;
     Unif distrib;
@@ -55,8 +55,6 @@ int main()
     /** project lambda random variable */
     proj.project(distrib, -2, 4);
     std::cout << "Projection: " << proj.coeff.transpose() << "\n";
-
-    return 0;
 
     /** get Galerkin tensor */
     Legendre::tensor_t Galerkin = leg.getGalerkinTensor();

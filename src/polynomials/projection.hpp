@@ -68,36 +68,4 @@ private:
 };
 
 
-/** @brief : Compute orthogonal projection onto the Chebyshev basis using Chebyshev-Gauss quadrature*/
-/**
-template<int PolyOrder, q_type Qtype, typename Scalar>
-template<class Function>
-typename Legendre<PolyOrder, Qtype, Scalar>::Projection
-Legendre<PolyOrder, Qtype, Scalar>::project(const Scalar &t0, const Scalar &tf)
-{
-    Projection proj;
-    Function f;
-    const Scalar t_scale = (tf - t0) / 2;
-    const Scalar t_delta = (tf + t0) / 2;
-
-    for(int n = 0; n <= PolyOrder; ++n)
-    {
-        Scalar fn;
-        Scalar inner_prod = 0;
-        for(int i = 0; i <= PolyOrder; ++i)
-        {
-            inner_prod += f(t_scale * _Nodes[i] + t_delta) * Eigen::poly_eval(_Ln.col(n), _Nodes[i]) * _QuadWeights[i];
-        }
-        fn = ((2.0 * n + 1) / 2.0) * inner_prod;
-        proj.coeff[n] = fn;
-    }
-    proj.coeff[PolyOrder] *= (PolyOrder / (2.0 * PolyOrder + 1));
-    proj.t_scale = t_scale;
-    proj.t_delta = t_delta;
-
-    return proj;
-}
-*/
-
-
 #endif // PROJECTION_HPP

@@ -95,10 +95,10 @@ public:
 
     using Scalar = _Scalar;
 
-    using q_weights_t = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
-    using nodes_t     = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
+    using q_weights_t = Eigen::Matrix<Scalar, NUM_NODES, 1>;
+    using nodes_t     = Eigen::Matrix<Scalar, NUM_NODES, 1>;
     using diff_mat_t  = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
-    using tensor_t    = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1, PolyOrder + 1>>;
+    using tensor_t    = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<NUM_NODES, NUM_NODES, NUM_NODES>>;
 
     /** some getters */
     diff_mat_t D(){return _D;}
@@ -130,17 +130,17 @@ private:
 
     /** private members */
     /** Diff matrix */
-    diff_mat_t _D;
+    diff_mat_t _D = diff_mat_t::Zero();
     /** Collocation points */
-    nodes_t _Nodes;
+    nodes_t _Nodes = nodes_t::Zero();
     /** Quadrature weights */
-    q_weights_t _QuadWeights;
+    q_weights_t _QuadWeights = q_weights_t::Zero();
     /** Normalization factors */
-    q_weights_t _NormFactors;
+    q_weights_t _NormFactors = q_weights_t::Zero();
 
     /** Legendre basis */
     using LnBASIS = Eigen::Matrix<Scalar, PolyOrder + 1, PolyOrder + 1>;
-    LnBASIS _Ln;
+    LnBASIS _Ln = LnBASIS::Zero();
     void generate_legendre_basis();
 
     /** Tensor to hold Galerkin product */
@@ -265,7 +265,6 @@ Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sca
 template<int PolyOrder, q_type Qtype, typename Scalar>
 void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
 {
-    _Ln = LnBASIS::Zero();
     /** the first basis polynomial is L0(x) = 1 */
     _Ln(0,0) = 1;
     /** the second basis polynomial is L1(x) = x */
@@ -283,10 +282,13 @@ void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
     }
 
     /** create polynomial basis */
-    for(int n = 1; n <= PolyOrder - 1; ++n)
+    /** @note had to put volatile here since the compiler messes copies of Ln
+     * columns here in Release mode */
+    for(volatile int n = 1; n < PolyOrder; ++n)
+    {
         _Ln.col(n+1) = a[n] * poly_mul(_Ln.col(n), x) - c[n] * _Ln.col(n-1);
+    }
 }
-
 
 /** @brief : Compute Galerkin Tensor */
 template<int PolyOrder, q_type Qtype, typename Scalar>
@@ -310,5 +312,6 @@ void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
     }
 
 }
+
 
 #endif // LEGENDRE_HPP

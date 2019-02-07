@@ -47,6 +47,7 @@ public:
     q_weights_t QWeights(){return _QuadWeights;}
     q_weights_t CCQWeights(){return _CCQuadWeights;}
     nodes_t CPoints(){return _Nodes;}
+    q_weights_t NFactors(){return _NormFactors;}
 
     /** numerical integration of an arbitrary function */
     template<class Integrand>
@@ -68,6 +69,8 @@ private:
     q_weights_t CCQuadWeights();
     /** compute Chebyshev quadrature points */
     q_weights_t QuadWeights();
+    /** compute normalization factors */
+    q_weights_t NormFactors();
 
     /** private members */
     /** Diff matrix */
@@ -78,6 +81,8 @@ private:
     q_weights_t _QuadWeights;
     /** Chebyshev quadrature weights */
     q_weights_t _CCQuadWeights;
+    /** Normalisation factors */
+    q_weights_t _NormFactors;
 
     /** Evaluate Chebyshev polynomial of order n*/
     inline Scalar Tn(const Scalar &arg, const int &n){return std::cos(n * std::acos(arg));}
@@ -90,10 +95,12 @@ Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
     EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
     /** initialize pseudopsectral scheme */
     _Nodes = CollocPoints();
-    std::cout << "Nodal points: " << _Nodes.transpose() << "\n";
+    //std::cout << "Nodal points: " << _Nodes.transpose() << "\n";
     _QuadWeights = QuadWeights();
-    std::cout << "Quadrature weights: " << _QuadWeights.transpose() << "\n";
+    //std::cout << "Quadrature weights: " << _QuadWeights.transpose() << "\n";
     _CCQuadWeights = CCQuadWeights();
+
+    _NormFactors = NormFactors();
     //_D           = DiffMatrix();
     //_ComD        = CompDiffMatrix();
 }
@@ -156,6 +163,16 @@ Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
 {
     q_weights_t w = q_weights_t::Constant(static_cast<Scalar>(M_PI / PolyOrder));
     w[0] *= 0.5; w[PolyOrder] *= 0.5;
+    return w;
+}
+
+/** @brief : compute Chebyshev normalisation factors: c = 1/ck */
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
+Chebyshev<PolyOrder, Qtype, Scalar>::NormFactors()
+{
+    q_weights_t w = q_weights_t::Constant(static_cast<Scalar>(Scalar(2) / M_PI));
+    w[0] *= Scalar(0.5);
     return w;
 }
 

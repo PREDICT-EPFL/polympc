@@ -22,12 +22,12 @@ struct Integrand
 
 int main()
 {
-    using chebyshev = Chebyshev<10, GAUSS_LOBATTO>;
+    using chebyshev = Chebyshev<8, GAUSS_LOBATTO>;
     chebyshev cheb;
 
     /** integrate value */
     Integrand f;
-    float result = cheb.integrate<Integrand>(1,6);
+    float result = cheb.integrate<Integrand>();
     Projection<chebyshev> proj(f, 1, 6);
 
     std::cout << "Integration resuls: " << result << "\n";

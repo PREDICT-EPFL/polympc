@@ -1,11 +1,12 @@
 //#include "legendre.hpp"
 #include "polynomials/legendre.hpp"
+#include "polynomials/projection.hpp"
 #include "integrator.h"
 
 /** uniform random variable */
 struct Unif
 {
-    double operator ()(const double &x)
+    double operator ()(const double &x) const
     {
         return  x;
     }
@@ -14,11 +15,12 @@ struct Unif
 
 int main(void)
 {
-    using Legendre = Legendre<5,1,3,4,5>;
+    using Legendre = Legendre<5>;
     Legendre leg;
+    Unif distr;
 
     /** project lambda random variable */
-    Legendre::Projection proj = leg.project<Unif>(4, 6);
+    Projection<Legendre> proj(distr, 4, 6);
     std::cout << "Projection: " << proj.coeff.transpose() << "\n";
 
     /** solve x_dot = v * f_kite(x,u), where v ~ Unif(1,3) */
@@ -35,9 +37,9 @@ int main(void)
     casadi::Function f2_fun = casadi::Function("f2", {state}, {f2});
     casadi::Function f3_fun = casadi::Function("f3", {state}, {f3});
 
-    Legendre::QUADWEIGHTYPE weights = leg.QWeights();
-    Legendre::NODESVECTYPE nodes = leg.CPoints();
-    Legendre::NODESVECTYPE nfactors = leg.NFactors();
+    Legendre::q_weights_t weights = leg.QWeights();
+    Legendre::nodes_t nodes = leg.CPoints();
+    Legendre::q_weights_t nfactors = leg.NFactors();
     int N = nodes.SizeAtCompileTime;
 
     /** construct K = N differential equations */
@@ -51,12 +53,12 @@ int main(void)
             double omega = 0;
             for(int j = 0; j < N; ++j)
             {
-                arg1 += x[j] * leg.Ln(nodes[n], j);
-                arg2 += x[j + N] * leg.Ln(nodes[n], j);
-                arg3 += x[j + 2 * N] * leg.Ln(nodes[n], j);
-                omega += proj.coeff[j] * leg.Ln(nodes[n], j);
+                arg1 += x[j] * leg.eval(nodes[n], j);
+                arg2 += x[j + N] * leg.eval(nodes[n], j);
+                arg3 += x[j + 2 * N] * leg.eval(nodes[n], j);
+                omega += proj.coeff[j] * leg.eval(nodes[n], j);
             }
-            double fi_k = leg.Ln(nodes[n], k);
+            double fi_k = leg.eval(nodes[n], k);
             casadi::SX f1_n = f1_fun(casadi::SX::vertcat({arg1, arg2, arg3}))[0];
             casadi::SX f2_n = f2_fun(casadi::SX::vertcat({arg1, arg2, arg3}))[0];
             casadi::SX f3_n = f3_fun(casadi::SX::vertcat({arg1, arg2, arg3}))[0];
@@ -64,9 +66,9 @@ int main(void)
             integral2 += (weights[n] * omega * fi_k) * f2_n;
             integral3 += (weights[n] * omega * fi_k) * f3_n;
         }
-        sode[k] = (1.0 / nfactors[k]) * integral1;
-        sode[k + N] = (1.0 / nfactors[k]) * integral2;
-        sode[k + 2 * N] = (1.0 / nfactors[k]) * integral3;
+        sode[k] = nfactors[k] * integral1;
+        sode[k + N] = nfactors[k] * integral2;
+        sode[k + 2 * N] = nfactors[k] * integral3;
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{x, u},{sode});

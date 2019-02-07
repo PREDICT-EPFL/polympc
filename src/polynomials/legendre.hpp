@@ -8,6 +8,8 @@
 #include "eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "eigen3/unsupported/Eigen/CXX11/TensorSymmetry"
 
+enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+
 /** utility functions */
 template<typename Derived, int size>
 Eigen::VectorBlock<Derived, size>
@@ -80,65 +82,33 @@ typename Derived::PlainObject poly_diff(const Eigen::MatrixBase<Derived> &p)
 /** ---------------------------------------------------------------------*/
 
 
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar = double>
+template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Legendre
 {
 private:
-    static constexpr int NUM_NODES = PolyOrder + NumSegments + 1;
+    static constexpr int NUM_NODES = PolyOrder + 1;
 
 public:
     /** constructor */
     Legendre();
     ~Legendre(){}
 
-    /** datat types */
-    using XTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, 1>;
-    using UTYPE = Eigen::Matrix<Scalar, NUM_NODES * NU, 1>;
-    using PTYPE = Eigen::Matrix<Scalar, NUM_NODES * NP, 1>;
+    using Scalar = _Scalar;
 
-    using QUADWEIGHTYPE = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
-    using NODESVECTYPE  = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
-    using DIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
-    using COMPDIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, NUM_NODES * NX>;
-    using MTENSOR = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1, PolyOrder + 1>>;
+    using q_weights_t = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
+    using nodes_t     = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
+    using diff_mat_t  = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
+    using tensor_t    = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1, PolyOrder + 1>>;
 
     /** some getters */
-    DIFFMTYPE D(){return _D;}
-    COMPDIFFMTYPE CompD(){return _ComD;}
-    QUADWEIGHTYPE QWeights(){return _QuadWeights;}
-    NODESVECTYPE CPoints(){return _Nodes;}
-    NODESVECTYPE NFactors(){return _NormFactors;}
-    MTENSOR getGalerkinTensor(){return _Galerkin;}
+    diff_mat_t D(){return _D;}
+    q_weights_t QWeights(){return _QuadWeights;}
+    nodes_t CPoints(){return _Nodes;}
+    q_weights_t NFactors(){return _NormFactors;}
+    tensor_t getGalerkinTensor(){return _Galerkin;}
 
-    /** @brief : Orthogonal projections */
-    /** a struct to store Legendre projections */
-    struct Projection : public Legendre
-    {
-        QUADWEIGHTYPE coeff;
-        Scalar t_scale, t_delta;
-        Scalar eval(const Scalar &arg)
-        {
-            Scalar val = 0;
-            for(int i = 0; i <= PolyOrder; ++i)
-            {
-                Scalar _arg = (arg - t_delta) / t_scale;
-                val += coeff[i] * Ln(_arg, i);
-            }
-            return val;
-        }
-    };
-
-    /** Evaluate Lengendre polynomial of order n*/
-    Scalar Ln(const Scalar &arg, const int &n){return Eigen::poly_eval(_Ln.col(n), arg);}
-
-    /** Legendre transform using orthogonal projection */
-    template<class Function>
-    Projection project(const Scalar &t0 = -1, const Scalar &tf = 1);
+    /** Evaluate Legendre polynomial of order n @bug put protectin against n > PolyOrder*/
+    Scalar eval(const Scalar &arg, const int &n){return Ln(arg, n);}
 
     /** numerical integration of an arbitrary function using LGL quadratures*/
     template<class Integrand>
@@ -150,32 +120,23 @@ public:
 private:
 
     /** generate Differentiation matrix */
-    DIFFMTYPE DiffMatrix();
+    diff_mat_t DiffMatrix();
     /** compute nodal points */
-    NODESVECTYPE CollocPoints();
+    nodes_t CollocPoints();
     /** compute clenshaw-Curtis quadrature weights */
-    QUADWEIGHTYPE QuadWeights();
+    q_weights_t QuadWeights();
     /** compute normalization factors */
-    NODESVECTYPE NormFactors();
-    /** compute composite differentiation matrix */
-    COMPDIFFMTYPE CompDiffMatrix();
+    q_weights_t NormFactors();
 
     /** private members */
     /** Diff matrix */
-    DIFFMTYPE _D;
-    /** Composite diff matrix */
-    COMPDIFFMTYPE _ComD;
+    diff_mat_t _D;
     /** Collocation points */
-    NODESVECTYPE _Nodes;
+    nodes_t _Nodes;
     /** Quadrature weights */
-    QUADWEIGHTYPE _QuadWeights;
+    q_weights_t _QuadWeights;
     /** Normalization factors */
-    NODESVECTYPE _NormFactors;
-
-    /** variables to store interpolation coefficients */
-    XTYPE _X;
-    UTYPE _U;
-    PTYPE _P;
+    q_weights_t _NormFactors;
 
     /** Legendre basis */
     using LnBASIS = Eigen::Matrix<Scalar, PolyOrder + 1, PolyOrder + 1>;
@@ -183,44 +144,22 @@ private:
     void generate_legendre_basis();
 
     /** Tensor to hold Galerkin product */
-    Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1, PolyOrder + 1>> _Galerkin;
+    tensor_t _Galerkin;
     //Eigen::DynamicSGroup symmetry; // NOT EFFICIENT
     void compute_galerkin_tensor();
+
     Scalar poly_eval(const int &order, const Scalar &arg) {return Eigen::poly_eval(_Ln.col(order), arg); }
 
-    /**
-    BaseClass VarX(){return _X;}
-    BaseClass VarU(){return _U;}
-    BaseClass VarP(){return _P;}
-
-    BaseClass CollocateDynamics(casadi::Function &dynamics, const double &t0, const double &tf);
-    BaseClass CollocateCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
-                            const double &t0, const double &tf);
-    BaseClass CollocateIdCost(casadi::Function &IdCost, casadi::DM data, const double &t0, const double &tf);
-
-    typedef std::function<BaseClass(BaseClass, BaseClass, BaseClass)> functor;
-    */
-    /** right hand side function of the ODE */
-    /**
-    functor _ode;
-    double _t0, _tf;
-    functor CollocateDynamics2(const functor &dynamics, const double &t0, const double &tf);
-    BaseClass collocate_dynamics(const BaseClass &X, const BaseClass &U, const BaseClass &P);
-
-private:
-
-    /** helper functions */
+    /** Evaluate Lengendre polynomial of order n*/
+    Scalar Ln(const Scalar &arg, const int &n){return Eigen::poly_eval(_Ln.col(n), arg);}
 };
 
 /** @brief constructor */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Legendre()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+Legendre<PolyOrder, Qtype, Scalar>::Legendre()
 {
+    EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
+
     /** initialize pseudopsectral scheme */
     generate_legendre_basis();
     //std::cout << "Polynomial basis: \n" << _Ln << "\n";
@@ -243,43 +182,33 @@ Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Legendre()
     //_D           = DiffMatrix();
     //_ComD        = CompDiffMatrix();
 
-    /** initialize coefficients */
-    _X = XTYPE::Zero();
-    _U = UTYPE::Zero();
-    _P = PTYPE::Zero();
-
-    std::cout << "CONSTRUCTOR CALL \n";
+    std::cout << "Legendre: constuctor call \n";
 }
 
 /** @brief : compute nodal points for the Legendre collocation scheme */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-typename Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::NODESVECTYPE
-Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::CollocPoints()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::nodes_t
+Legendre<PolyOrder, Qtype, Scalar>::CollocPoints()
 {
     /** Legendre (LGL) collocation points for the interval [-1, 1]*/
     /** compute roots of LN_dot(x) polynomial - extremas of LN(x) */
-    NODESVECTYPE LN_dot = poly_diff(_Ln.col(PolyOrder));
+    nodes_t LN_dot = poly_diff(_Ln.col(PolyOrder));
     Scalar eps = std::numeric_limits<Scalar>::epsilon();
 
     /** prepare the polynomial for the solver */
     for(int i = 0; i < PolyOrder; ++i)
     {
         if(std::fabs(LN_dot[i]) <= eps)
-            LN_dot[i] = static_cast<Scalar>(0);
+            LN_dot[i] = Scalar(0);
     }
 
     Eigen::PolynomialSolver<Scalar, PolyOrder-1> root_finder;
-    root_finder.compute(segment<NODESVECTYPE, PolyOrder>(LN_dot, 0)); // remove the last zero
+    root_finder.compute(segment<nodes_t, PolyOrder>(LN_dot, 0)); // remove the last zero
 
-    NODESVECTYPE nodes = NODESVECTYPE::Zero();
+    nodes_t nodes = nodes_t::Zero();
     nodes[0] = -1; nodes[PolyOrder] = 1;
 
-    segment<NODESVECTYPE, PolyOrder - 1>(nodes, 1) = root_finder.roots().real();
+    segment<nodes_t, PolyOrder - 1>(nodes, 1) = root_finder.roots().real();
 
     /** sort the nodes in the ascending order */
     std::sort(nodes.data(), nodes.data() + nodes.size());
@@ -287,18 +216,13 @@ Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::CollocPoints()
 }
 
 /** @brief : compute LGL quadrature weights */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-typename Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QUADWEIGHTYPE
-Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QuadWeights()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
+Legendre<PolyOrder, Qtype, Scalar>::QuadWeights()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
-    QUADWEIGHTYPE weights = QUADWEIGHTYPE::Zero();
-    const Scalar coeff = static_cast<Scalar>(2) / (PolyOrder * (PolyOrder + 1));
+    q_weights_t weights = q_weights_t::Zero();
+    const Scalar coeff = Scalar(2) / (PolyOrder * (PolyOrder + 1));
     for(int i = 0; i <= PolyOrder; ++i)
     {
         Scalar LN_xi = Eigen::poly_eval(_Ln.col(PolyOrder), _Nodes[i]);
@@ -307,34 +231,24 @@ Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::QuadWeights()
     return weights;
 }
 
-/** @brief : compute LGL normalization factors */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-typename Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::NODESVECTYPE
-Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::NormFactors()
+/** @brief : compute LGL normalization factors c = 1 / ck */
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
+Legendre<PolyOrder, Qtype, Scalar>::NormFactors()
 {
-    NODESVECTYPE factors = NODESVECTYPE::Zero();
+    q_weights_t factors = q_weights_t::Zero();
     for(int k = 0; k < PolyOrder; ++k)
     {
-        factors[k] = 2.0 / (2 * k + 1);
+        factors[k] = (Scalar(2) * k + 1) / Scalar(2);
     }
-    factors[PolyOrder] = 2.0 / (PolyOrder);
+    factors[PolyOrder] =  PolyOrder / Scalar(2);
     return factors;
 }
 
 /** @brief : Compute integrals using LGL-quadrature rule */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
+template<int PolyOrder, q_type Qtype, typename Scalar>
 template<class Integrand>
-Scalar Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
+Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
     Scalar integral = 0;
     Integrand f;
@@ -347,50 +261,9 @@ Scalar Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::integrate(const Sca
     return t_scale * integral;
 }
 
-
-/** @brief : Compute orthogonal projection onto the Chebyshev basis using Chebyshev-Gauss quadrature*/
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-template<class Function>
-typename Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::Projection
-Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::project(const Scalar &t0, const Scalar &tf)
-{
-    Projection proj;
-    Function f;
-    const Scalar t_scale = (tf - t0) / 2;
-    const Scalar t_delta = (tf + t0) / 2;
-
-    for(int n = 0; n <= PolyOrder; ++n)
-    {
-        Scalar fn;
-        Scalar inner_prod = 0;
-        for(int i = 0; i <= PolyOrder; ++i)
-        {
-            inner_prod += f(t_scale * _Nodes[i] + t_delta) * Eigen::poly_eval(_Ln.col(n), _Nodes[i]) * _QuadWeights[i];
-        }
-        fn = ((2.0 * n + 1) / 2.0) * inner_prod;
-        proj.coeff[n] = fn;
-    }
-    proj.coeff[PolyOrder] *= (PolyOrder / (2.0 * PolyOrder + 1));
-    proj.t_scale = t_scale;
-    proj.t_delta = t_delta;
-
-    return proj;
-}
-
-
 /** @brief : Compute Legendre basis*/
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-void Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::generate_legendre_basis()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
 {
     _Ln = LnBASIS::Zero();
     /** the first basis polynomial is L0(x) = 1 */
@@ -399,14 +272,14 @@ void Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::generate_legendre_bas
     _Ln(1,1) = 1;
 
     /** compute recurrent coefficients */
-    NODESVECTYPE a = NODESVECTYPE::Zero();
-    NODESVECTYPE c = NODESVECTYPE::Zero();
-    NODESVECTYPE x = NODESVECTYPE::Zero(); // p(x) = x
+    nodes_t a = nodes_t::Zero();
+    nodes_t c = nodes_t::Zero();
+    nodes_t x = nodes_t::Zero(); // p(x) = x
     x[1] = 1;
     for(int n = 0; n <= PolyOrder; ++n)
     {
-        a[n] = static_cast<Scalar>(2 * n + 1) / (n + 1);
-        c[n] = static_cast<Scalar>(n) / (n + 1);
+        a[n] = Scalar(2 * n + 1) / (n + 1);
+        c[n] = Scalar(n) / (n + 1);
     }
 
     /** create polynomial basis */
@@ -416,13 +289,8 @@ void Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::generate_legendre_bas
 
 
 /** @brief : Compute Galerkin Tensor */
-template<int PolyOrder,
-         int NumSegments,
-         int NX,
-         int NU,
-         int NP,
-         typename Scalar>
-void Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::compute_galerkin_tensor()
+template<int PolyOrder, q_type Qtype, typename Scalar>
+void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
 {
     /** naive implementation */
     for(int k = 0; k <= PolyOrder; ++k){
@@ -434,11 +302,7 @@ void Legendre<PolyOrder, NumSegments, NX, NU, NP, Scalar>::compute_galerkin_tens
                     // compute projection //
                     inner_prod += poly_eval(i, _Nodes[n]) * poly_eval(j, _Nodes[n]) * poly_eval(k, _Nodes[n]) * _QuadWeights[n];
                 }
-                if(k == PolyOrder)
-                    _Galerkin(i, j, k) = (PolyOrder / 2.0) * inner_prod;
-                else
-                    _Galerkin(i, j, k) = ((2.0 * k + 1) / 2.0) * inner_prod;
-                //std::cout << _Galerkin(i, j, k) << " " ;
+                _Galerkin(i, j, k) = _NormFactors[k] * inner_prod;
             }
             //std::cout << "\n";
         }

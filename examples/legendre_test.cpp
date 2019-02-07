@@ -1,10 +1,10 @@
-//#include "legendre.hpp"
 #include "polynomials/legendre.hpp"
+#include "polynomials/projection.hpp"
 #include "integrator.h"
 
 struct Integrand
 {
-    double operator ()(const double &x)
+    double operator ()(const double &x) const
     {
         double sgm = 3.0;
         double mu = 1.0;
@@ -18,7 +18,7 @@ struct Integrand
 
 struct Unif
 {
-    double operator ()(const double &x)
+    double operator ()(const double &x) const
     {
         return  x;
     }
@@ -36,38 +36,30 @@ MatrixType<Scalar> Tensor_to_Matrix(const Eigen::Tensor<Scalar,rank> &tensor,con
 
 
 
-
-
 int main()
 {
-    using Legendre = Legendre<5,1,3,4,5>;
+    using Legendre = Legendre<8, GAUSS_LOBATTO>;
     Legendre leg;
     Integrand f;
+    Unif distrib;
 
     /** integrate value */
     float result = leg.integrate<Integrand>();
-    Legendre::Projection proj = leg.project<Integrand>();
+    Projection<Legendre> proj(f, 1, 6);
     std::cout << "Integration resuls: " << result << "\n";
     std::cout << "Projection: " << proj.coeff.transpose() << "\n";
-    std::cout << "f(x): " << f(3) << " fN(x): " << proj.eval(3) << "\n";
-    std::cout << "Weights: " << leg.QWeights() << "\n";
+    std::cout << "f(x): " << f(4) << " fN(x): " << proj.eval(4) << "\n";
+    //std::cout << "Weights: " << leg.QWeights() << "\n";
 
     /** solve test equation x_dot = -lambda * x; lambda ~ Unif(1,2)*/
     /** project lambda random variable */
-    proj = leg.project<Unif>(-2, 4);
+    proj.project(distrib, -2, 4);
     std::cout << "Projection: " << proj.coeff.transpose() << "\n";
 
-    /** norm factors */
-    Legendre::NODESVECTYPE norm_factors = leg.NFactors();
-    std::ofstream nfactors_file("norm_factors.txt");
-    if(nfactors_file.is_open())
-    {
-        nfactors_file << norm_factors << "\n";
-    }
-    nfactors_file.close();
+    return 0;
 
     /** get Galerkin tensor */
-    Legendre::MTENSOR Galerkin = leg.getGalerkinTensor();
+    Legendre::tensor_t Galerkin = leg.getGalerkinTensor();
 
     /** get a chip and cast to a matrix */
     Eigen::Tensor<double, 2> kchip = Galerkin.chip(0, 2);
@@ -142,9 +134,9 @@ int main()
     casadi::SX a = casadi::SX::sym("a", 6);
     casadi::SX var = casadi::SX::sym("var");
     casadi::Function ode = casadi::Function("lox", {var}, {sin(4 * var)});
-    Legendre::QUADWEIGHTYPE weights = leg.QWeights();
-    Legendre::NODESVECTYPE nodes = leg.CPoints();
-    Legendre::NODESVECTYPE nfactors = leg.NFactors();
+    Legendre::q_weights_t weights = leg.QWeights();
+    Legendre::nodes_t nodes = leg.CPoints();
+    Legendre::q_weights_t nfactors = leg.NFactors();
     int N = nodes.SizeAtCompileTime;
 
     /** construct K = N differential equations */
@@ -158,14 +150,14 @@ int main()
             double omega = 0;
             for(int j = 0; j < N; ++j)
             {
-                arg += a[j] * leg.Ln(nodes[n], j);
-                omega += proj.coeff[j] * leg.Ln(nodes[n], j);
+                arg += a[j] * leg.eval(nodes[n], j);
+                omega += proj.coeff[j] * leg.eval(nodes[n], j);
             }
-            double fi_k = leg.Ln(nodes[n], k);
+            double fi_k = leg.eval(nodes[n], k);
             casadi::SX f = ode({arg})[0];
             integral += (weights[n] * omega * fi_k) * f;
         }
-        sode[k] = (1.0 / nfactors[k]) * integral;
+        sode[k] = nfactors[k] * integral;
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{a, u},{sode});

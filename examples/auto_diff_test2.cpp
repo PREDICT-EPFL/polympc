@@ -194,6 +194,7 @@ void test_matrix_twice(){
     typedef Eigen::AutoDiffScalar<outer_derivative_type> outer_active_scalar;
     typedef Eigen::Matrix<outer_active_scalar,Eigen::Dynamic,1> AVector;
     AVector Aa(a.size()),Ab(b.size());
+
     // copy value from non-active example
     for(int i=0;i<a.size();i++)Aa(i).value().value() = a(i);
     for(int i=0;i<b.size();i++)Ab(i).value().value() = b(i);

@@ -85,8 +85,12 @@ typename Derived::PlainObject poly_diff(const Eigen::MatrixBase<Derived> &p)
 template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Legendre
 {
-private:
-    static constexpr int NUM_NODES = PolyOrder + 1;
+public:
+
+    enum{
+        POLY_ORDER = PolyOrder,
+        NUM_NODES  = PolyOrder + 1
+    };
 
 public:
     /** constructor */

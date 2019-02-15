@@ -144,7 +144,6 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DiffMatrix()
     /** Diff Matrix */
     BaseClass c = BaseClass::vertcat({2, BaseClass::ones(PolyOrder - 1, 1), 2});
     c = BaseClass::mtimes(BaseClass::diag( pow(-1, grid)), c);
-
     BaseClass XM = BaseClass::repmat(cpoints, 1, PolyOrder + 1);
     BaseClass dX = XM - XM.T();
     BaseClass Dn  = BaseClass::mtimes(c, (1 / c).T() ) / (dX + (BaseClass::eye(PolyOrder + 1)));      /** off-diagonal entries */

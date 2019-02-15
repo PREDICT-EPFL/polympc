@@ -32,3 +32,4 @@ include_directories(src src/examples ${CASADI_INCLUDE_DIR} )
 
 add_subdirectory(src cmake)
 add_subdirectory(examples)
+add_subdirectory(src/control)

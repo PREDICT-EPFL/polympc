@@ -27,8 +27,13 @@ segment(const Eigen::MatrixBase<Derived>& v, int start)
 template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Chebyshev
 {
-private:
-    static constexpr int NUM_NODES = PolyOrder + 1;
+public:
+
+    enum
+    {
+        POLY_ORDER = PolyOrder,
+        NUM_NODES = PolyOrder + 1
+    };
 
 public:
     /** constructor */
@@ -37,10 +42,9 @@ public:
 
     using Scalar = _Scalar;
 
-    using q_weights_t   = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
-    using nodes_t       = Eigen::Matrix<Scalar, PolyOrder + 1, 1>;
+    using q_weights_t   = Eigen::Matrix<Scalar, NUM_NODES, 1>;
+    using nodes_t       = Eigen::Matrix<Scalar, NUM_NODES, 1>;
     using diff_mat_t    = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
-    //using COMPDIFFMTYPE = Eigen::Matrix<Scalar, NUM_NODES * NX, NUM_NODES * NX>;
 
     /** some getters */
     diff_mat_t D(){return _D;}
@@ -101,7 +105,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
     _CCQuadWeights = CCQuadWeights();
 
     _NormFactors = NormFactors();
-    //_D           = DiffMatrix();
+    _D           = DiffMatrix();
     //_ComD        = CompDiffMatrix();
 }
 
@@ -190,6 +194,25 @@ Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sc
         integral += f(t_scale * _Nodes[i] + t_delta) * _CCQuadWeights[i];
     }
     return t_scale * integral;
+}
+
+
+/** @brief : compute Chebyshev differentiation matrix (Trefethen)*/
+template<int PolyOrder, q_type Qtype, typename Scalar>
+typename Chebyshev<PolyOrder, Qtype, Scalar>::diff_mat_t
+Chebyshev<PolyOrder, Qtype, Scalar>::DiffMatrix()
+{
+    nodes_t grid = nodes_t::LinSpaced(NUM_NODES, 0, POLY_ORDER);
+    nodes_t c    = nodes_t::Ones(); c[0] = Scalar(2); c[POLY_ORDER] = Scalar(2);
+    c = (Eigen::pow(Scalar(-1), grid.array()).matrix()).asDiagonal() * c;
+
+    diff_mat_t XM = _Nodes.template replicate<1, NUM_NODES>();
+    diff_mat_t dX = XM - XM.transpose();
+
+    diff_mat_t Dn = (c * (c.cwiseInverse()).transpose()).array() * (dX + diff_mat_t::Identity()).cwiseInverse().array();
+    diff_mat_t diag_D = (Dn.rowwise().sum()).asDiagonal();
+
+    return Dn - diag_D;
 }
 
 

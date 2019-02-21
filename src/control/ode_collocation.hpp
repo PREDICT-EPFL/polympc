@@ -1,5 +1,5 @@
-#ifndef NMPC_HPP
-#define NMPC_HPP
+#ifndef ODE_COLLOCATION_HPP
+#define ODE_COLLOCATION_HPP
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Sparse"
@@ -47,9 +47,7 @@ public:
 
     /** linearized approximation */
     using jacobian_t = Eigen::Matrix<Scalar, constr_t::RowsAtCompileTime, var_t::RowsAtCompileTime>;
-    using Index = typename jacobian_t::Index;
     using local_jacobian_t = Eigen::Matrix<Scalar, NX, NX + NU>;
-    using localIndex = typename local_jacobian_t::Index;
     using Derivatives = Eigen::Matrix<Scalar, NX + NU, 1>;
     using ADScalar = Eigen::AutoDiffScalar<Derivatives>;
     /** AD variables */
@@ -202,4 +200,4 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t 
 
 
 }
-#endif // NMPC_HPP
+#endif // ODE_COLLOCATION_HPP

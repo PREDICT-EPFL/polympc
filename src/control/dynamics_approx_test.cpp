@@ -1,5 +1,5 @@
 #include "polynomials/ebyshev.hpp"
-#include "control/nmpc.hpp"
+#include "control/ode_collocation.hpp"
 #include <iomanip>
 
 
@@ -76,6 +76,8 @@ int main(void)
     /** compute linearized PS constraints */
 
     std::cout << "Jacobian: \n" << A.template rightCols<7>() << "\n";
+    Eigen::ColPivHouseholderQR< collocation::jacobian_t > lu(A);
+    std::cout << "Jacobian: \n" << lu.rank() << "\n";
 
     return 0;
 }

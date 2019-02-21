@@ -74,4 +74,14 @@ int main()
               << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
     std::cout << "Jacobian: \n" << jac(casadi::Slice(0, jac.size1()), casadi::Slice(jac.size2() - 6, jac.size2())) << "\n";
 
+    casadi::Function Mayer = casadi::Function("mayer",{state},{casadi::SX::dot(state, state)});
+    casadi::Function Lagrange = casadi::Function("lagrange",{state, control}, {casadi::SX::dot(state, state) + casadi::SX::dot(control, control)});
+
+    casadi::SX L = cheb.CollocateCost(Mayer, Lagrange, -1, 1);
+
+    /** evaluate L */
+    casadi::Function L_f = casadi::Function("L",{opt_var},{L});
+    casadi::DM L_val = L_f({x_init})[0];
+
+    std::cout << "Cost function value: " << L_val << "\n";
 }

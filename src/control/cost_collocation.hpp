@@ -65,6 +65,22 @@ public:
     void operator() (const var_t &var, Scalar &cost_value,
                      const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1) ) const;
 
+    /** compute value and gradient */
+    /** linearized approximation */
+    using gradient_t = Eigen::Matrix<Scalar, var_t::RowsAtCompileTime, 1>;
+    using local_gradient_t = Eigen::Matrix<Scalar, NX + NU, 1>;
+    using Derivatives = Eigen::Matrix<Scalar, NX + NU, 1>;
+    using ADScalar = Eigen::AutoDiffScalar<Derivatives>;
+    /** AD variables */
+    using ADx_t = Eigen::Matrix<ADScalar, NX, 1>;
+    using ADu_t = Eigen::Matrix<ADScalar, NU, 1>;
+    ADx_t m_ADx, m_ADy;
+    ADu_t m_ADu;
+
+    void initialize_derivatives();
+    void value_gradient(const var_t &var, Scalar &cost_value, var_t &cost_gradient,
+                        const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1) );
+
 
     cost_collocation();
     cost_collocation(const LagrangeTerm &L, const MayerTerm &M){}
@@ -86,6 +102,7 @@ cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::cost_colloca
     std::cout << HAS_MAYER << "\n";
 
     m_weights = m_basis_f.CCQWeights(); // change interface, probably integration weights? Both in Ebyshev and Legendre
+    initialize_derivatives();
 }
 
 
@@ -122,6 +139,86 @@ void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::operato
     }
 }
 
+
+/** evaluate cost and gradient */
+template<typename LagrangeTerm, typename MayerTerm, typename Polynomial, int NumSegments>
+void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::value_gradient(const var_t &var, Scalar &cost_value, var_t &cost_gradient,
+                                                                                        const Scalar &t0, const Scalar &tf)
+{
+    cost_value = Scalar(0);
+    cost_gradient = var_t::Zero();
+
+    if(HAS_LAGRANGE)
+    {
+        Scalar t_scale = (tf - t0) / (2 * NumSegments);
+        Scalar coeff;
+        ADScalar ad_value;
+
+        int n = 0, it = 0;
+        for(int k = 0; k < VARX_SIZE; k += NX)
+        {
+            for(int i = 0; i < NX; i++)
+                m_ADx(i).value() = var.template segment<NX>(k)(i);
+
+            for(int i = 0; i < NU; i++)
+                m_ADu(i).value() = var.template segment<NU>(n + VARX_SIZE)(i);
+
+            m_Lagrange(m_ADx, m_ADu,
+                    var.template segment<NP>(VARX_SIZE + VARU_SIZE), ad_value);
+
+            coeff = t_scale * m_weights[it % POLY_ORDER];
+            cost_value += coeff * ad_value.value();
+
+            /** extract gradient */
+            cost_gradient. template segment<NX>(k) = coeff * ad_value.derivatives(). template head<NX>();
+            cost_gradient. template segment<NU>(n + VARX_SIZE) = coeff * ad_value.derivatives(). template tail<NU>();
+
+            /** @note: better way to identify junction points? */
+            if( ((it % POLY_ORDER) == 0) && (it != 0) && (it < NumSegments * POLY_ORDER))
+            {
+                cost_value += coeff * ad_value.value(); // add twice at the border points
+                cost_gradient. template segment<NX>(k) *= Scalar(2);
+                cost_gradient. template segment<NU>(n + VARX_SIZE) *= Scalar(2);
+            }
+
+            n += NU;
+            it++;
+        }
+
+    }
+
+    if(0)
+    {
+        ADScalar ad_value;
+        for(int i = 0; i < NX; i++)
+            m_ADx(i).value() = var.template head<NX>()(i);
+
+        m_Mayer(m_ADx, ad_value);
+        cost_value += ad_value.value();
+        cost_gradient.template head<NX + NU>() += ad_value.derivatives();
+    }
+
+}
+
+
+/** void initialize derivatives */
+template<typename LagrangeTerm, typename MayerTerm, typename Polynomial, int NumSegments>
+void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::initialize_derivatives()
+{
+    int deriv_num = NX + NU;
+    int deriv_idx = 0;
+
+    for(int i = 0; i < NX; i++)
+    {
+        m_ADx[i].derivatives() = Derivatives::Unit(deriv_num, deriv_idx);
+        deriv_idx++;
+    }
+    for(int i = 0; i < NU; i++)
+    {
+        m_ADu[i].derivatives() = Derivatives::Unit(deriv_num, deriv_idx);
+        deriv_idx++;
+    }
+}
 
 // end of namespace
 }

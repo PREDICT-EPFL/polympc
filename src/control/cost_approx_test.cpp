@@ -1,6 +1,21 @@
 #include "control/cost_collocation.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "eigen3/Eigen/Dense"
+#include <iostream>
+#include <iomanip>
+
+typedef std::chrono::time_point<std::chrono::system_clock> time_point;
+time_point get_time()
+{
+    /** OS dependent */
+#ifdef __APPLE__
+    return std::chrono::system_clock::now();
+#else
+    return std::chrono::high_resolution_clock::now();
+#endif
+}
+
+
 
 template<typename _Scalar = double>
 struct Lagrange
@@ -40,6 +55,7 @@ struct Mayer
 
     Eigen::Matrix<Scalar, State::RowsAtCompileTime, State::RowsAtCompileTime> Q;
 
+
     template<typename StateT, typename CostT>
     void operator() (const Eigen::MatrixBase<StateT> &state, CostT &value) const
     {
@@ -56,10 +72,20 @@ int main(void)
     x[x.SizeAtCompileTime - 1] = 2.0;
 
     cost_collocation cost_f;
+    cost_collocation::var_t gradient;
     cost_collocation::Scalar value;
-    cost_f(x, value);
 
-    std::cout << "Value: " << value << "\n";
+    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    //cost_f(x, value);
+    cost_f.value_gradient(x,value,gradient);
+    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+
+    std::cout << "Cost: " << value << "\n";
+    std::cout << "Gradient: " << gradient.transpose() << "\n";
+
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    std::cout << "Eigen time: " << std::setprecision(9)
+              << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
 
     return 0;
 }

@@ -187,7 +187,7 @@ void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::value_g
 
     }
 
-    if(0)
+    if(HAS_MAYER)
     {
         ADScalar ad_value;
         for(int i = 0; i < NX; i++)

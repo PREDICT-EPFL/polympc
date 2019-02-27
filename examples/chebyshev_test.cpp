@@ -74,19 +74,22 @@ int main()
               << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
     std::cout << "Jacobian: \n" << jac(casadi::Slice(0, jac.size1()), casadi::Slice(jac.size2() - 6, jac.size2())) << "\n";
 
-    casadi::Function Mayer; //= casadi::Function("mayer",{state},{casadi::SX::dot(state, state)});
+    casadi::Function Mayer = casadi::Function("mayer",{state},{casadi::SX::dot(state, state)});
     casadi::Function Lagrange = casadi::Function("lagrange",{state, control}, {casadi::SX::dot(state, state) + casadi::SX::dot(control, control)});
 
     casadi::SX L = cheb.CollocateCost(Mayer, Lagrange, -1, 1);
-    casadi::SX L_grad = casadi::SX::gradient(L,opt_var);
+    casadi::SX L_grad = casadi::SX::gradient(L, opt_var);
+    casadi::SX L_hess = casadi::SX::hessian(L, opt_var);
 
     /** evaluate L */
     casadi::Function L_f = casadi::Function("L",{opt_var},{L});
     casadi::Function L_f_grad = casadi::Function("L_grad",{opt_var}, {L_grad});
+    casadi::Function L_f_hess = casadi::Function("L_grad",{opt_var}, {L_hess});
 
     start = get_time();
     casadi::DM L_val = L_f({x_init})[0];
     casadi::DM L_val_grad = L_f_grad({x_init})[0];
+    casadi::DM L_val_hess = L_f_hess({x_init})[0];
     stop = get_time();
 
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
@@ -96,4 +99,5 @@ int main()
 
     std::cout << "Cost function value: " << L_val << "\n";
     std::cout << "Cost function gradient: " << L_val_grad << "\n";
+    std::cout << "Cost function hessian: \n" << L_val_hess << "\n";
 }

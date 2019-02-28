@@ -2,11 +2,11 @@
 #define LEGENDRE_HPP
 
 #include "iostream"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
-#include "eigen3/unsupported/Eigen/Polynomials"
-#include "eigen3/unsupported/Eigen/CXX11/Tensor"
-#include "eigen3/unsupported/Eigen/CXX11/TensorSymmetry"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "unsupported/Eigen/Polynomials"
+#include "unsupported/Eigen/CXX11/Tensor"
+#include "unsupported/Eigen/CXX11/TensorSymmetry"
 
 enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
 

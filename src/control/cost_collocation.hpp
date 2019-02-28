@@ -1,9 +1,9 @@
 #ifndef COST_COLLOCATION_HPP
 #define COST_COLLOCATION_HPP
 
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
-#include "eigen3/unsupported/Eigen/AutoDiff"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "unsupported/Eigen/AutoDiff"
 #include <type_traits>
 #include <iostream>
 

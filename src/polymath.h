@@ -2,10 +2,10 @@
 #define POLYMATH_H
 
 #include "casadi/casadi.hpp"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Eigenvalues"
-#include "eigen3/unsupported/Eigen/Polynomials"
-#include "eigen3/unsupported/Eigen/MatrixFunctions"
+#include "Eigen/Dense"
+#include "Eigen/Eigenvalues"
+#include "unsupported/Eigen/Polynomials"
+#include "unsupported/Eigen/MatrixFunctions"
 
 enum IntType {RK4, CVODES, CHEBYCHEV};
 

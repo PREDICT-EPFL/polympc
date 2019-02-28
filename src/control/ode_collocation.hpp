@@ -1,10 +1,10 @@
 #ifndef ODE_COLLOCATION_HPP
 #define ODE_COLLOCATION_HPP
 
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
-#include "eigen3/unsupported/Eigen/KroneckerProduct"
-#include "eigen3/unsupported/Eigen/AutoDiff"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "unsupported/Eigen/KroneckerProduct"
+#include "unsupported/Eigen/AutoDiff"
 
 namespace polympc
 {

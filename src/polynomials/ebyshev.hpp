@@ -2,8 +2,8 @@
 #define EBYSHEV_HPP
 
 #include "iostream"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
 
 enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
 

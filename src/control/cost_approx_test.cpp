@@ -1,6 +1,6 @@
 #include "control/cost_collocation.hpp"
 #include "polynomials/ebyshev.hpp"
-#include "eigen3/Eigen/Dense"
+#include "Eigen/Dense"
 #include <iostream>
 #include <iomanip>
 

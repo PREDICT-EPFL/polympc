@@ -4,8 +4,8 @@
 #include "chrono"
 
 #include "ros/time.h"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
 #include "pseudospectral/chebyshev.hpp"
 
 using namespace casadi;

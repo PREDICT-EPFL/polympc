@@ -2,9 +2,9 @@
 #define PSARC_HPP
 
 #include "casadi/casadi.hpp"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
-#include "eigen3/Eigen/Eigenvalues"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "Eigen/Eigenvalues"
 #include "kite.h"
 
 namespace psarc_math

@@ -2,7 +2,7 @@
 #define INTEGRATOR_H
 
 #include "casadi/casadi.hpp"
-#include "eigen3/Eigen/Dense"
+#include "Eigen/Dense"
 #include "chebyshev.hpp"
 
 /** Solve ODE of the form : xdot = f(x, u) */

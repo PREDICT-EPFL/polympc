@@ -1,0 +1,18 @@
+language: cpp
+os: osx
+compiler: clang
+
+addons:
+  homebrew:
+    packages:
+      - eigen
+
+env:
+  global
+  - CASADI_PREFIX="${HOME}/casadi"
+
+install:
+  - ci/install_casadi_macos.sh
+
+script:
+  - ci/build.sh

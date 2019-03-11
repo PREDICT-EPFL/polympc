@@ -6,37 +6,81 @@
 
 namespace osqp_solver {
 
-/*
+template <int _n, int _m, typename _Scalar = double>
+struct QP {
+    using Scalar = _Scalar;
+    enum {
+        n=_n,
+        m=_m
+    };
+    Eigen::Matrix<Scalar, n, n> P;
+    Eigen::Matrix<Scalar, n, 1> q;
+    Eigen::Matrix<Scalar, m, n> A;
+    Eigen::Matrix<Scalar, m, 1> l, u;
+};
+
+/** Direct linear system solver
+ *  solve A x = b
+ */
+template<typename AType>
+class DirectLinSysSolver {
+public:
+    enum {
+        n=AType::RowsAtCompileTime
+    };
+    using Scalar = typename AType::Scalar;
+    using Vn = Eigen::Matrix<Scalar, n, 1>;
+    Eigen::LDLT<AType> ldlt;
+
+    void setup(AType &A)
+    {
+        // TODO: Inplace matrix decompositions
+        // LDLT<Ref<KKT>>, with matrix passed to constructor!
+        // https://eigen.tuxfamily.org/dox/group__InplaceDecomposition.html
+        ldlt.compute(A);
+    }
+
+    Vn solve(Vn &rhs)
+    {
+        return ldlt.solve(rhs);
+    }
+};
+
+template <typename Scalar>
+struct OSQPSettings {
+    Scalar sigma = 1e-6;
+    Scalar rho = 1e-1;
+    Scalar alpha = 1.0;
+    Scalar eps_rel = 1e-3;
+    Scalar eps_abs = 1e-3;
+    int max_iter = 1000;
+};
+
+/**
  *  minimize        0.5 x' P x + q' x
  *  subject to      l <= A x <= u
-*/
+ *
+ *  with:
+ *    x element of R^n
+ *    Ax element of R^m
+ */
+template <typename _QPType>
 class OSQPSolver {
 public:
     enum {
-        n = 2,
-        m = 3
+        n=_QPType::n,
+        m=_QPType::m
     };
 
-    using Scalar = double;
+    using QPType = _QPType;
+    using Scalar = typename _QPType::Scalar;
     using Vn = Eigen::Matrix<Scalar, n, 1>;
     using Vm = Eigen::Matrix<Scalar, m, 1>;
-    using Vnm = Eigen::Matrix<Scalar, n+m, 1>;
+    using Vnm = Eigen::Matrix<Scalar, n + m, 1>;
     using Mn = Eigen::Matrix<Scalar, n, n>;
     using Mmn = Eigen::Matrix<Scalar, m, n>;
-    using KKT = Eigen::Matrix<Scalar, n+m, n+m>;
-
-    // Problem parameters
-    Mn P;
-    Vn q;
-    Mmn A;
-    Vm l, u;
-
-    // Solver settings
-    Scalar sigma;
-    Scalar rho;
-    Scalar rho_inv;
-    Scalar alpha;
-    int max_iter;
+    using KKT = Eigen::Matrix<Scalar, n + m, n + m>;
+    using Settings = OSQPSettings<Scalar>;
 
     // Solver state variables
     int iter;
@@ -46,63 +90,42 @@ public:
     Vn x_tilde;
     Vm z_tilde;
     Vm z_prev;
-    // TODO: Inplace matrix decompositions
-    // LDLT<Ref<KKT>>, with matrix passed to constructor!
-    // https://eigen.tuxfamily.org/dox/group__InplaceDecomposition.html
+
     KKT kkt_mat;
-    Eigen::LDLT<KKT> kkt_ldlt;
+    // TODO: choose between direct and indirect method
+    DirectLinSysSolver<KKT> lin_sys_solver;
 
-    void setup(const Mn& _P, const Vn& _q, const Mmn& _A, const Vm& _l, const Vm& _u)
+    void solve(const QPType &qp, const Settings &settings)
     {
-        P = _P;
-        q = _q;
-        A = _A;
-        l = _l;
-        u = _u;
+        Vnm rhs, x_tilde_nu;
 
-        // TODO: parameter
-        rho = 1.0f;
-        rho_inv = 1.0f/rho;
-        sigma = 1e-6f;
-        alpha = 1.0f;
-        max_iter = 50;
-    }
-
-    void update()
-    {
-        // TOOD: update problem
-    }
-
-    void solve()
-    {
         // TODO: warm-start
         x.setZero();
         z.setZero();
         y.setZero();
 
-        form_KKT_mat(kkt_mat);
-        kkt_ldlt.compute(kkt_mat);
+        form_KKT_mat(qp, settings, kkt_mat);
+        lin_sys_solver.setup(kkt_mat);
 
-        for (iter = 1; iter <= max_iter; iter++) {
+        for (iter = 1; iter <= settings.max_iter; iter++) {
             z_prev = z;
 
             // update x_tilde z_tilde
-            Vnm rhs, x_tilde_nu;
-            form_KKT_rhs(rhs);
-            x_tilde_nu = kkt_ldlt.solve(rhs);
+            form_KKT_rhs(qp, settings, rhs);
+            x_tilde_nu = lin_sys_solver.solve(rhs);
 
-            x_tilde = x_tilde_nu.head<n>();
-            z_tilde = z_prev + rho_inv*(x_tilde_nu.tail<m>() - y);
+            x_tilde = x_tilde_nu.template head<n>();
+            z_tilde = z_prev + 1.0 / settings.rho * (x_tilde_nu.template tail<m>() - y);
 
             // update x
-            x = alpha * x_tilde + (1 - alpha) * x;
+            x = settings.alpha * x_tilde + (1 - settings.alpha) * x;
 
             // update z
-            z = alpha * z_tilde + (1 - alpha) * z_prev + rho_inv * y;
-            clip(z, l, u); // euclidean projection
+            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + 1.0 / settings.rho * y;
+            clip(z, qp.l, qp.u); // euclidean projection
 
             // update y
-            y = y + rho * (alpha * z_tilde + (1 - alpha) * z_prev - z);
+            y = y + settings.rho * (settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
             if (termination_criteria()) {
                 break;
@@ -112,20 +135,19 @@ public:
     }
 
 private:
-    void form_KKT_mat(KKT& kkt)
+    void form_KKT_mat(const QPType &qp, const Settings &settings, KKT& kkt)
     {
-        kkt.topLeftCorner<n,n>() = P + sigma*P.Identity();
-        kkt.topRightCorner<n,m>() = A.transpose();
-        kkt.bottomLeftCorner<m,n>() = A;
-        kkt.bottomRightCorner<m,m>().setIdentity();
-        kkt.bottomRightCorner<m,m>() *= -rho_inv;
+        kkt.template topLeftCorner<n, n>() = qp.P + settings.sigma * qp.P.Identity();
+        kkt.template topRightCorner<n, m>() = qp.A.transpose();
+        kkt.template bottomLeftCorner<m, n>() = qp.A;
+        kkt.template bottomRightCorner<m, m>().setIdentity();
+        kkt.template bottomRightCorner<m, m>() *= -1.0 / settings.rho;
     }
 
-    // void form_KKT_rhs(Vnm& rhs, const Vn& x, const Vm& z, const Vm& y)
-    void form_KKT_rhs(Vnm& rhs)
+    void form_KKT_rhs(const QPType &qp, const Settings &settings, Vnm& rhs)
     {
-        rhs.head<n>() = sigma*x - q;
-        rhs.tail<m>() = z - rho_inv*y;
+        rhs.template head<n>() = settings.sigma * x - qp.q;
+        rhs.template tail<m>() = z - 1.0 / settings.rho * y;
     }
 
     void clip(Vm& z, const Vm& l, const Vm& u)

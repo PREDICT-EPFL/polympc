@@ -4,24 +4,25 @@
 using namespace osqp_solver;
 
 TEST(OSQPTestCase, TestSimpleQP) {
-    OSQPSolver::Mn P;
-    OSQPSolver::Vn q;
-    OSQPSolver::Mmn A;
-    OSQPSolver::Vm l, u;
-    OSQPSolver::Vn sol, expect;
+    using SimpleQP = osqp_solver::QP<2, 3, double>;
+    OSQPSolver<SimpleQP> prob;
+    Eigen::Vector2d sol, expect;
 
-    P << 4, 1,
-         1, 2;
-    q << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    SimpleQP qp;
+    qp.P << 4, 1,
+            1, 2;
+    qp.q << 1, 1;
+    qp.A << 1, 1,
+            1, 0,
+            0, 1;
+    qp.l << 1, 0, 0;
+    qp.u << 1, 0.7, 0.7;
 
-    OSQPSolver prob;
-    prob.setup(P, q, A, l, u);
-    prob.solve();
+    OSQPSolver<SimpleQP>::Settings settings;
+    settings.rho = 1.0;
+    settings.max_iter = 50;
+
+    prob.solve(qp, settings);
     sol = prob.x;
 
     expect << 0.3, 0.7;

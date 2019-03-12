@@ -27,8 +27,15 @@ TEST(OSQPTestCase, TestSimpleQP) {
     prob.solve(qp, settings);
     sol = prob.x;
 
+    // solution
     expect << 0.3, 0.7;
-    ASSERT_TRUE(sol.isApprox(expect, 1e-3f));
+    EXPECT_TRUE(sol.isApprox(expect, 1e-3));
+
+    // check feasibility (with some epsilon margin)
+    Eigen::Vector3d lower = qp.A*sol - qp.l;
+    Eigen::Vector3d upper = qp.A*sol - qp.u;
+    EXPECT_GE(lower.minCoeff(), -1e-3);
+    EXPECT_LE(upper.maxCoeff(), 1e-3);
 }
 
 int main(int argc, char **argv) {

@@ -4,7 +4,7 @@
 using namespace osqp_solver;
 
 TEST(OSQPTestCase, TestSimpleQP) {
-    using SimpleQP = osqp_solver::QP<2, 3, double>;
+    using SimpleQP = QP<2, 3, double>;
     OSQPSolver<SimpleQP> prob;
     Eigen::Vector2d sol, expect;
 
@@ -21,6 +21,8 @@ TEST(OSQPTestCase, TestSimpleQP) {
     OSQPSolver<SimpleQP>::Settings settings;
     settings.rho = 1.0;
     settings.max_iter = 50;
+    settings.eps_rel = 1e-4f; // set below isApprox() threshold
+    settings.eps_abs = 1e-4f;
 
     prob.solve(qp, settings);
     sol = prob.x;

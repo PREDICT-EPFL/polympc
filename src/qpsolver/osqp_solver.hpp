@@ -54,6 +54,7 @@ struct OSQPSettings {
     Scalar eps_rel = 1e-3;
     Scalar eps_abs = 1e-3;
     int max_iter = 1000;
+    // TODO: add check_termination param for minimal number of iterations before termination criteria is checked
 };
 
 /**
@@ -127,11 +128,12 @@ public:
             // update y
             y = y + settings.rho * (settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
-            if (termination_criteria()) {
+            if (termination_criteria(qp, settings)) {
                 break;
             }
         }
-        // print summary
+
+        // TODO: return summary
     }
 
 private:
@@ -157,9 +159,44 @@ private:
         }
     }
 
-    bool termination_criteria()
+    Scalar eps_prim(const QPType &qp, const Settings &settings) const
     {
-        // TODO
+        Scalar norm_Ax, norm_z;
+        norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
+        norm_z = z.template lpNorm<Eigen::Infinity>();
+        return settings.eps_abs + settings.eps_rel * fmax(norm_Ax, norm_z);
+    }
+
+    Scalar eps_dual(const QPType &qp, const Settings &settings) const
+    {
+        Scalar norm_Px, norm_ATy, norm_q;
+        norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
+        norm_ATy = (qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
+        norm_q = qp.q.template lpNorm<Eigen::Infinity>();
+        return settings.eps_abs + settings.eps_rel * fmax(norm_Px, fmax(norm_ATy, norm_q));
+    }
+
+    Vm residual_prim(const QPType &qp) const
+    {
+        return qp.A*x - z;
+    }
+
+    Vn residual_dual(const QPType &qp) const
+    {
+        return qp.P*x + qp.q + qp.A.transpose()*y;
+    }
+
+    bool termination_criteria(const QPType &qp, const Settings &settings)
+    {
+        Scalar rp_norm, rd_norm;
+        rp_norm = residual_prim(qp).template lpNorm<Eigen::Infinity>();
+        rd_norm = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+
+        // check residual norms to detect optimality
+        if (rp_norm <= eps_prim(qp, settings) && rd_norm <= eps_dual(qp, settings)) {
+            return true;
+        }
+
         return false;
     }
 };

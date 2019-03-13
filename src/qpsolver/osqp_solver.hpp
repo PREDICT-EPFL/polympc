@@ -91,6 +91,14 @@ public:
     Vn x_tilde;
     Vm z_tilde;
     Vm z_prev;
+    Vm rho;
+    Vm rho_inv;
+
+    enum {
+        INEQUALITY_CONSTRAINT,
+        EQUALITY_CONSTRAINT,
+        LOOSE_BOUNDS
+    } constr_type[m]; /**< constraint type classification */
 
     KKT kkt_mat;
     // TODO: choose between direct and indirect method
@@ -105,6 +113,9 @@ public:
         z.setZero();
         y.setZero();
 
+        constr_type_init(qp);
+        rho_init(settings);
+
         form_KKT_mat(qp, settings, kkt_mat);
         lin_sys_solver.setup(kkt_mat);
 
@@ -116,21 +127,23 @@ public:
             x_tilde_nu = lin_sys_solver.solve(rhs);
 
             x_tilde = x_tilde_nu.template head<n>();
-            z_tilde = z_prev + 1.0 / settings.rho * (x_tilde_nu.template tail<m>() - y);
+            z_tilde = z_prev + rho_inv.cwiseProduct(x_tilde_nu.template tail<m>() - y);
 
             // update x
             x = settings.alpha * x_tilde + (1 - settings.alpha) * x;
 
             // update z
-            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + 1.0 / settings.rho * y;
+            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + rho_inv.cwiseProduct(y);
             clip(z, qp.l, qp.u); // euclidean projection
 
             // update y
-            y = y + settings.rho * (settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
+            y = y + rho.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
             if (termination_criteria(qp, settings)) {
                 break;
             }
+
+            // TODO: adaptive rho
         }
 
         // TODO: return summary
@@ -142,14 +155,13 @@ private:
         kkt.template topLeftCorner<n, n>() = qp.P + settings.sigma * qp.P.Identity();
         kkt.template topRightCorner<n, m>() = qp.A.transpose();
         kkt.template bottomLeftCorner<m, n>() = qp.A;
-        kkt.template bottomRightCorner<m, m>().setIdentity();
-        kkt.template bottomRightCorner<m, m>() *= -1.0 / settings.rho;
+        kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv.asDiagonal();
     }
 
     void form_KKT_rhs(const QPType &qp, const Settings &settings, Vnm& rhs)
     {
         rhs.template head<n>() = settings.sigma * x - qp.q;
-        rhs.template tail<m>() = z - 1.0 / settings.rho * y;
+        rhs.template tail<m>() = z - rho_inv.cwiseProduct(y);
     }
 
     void clip(Vm& z, const Vm& l, const Vm& u)
@@ -157,6 +169,33 @@ private:
         for (int i = 0; i < z.RowsAtCompileTime; i++) {
             z(i) = fmax(l(i), fmin(z(i), u(i)));
         }
+    }
+
+    void constr_type_init(const QPType &qp)
+    {
+        for (int i = 0; i < qp.l.RowsAtCompileTime; i++) {
+            if (qp.l[i] < -1e-16 && qp.u[i] > 1e-16) {
+                constr_type[i] = LOOSE_BOUNDS;
+            } else if (qp.u[i] - qp.l[i] < 1e-4) {
+                constr_type[i] = EQUALITY_CONSTRAINT;
+            } else {
+                constr_type[i] = INEQUALITY_CONSTRAINT;
+            }
+        }
+    }
+
+    void rho_init(const Settings &settings)
+    {
+        for (int i = 0; i < rho.RowsAtCompileTime; i++) {
+            if (constr_type[i] == LOOSE_BOUNDS) {
+                rho[i] = 1e-6; // TODO: constant RHO_MIN
+            } else if (constr_type[i] == EQUALITY_CONSTRAINT) {
+                rho[i] = 1e3*settings.rho; // TODO: constant
+            } else { // INEQUALITY_CONSTRAINT
+                rho[i] = settings.rho;
+            }
+        }
+        rho_inv = rho.cwiseInverse();
     }
 
     Scalar eps_prim(const QPType &qp, const Settings &settings) const

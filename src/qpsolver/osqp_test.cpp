@@ -19,7 +19,7 @@ TEST(OSQPTestCase, TestSimpleQP) {
     qp.u << 1, 0.7, 0.7;
 
     OSQPSolver<SimpleQP>::Settings settings;
-    settings.rho = 1.0;
+    settings.rho = 0.1;
     settings.max_iter = 50;
     settings.eps_rel = 1e-4f; // set below isApprox() threshold
     settings.eps_abs = 1e-4f;

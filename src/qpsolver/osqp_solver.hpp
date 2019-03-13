@@ -54,7 +54,8 @@ struct OSQPSettings {
     Scalar eps_rel = 1e-3;
     Scalar eps_abs = 1e-3;
     int max_iter = 1000;
-    // TODO: add check_termination param for minimal number of iterations before termination criteria is checked
+    bool adaptive_rho = false;
+    // int check_termination_interval = 10; /**< check termination every iteration interval */
 };
 
 /**
@@ -93,6 +94,7 @@ public:
     Vm z_prev;
     Vm rho;
     Vm rho_inv;
+    Scalar rho_bar;
 
     enum {
         INEQUALITY_CONSTRAINT,
@@ -114,7 +116,7 @@ public:
         y.setZero();
 
         constr_type_init(qp);
-        rho_init(settings);
+        rho_update(settings.rho);
 
         form_KKT_mat(qp, settings, kkt_mat);
         lin_sys_solver.setup(kkt_mat);
@@ -134,7 +136,7 @@ public:
 
             // update z
             z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + rho_inv.cwiseProduct(y);
-            clip(z, qp.l, qp.u); // euclidean projection
+            clip_z(z, qp.l, qp.u); // euclidean projection
 
             // update y
             y = y + rho.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
@@ -143,7 +145,16 @@ public:
                 break;
             }
 
-            // TODO: adaptive rho
+            if (settings.adaptive_rho) {
+                Scalar new_rho = rho_estimate(rho_bar, qp, settings);
+                new_rho = fmax(1e-6, fmin(new_rho, 1e6));
+
+                if (new_rho < rho_bar / 5 || new_rho > rho_bar * 5) {
+                    rho_update(new_rho);
+                    form_KKT_mat(qp, settings, kkt_mat);
+                    lin_sys_solver.setup(kkt_mat);
+                }
+            }
         }
 
         // TODO: return summary
@@ -164,7 +175,7 @@ private:
         rhs.template tail<m>() = z - rho_inv.cwiseProduct(y);
     }
 
-    void clip(Vm& z, const Vm& l, const Vm& u)
+    void clip_z(Vm& z, const Vm& l, const Vm& u)
     {
         for (int i = 0; i < z.RowsAtCompileTime; i++) {
             z(i) = fmax(l(i), fmin(z(i), u(i)));
@@ -184,18 +195,51 @@ private:
         }
     }
 
-    void rho_init(const Settings &settings)
+    void rho_update(Scalar rho0)
     {
         for (int i = 0; i < rho.RowsAtCompileTime; i++) {
-            if (constr_type[i] == LOOSE_BOUNDS) {
+            switch (constr_type[i]) {
+            case LOOSE_BOUNDS:
                 rho[i] = 1e-6; // TODO: constant RHO_MIN
-            } else if (constr_type[i] == EQUALITY_CONSTRAINT) {
-                rho[i] = 1e3*settings.rho; // TODO: constant
-            } else { // INEQUALITY_CONSTRAINT
-                rho[i] = settings.rho;
-            }
+                break;
+            case EQUALITY_CONSTRAINT:
+                rho[i] = 1e3*rho0; // TODO: constant
+                break;
+            case INEQUALITY_CONSTRAINT: // fall through
+            default:
+                rho[i] = rho0;
+            };
         }
         rho_inv = rho.cwiseInverse();
+        rho_bar = rho0;
+    }
+
+    Scalar rho_estimate(const Scalar rho, const QPType &qp, const Settings &settings) const
+    {
+        Scalar max_Ax_z_norm, max_Px_ATy_q_norm;
+        const Scalar DIV_BY_ZERO_REGUL = 1e-10;
+
+        // TODO: remove duplicate code
+        Scalar norm_Ax, norm_z;
+        norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
+        norm_z = z.template lpNorm<Eigen::Infinity>();
+        max_Ax_z_norm = fmax(norm_Ax, norm_z);
+
+        Scalar norm_Px, norm_ATy, norm_q;
+        norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
+        norm_ATy = (qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
+        norm_q = qp.q.template lpNorm<Eigen::Infinity>();
+        max_Px_ATy_q_norm = fmax(norm_Px, fmax(norm_ATy, norm_q));
+
+        Scalar rp_norm, rd_norm;
+        rp_norm = residual_prim(qp).template lpNorm<Eigen::Infinity>();
+        rd_norm = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+
+        rp_norm = rp_norm / (max_Ax_z_norm + DIV_BY_ZERO_REGUL);
+        rd_norm = rd_norm / (max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
+
+        Scalar rho_new = rho * sqrt(rp_norm/(rd_norm + DIV_BY_ZERO_REGUL));
+        return rho_new;
     }
 
     Scalar eps_prim(const QPType &qp, const Settings &settings) const

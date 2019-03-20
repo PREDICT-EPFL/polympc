@@ -11,10 +11,23 @@ TEST(NMPCTestCase, TestRobotNMPC)
     using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
     using Approximation = Chebyshev<3>;
 
-    using SimpleQP = osqp_solver::QP<2, 3, double>;
-    using Solver = osqp_solver::OSQPSolver<SimpleQP>;
+    using controller_t = polympc::nmpc<Problem, Approximation>;
+    controller_t robot_controller;
 
-    polympc::nmpc<Problem, Approximation, Solver> robot_controller;
+    std::cout << controller_t::cost_colloc_t::hessian_t::RowsAtCompileTime << std::endl;
+    std::cout << controller_t::ode_colloc_t::jacobian_t::RowsAtCompileTime << std::endl;
+
+    controller_t::qp_t qp;
+    controller_t::var_t x = controller_t::var_t::Ones();
+    controller_t::Scalar cost;
+
+    robot_controller.construct_subproblem(x, qp);
+
+    std::cout << "P=\n" << qp.P << std::endl;
+    std::cout << "q=\n" << qp.q.transpose() << std::endl;
+    std::cout << "A=\n" << qp.A << std::endl;
+    std::cout << "l=\n" << qp.l.transpose() << std::endl;
+    std::cout << "u=\n" << qp.u.transpose() << std::endl;
 }
 
 int main(int argc, char **argv)

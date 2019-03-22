@@ -1,25 +1,16 @@
 language: cpp
 matrix:
   include:
-    # OSX Clang
     - os: osx
-      env:
-        - MATRIX_EVAL="" # default
+      osx_image: xcode10.1
+      compiler: clang
+      env: CASADI_PREFIX="${HOME}/casadi"
+      install: ci/install-osx.sh
 
-    # OSX GCC
-    - os: osx
-      env:
-        - MATRIX_EVAL="brew install gcc@7 && CC=gcc-7 && CXX=g++-7"
-
-env:
-  global:
-    - CASADI_PREFIX="${HOME}/casadi"
-
-before_install:
-  - eval "${MATRIX_EVAL}"
-
-install:
-  - ci/install_macos.sh
+    # - os: linux
+    #   dist: trusty
+    #   compiler: gcc
+    #   install: ci/install-linux.sh
 
 script:
   - ci/build.sh

@@ -8,6 +8,7 @@ apt-get install -y \
     build-essential \
     cmake \
     libeigen3-dev \
+    libgtest-dev \
     wget
 apt-get clean
 
@@ -16,3 +17,9 @@ wget -qO libcasadi.deb "https://github.com/casadi/casadi/releases/download/3.0.0
 dpkg -i libcasadi.deb
 apt-get install -f
 rm libcasadi.deb
+
+# Build googletest
+cd /usr/src/googletest
+cmake .
+make
+make install

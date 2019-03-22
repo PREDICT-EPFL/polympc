@@ -1,7 +1,6 @@
 #ifndef EBYSHEV_HPP
 #define EBYSHEV_HPP
 
-#include "iostream"
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 

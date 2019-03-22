@@ -5,7 +5,6 @@
 #include "Eigen/Sparse"
 #include "unsupported/Eigen/AutoDiff"
 #include <type_traits>
-#include <iostream>
 
 
 /** ------------------------------- */
@@ -110,9 +109,6 @@ private:
 template<typename LagrangeTerm, typename MayerTerm, typename Polynomial, int NumSegments>
 cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::cost_collocation()
 {
-    std::cout << HAS_LAGRANGE << "\n";
-    std::cout << HAS_MAYER << "\n";
-
     m_weights = m_basis_f.CCQWeights(); // change interface, probably integration weights? Both in Ebyshev and Legendre
     initialize_derivatives();
     initialize_second_derivatives();

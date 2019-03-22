@@ -1,7 +1,8 @@
 #include "polynomials/ebyshev.hpp"
 #include "control/ode_collocation.hpp"
 #include <iomanip>
-
+#include <iostream>
+#include <chrono>
 
 typedef std::chrono::time_point<std::chrono::system_clock> time_point;
 time_point get_time()

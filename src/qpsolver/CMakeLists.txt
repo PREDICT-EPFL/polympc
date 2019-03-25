@@ -8,3 +8,6 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 add_executable(osqp_test osqp_test.cpp)
 target_link_libraries(osqp_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES})
+
+add_executable(sqp_test sqp_test.cpp)
+target_link_libraries(sqp_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES})

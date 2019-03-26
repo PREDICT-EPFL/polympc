@@ -23,12 +23,12 @@ struct SQPSettings {
 class SQP {
 public:
     using Scalar = double;
-    using qp_t = osqp_solver::QP<2, 3, Scalar>;
+    using qp_t = osqp_solver::QP<2, 4, Scalar>;
     using qp_solver_t = osqp_solver::OSQPSolver<qp_t>;
     using Settings = SQPSettings<Scalar>;
 
     using x_t = Eigen::Matrix<Scalar, 2, 1>;
-    using dual_t = Eigen::Matrix<Scalar, 3, 1>;
+    using dual_t = Eigen::Matrix<Scalar, 4, 1>;
     using hessian_t = Eigen::Matrix<Scalar, 2, 2>;
 
     // Solver state variables
@@ -54,9 +54,14 @@ public:
     }
     void make_hessian_psd(hessian_t &h)
     {
+        // if (!is_psd(h)) {
+        //     printf("not PSD\n");
+        // }
+
         // while (!is_psd(h)) {
         //     h += 0.1*h.Identity();
         // }
+
         h.setIdentity();
     }
 
@@ -75,7 +80,8 @@ public:
     {
         hessian_t L_xx;
         L_xx.setIdentity();
-        L_xx *= 2 * (lambda(2));
+        L_xx += -2 * lambda(2) * hessian_t::Identity();
+        L_xx += - lambda(3) * (hessian_t() << -2,0,0,0).finished();
         make_hessian_psd(L_xx);
         return L_xx;
     }
@@ -101,16 +107,19 @@ public:
         // constraint gradient
         _qp.A << 1, 0,
                  0, 1,
-                 2*_x(0), 2*_x(1);
+                 2*_x(0), 2*_x(1),
+                 -2*_x(0), 1;
         // constraint bounds:
         // transform    l     <= A.x + b <= u
         //        to    l - b <= A.x     <= u - b
         _qp.l << -_x(0),
                  -_x(1),
-                 -_x.squaredNorm() + 1;
+                 -_x.squaredNorm() + 1,
+                 -(_x(1) - _x(0)*_x(0));
         _qp.u << UNBOUNDED,
                  UNBOUNDED,
-                 -_x.squaredNorm() + 2;
+                 -_x.squaredNorm() + 2,
+                 -(_x(1) - _x(0)*_x(0));
 
         std::cout << "P\n" << _qp.P << std::endl;
         std::cout << "q " << _qp.q.transpose() << std::endl;

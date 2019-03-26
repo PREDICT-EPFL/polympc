@@ -55,6 +55,7 @@ struct OSQPSettings {
     Scalar eps_abs = 1e-3;
     int max_iter = 1000;
     bool adaptive_rho = false;
+    bool warm_start = false;
     // int check_termination_interval = 10; /**< check termination every iteration interval */
 };
 
@@ -110,10 +111,11 @@ public:
     {
         Vnm rhs, x_tilde_nu;
 
-        // TODO: warm-start
-        x.setZero();
-        z.setZero();
-        y.setZero();
+        if (!settings.warm_start) {
+            x.setZero();
+            z.setZero();
+            y.setZero();
+        }
 
         constr_type_init(qp);
         rho_update(settings.rho);

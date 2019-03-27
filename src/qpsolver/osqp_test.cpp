@@ -38,6 +38,42 @@ TEST(OSQPTestCase, TestSimpleQP) {
     EXPECT_LE(upper.maxCoeff(), 1e-3);
 }
 
+TEST(OSQPTestCase, QP2) {
+    using qp_t = QP<2, 4, double>;
+    OSQPSolver<qp_t> prob;
+    Eigen::Vector2d sol, expect;
+
+    qp_t qp;
+    qp.P << 1, 0,
+            0, 1;
+    qp.q << -1, -1;
+    qp.A << -1, 0,
+            0, -1,
+            2.4, 0.2,
+            -2.4, -0.2;
+    qp.l << -1e+16, -1e+16, -1e+16, -1e+16;
+    qp.u << 1.2,  0.1, 0.45, 0.55;
+
+    OSQPSolver<qp_t>::Settings settings;
+    settings.rho = 0.1;
+    settings.max_iter = 100;
+    settings.eps_rel = 1e-4f; // set below isApprox() threshold
+    settings.eps_abs = 1e-4f;
+
+    prob.solve(qp, settings);
+    sol = prob.x;
+
+    std::cout << "QP solution:" << std::endl;
+    std::cout << "x " <<  prob.x.transpose() << std::endl;
+    std::cout << "y " <<  prob.y.transpose() << std::endl;
+    std::cout << "iter " <<  prob.iter << std::endl;
+
+    // solution
+    expect << 0.10972805, 0.92581067;
+    EXPECT_TRUE(sol.isApprox(expect, 1e-3));
+    EXPECT_LT(prob.iter, settings.max_iter);
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

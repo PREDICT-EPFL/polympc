@@ -85,7 +85,13 @@ public:
     using KKT = Eigen::Matrix<Scalar, n + m, n + m>;
     using Settings = OSQPSettings<Scalar>;
 
-    static constexpr Scalar LOOSE_BOUNDS_TH = 1e+16;
+    static constexpr Scalar RHO_MIN = 1e-6;
+    static constexpr Scalar RHO_MAX = 1e+6;
+    static constexpr Scalar RHO_TOL = 1e-4;
+    static constexpr Scalar RHO_EQ_FACTOR = 1e+3;
+    static constexpr Scalar ADAPTIVE_RHO_THRESH = 5;
+    static constexpr Scalar LOOSE_BOUNDS_THRESH = 1e+16;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
 
     // Solver state variables
     int iter;
@@ -151,9 +157,9 @@ public:
 
             if (settings.adaptive_rho) {
                 Scalar new_rho = rho_estimate(rho_bar, qp, settings);
-                new_rho = fmax(1e-6, fmin(new_rho, 1e6));
+                new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
 
-                if (new_rho < rho_bar / 5 || new_rho > rho_bar * 5) {
+                if (new_rho < rho_bar / ADAPTIVE_RHO_THRESH || new_rho > rho_bar * ADAPTIVE_RHO_THRESH) {
                     rho_update(new_rho);
                     form_KKT_mat(qp, settings, kkt_mat);
                     lin_sys_solver.setup(kkt_mat);
@@ -189,9 +195,9 @@ private:
     void constr_type_init(const QPType &qp)
     {
         for (int i = 0; i < qp.l.RowsAtCompileTime; i++) {
-            if (qp.l[i] < -LOOSE_BOUNDS_TH && qp.u[i] > LOOSE_BOUNDS_TH) {
+            if (qp.l[i] < -LOOSE_BOUNDS_THRESH && qp.u[i] > LOOSE_BOUNDS_THRESH) {
                 constr_type[i] = LOOSE_BOUNDS;
-            } else if (qp.u[i] - qp.l[i] < 1e-4) {
+            } else if (qp.u[i] - qp.l[i] < RHO_TOL) {
                 constr_type[i] = EQUALITY_CONSTRAINT;
             } else {
                 constr_type[i] = INEQUALITY_CONSTRAINT;
@@ -204,12 +210,12 @@ private:
         for (int i = 0; i < rho.RowsAtCompileTime; i++) {
             switch (constr_type[i]) {
             case LOOSE_BOUNDS:
-                rho[i] = 1e-6; // TODO: constant RHO_MIN
+                rho[i] = RHO_MIN;
                 break;
             case EQUALITY_CONSTRAINT:
-                rho[i] = 1e3*rho0; // TODO: constant
+                rho[i] = RHO_EQ_FACTOR*rho0;
                 break;
-            case INEQUALITY_CONSTRAINT: // fall through
+            case INEQUALITY_CONSTRAINT: /* fall through */
             default:
                 rho[i] = rho0;
             };
@@ -221,7 +227,6 @@ private:
     Scalar rho_estimate(const Scalar rho, const QPType &qp, const Settings &settings) const
     {
         Scalar max_Ax_z_norm, max_Px_ATy_q_norm;
-        const Scalar DIV_BY_ZERO_REGUL = 1e-10;
 
         // TODO: remove duplicate code
         Scalar norm_Ax, norm_z;

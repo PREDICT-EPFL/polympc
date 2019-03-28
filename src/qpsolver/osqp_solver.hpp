@@ -19,33 +19,6 @@ struct QP {
     Eigen::Matrix<Scalar, m, 1> l, u;
 };
 
-/** Direct linear system solver
- *  solve A x = b
- */
-template<typename AType>
-class DirectLinSysSolver {
-public:
-    enum {
-        n=AType::RowsAtCompileTime
-    };
-    using Scalar = typename AType::Scalar;
-    using Vn = Eigen::Matrix<Scalar, n, 1>;
-    Eigen::LDLT<AType> ldlt;
-
-    void setup(AType &A)
-    {
-        // TODO: Inplace matrix decompositions
-        // LDLT<Ref<KKT>>, with matrix passed to constructor!
-        // https://eigen.tuxfamily.org/dox/group__InplaceDecomposition.html
-        ldlt.compute(A);
-    }
-
-    Vn solve(Vn &rhs)
-    {
-        return ldlt.solve(rhs);
-    }
-};
-
 template <typename Scalar>
 struct OSQPSettings {
     Scalar rho = 1e-1;          /**< ADMM rho step, 0 < rho */
@@ -76,14 +49,13 @@ public:
         m=_QPType::m
     };
 
-    using QPType = _QPType;
+    using qp_t = _QPType;
     using Scalar = typename _QPType::Scalar;
-    using Vn = Eigen::Matrix<Scalar, n, 1>;
-    using Vm = Eigen::Matrix<Scalar, m, 1>;
-    using Vnm = Eigen::Matrix<Scalar, n + m, 1>;
-    using Mn = Eigen::Matrix<Scalar, n, n>;
-    using Mmn = Eigen::Matrix<Scalar, m, n>;
-    using KKT = Eigen::Matrix<Scalar, n + m, n + m>;
+    using primal_t = Eigen::Matrix<Scalar, n, 1>;
+    using constraint_t = Eigen::Matrix<Scalar, m, 1>;
+    using dual_t = Eigen::Matrix<Scalar, m, 1>;
+    using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
+    using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
     using Settings = OSQPSettings<Scalar>;
 
     static constexpr Scalar RHO_MIN = 1e-6;
@@ -96,14 +68,14 @@ public:
 
     // Solver state variables
     int iter;
-    Vn x;
-    Vm z;
-    Vm y;
-    Vn x_tilde;
-    Vm z_tilde;
-    Vm z_prev;
-    Vm rho;
-    Vm rho_inv;
+    primal_t x;
+    constraint_t z;
+    dual_t y;
+    primal_t x_tilde;
+    constraint_t z_tilde;
+    constraint_t z_prev;
+    dual_t rho_vec;
+    dual_t rho_inv_vec;
     Scalar rho_bar;
 
     enum {
@@ -114,9 +86,13 @@ public:
 
     Settings settings;
 
-    KKT kkt_mat;
+    kkt_mat_t kkt_mat;
+
     // TODO: choose between direct and indirect method
-    DirectLinSysSolver<KKT> lin_sys_solver;
+    // TODO: Inplace matrix decompositions
+    // LDLT<Ref<KKT>>, with matrix passed to constructor!
+    // https://eigen.tuxfamily.org/dox/group__InplaceDecomposition.html
+    Eigen::LDLT<kkt_mat_t> lin_sys_solver;
 
     OSQPSolver()
     {
@@ -125,9 +101,9 @@ public:
         y.setZero();
     }
 
-    void solve(const QPType &qp)
+    void solve(const qp_t &qp)
     {
-        Vnm rhs, x_tilde_nu;
+        kkt_vec_t rhs, x_tilde_nu;
 
 #ifdef OSQP_PRINTING
         print_settings(settings);
@@ -141,8 +117,8 @@ public:
         constr_type_init(qp);
         rho_update(settings.rho);
 
-        form_KKT_mat(qp, kkt_mat);
-        lin_sys_solver.setup(kkt_mat);
+        KKT_mat_update(qp, kkt_mat);
+        lin_sys_solver.compute(kkt_mat);
 
         for (iter = 1; iter <= settings.max_iter; iter++) {
             z_prev = z;
@@ -152,17 +128,17 @@ public:
             x_tilde_nu = lin_sys_solver.solve(rhs);
 
             x_tilde = x_tilde_nu.template head<n>();
-            z_tilde = z_prev + rho_inv.cwiseProduct(x_tilde_nu.template tail<m>() - y);
+            z_tilde = z_prev + rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<m>() - y);
 
             // update x
             x = settings.alpha * x_tilde + (1 - settings.alpha) * x;
 
             // update z
-            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + rho_inv.cwiseProduct(y);
+            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + rho_inv_vec.cwiseProduct(y);
             clip_z(z, qp.l, qp.u); // euclidean projection
 
             // update y
-            y = y + rho.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
+            y = y + rho_vec.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
             if (settings.check_termination != 0 && iter % settings.check_termination == 0) {
 #ifdef OSQP_PRINTING
@@ -179,8 +155,8 @@ public:
 
                 if (new_rho < rho_bar / ADAPTIVE_RHO_THRESH || new_rho > rho_bar * ADAPTIVE_RHO_THRESH) {
                     rho_update(new_rho);
-                    form_KKT_mat(qp, kkt_mat);
-                    lin_sys_solver.setup(kkt_mat);
+                    KKT_mat_update(qp, kkt_mat);
+                    lin_sys_solver.compute(kkt_mat);
                 }
             }
         }
@@ -189,28 +165,28 @@ public:
     }
 
 private:
-    void form_KKT_mat(const QPType &qp, KKT& kkt)
+    void KKT_mat_update(const qp_t &qp, kkt_mat_t& kkt)
     {
         kkt.template topLeftCorner<n, n>() = qp.P + settings.sigma * qp.P.Identity();
         kkt.template topRightCorner<n, m>() = qp.A.transpose();
         kkt.template bottomLeftCorner<m, n>() = qp.A;
-        kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv.asDiagonal();
+        kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
     }
 
-    void form_KKT_rhs(const QPType &qp, Vnm& rhs)
+    void form_KKT_rhs(const qp_t &qp, kkt_vec_t& rhs)
     {
         rhs.template head<n>() = settings.sigma * x - qp.q;
-        rhs.template tail<m>() = z - rho_inv.cwiseProduct(y);
+        rhs.template tail<m>() = z - rho_inv_vec.cwiseProduct(y);
     }
 
-    void clip_z(Vm& z, const Vm& l, const Vm& u)
+    void clip_z(constraint_t& z, const constraint_t& l, const constraint_t& u)
     {
         for (int i = 0; i < z.RowsAtCompileTime; i++) {
             z(i) = fmax(l(i), fmin(z(i), u(i)));
         }
     }
 
-    void constr_type_init(const QPType &qp)
+    void constr_type_init(const qp_t &qp)
     {
         for (int i = 0; i < qp.l.RowsAtCompileTime; i++) {
             if (qp.l[i] < -LOOSE_BOUNDS_THRESH && qp.u[i] > LOOSE_BOUNDS_THRESH) {
@@ -225,24 +201,24 @@ private:
 
     void rho_update(Scalar rho0)
     {
-        for (int i = 0; i < rho.RowsAtCompileTime; i++) {
+        for (int i = 0; i < rho_vec.RowsAtCompileTime; i++) {
             switch (constr_type[i]) {
             case LOOSE_BOUNDS:
-                rho[i] = RHO_MIN;
+                rho_vec[i] = RHO_MIN;
                 break;
             case EQUALITY_CONSTRAINT:
-                rho[i] = RHO_EQ_FACTOR*rho0;
+                rho_vec[i] = RHO_EQ_FACTOR*rho0;
                 break;
             case INEQUALITY_CONSTRAINT: /* fall through */
             default:
-                rho[i] = rho0;
+                rho_vec[i] = rho0;
             };
         }
-        rho_inv = rho.cwiseInverse();
+        rho_inv_vec = rho_vec.cwiseInverse();
         rho_bar = rho0;
     }
 
-    Scalar rho_estimate(const Scalar rho, const QPType &qp) const
+    Scalar rho_estimate(const Scalar rho, const qp_t &qp) const
     {
         Scalar max_Ax_z_norm, max_Px_ATy_q_norm;
 
@@ -259,8 +235,8 @@ private:
         max_Px_ATy_q_norm = fmax(norm_Px, fmax(norm_ATy, norm_q));
 
         Scalar rp_norm, rd_norm;
-        rp_norm = residual_prim(qp).template lpNorm<Eigen::Infinity>();
-        rd_norm = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+        rp_norm = residual_prim(qp);
+        rd_norm = residual_dual(qp);
 
         rp_norm = rp_norm / (max_Ax_z_norm + DIV_BY_ZERO_REGUL);
         rd_norm = rd_norm / (max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
@@ -269,7 +245,7 @@ private:
         return rho_new;
     }
 
-    Scalar eps_prim(const QPType &qp) const
+    Scalar eps_prim(const qp_t &qp) const
     {
         Scalar norm_Ax, norm_z;
         norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
@@ -277,7 +253,7 @@ private:
         return settings.eps_abs + settings.eps_rel * fmax(norm_Ax, norm_z);
     }
 
-    Scalar eps_dual(const QPType &qp) const
+    Scalar eps_dual(const qp_t &qp) const
     {
         Scalar norm_Px, norm_ATy, norm_q;
         norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
@@ -286,21 +262,21 @@ private:
         return settings.eps_abs + settings.eps_rel * fmax(norm_Px, fmax(norm_ATy, norm_q));
     }
 
-    Vm residual_prim(const QPType &qp) const
+    Scalar residual_prim(const qp_t &qp) const
     {
-        return qp.A*x - z;
+        return (qp.A*x - z).template lpNorm<Eigen::Infinity>();
     }
 
-    Vn residual_dual(const QPType &qp) const
+    Scalar residual_dual(const qp_t &qp) const
     {
-        return qp.P*x + qp.q + qp.A.transpose()*y;
+        return (qp.P*x + qp.q + qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
     }
 
-    bool termination_criteria(const QPType &qp)
+    bool termination_criteria(const qp_t &qp)
     {
         Scalar rp_norm, rd_norm;
-        rp_norm = residual_prim(qp).template lpNorm<Eigen::Infinity>();
-        rd_norm = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+        rp_norm = residual_prim(qp);
+        rd_norm = residual_dual(qp);
 
         // check residual norms to detect optimality
         if (rp_norm <= eps_prim(qp) && rd_norm <= eps_dual(qp)) {
@@ -311,11 +287,11 @@ private:
     }
 
 #ifdef OSQP_PRINTING
-    void print_status(const QPType &qp) const
+    void print_status(const qp_t &qp) const
     {
         Scalar rp, rd, obj;
-        rp = residual_prim(qp).template lpNorm<Eigen::Infinity>();
-        rd = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+        rp = residual_prim(qp);
+        rd = residual_dual(qp);
         obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
 
         if (iter == 1) {

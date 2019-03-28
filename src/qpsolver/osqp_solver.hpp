@@ -85,6 +85,8 @@ public:
     using KKT = Eigen::Matrix<Scalar, n + m, n + m>;
     using Settings = OSQPSettings<Scalar>;
 
+    static constexpr Scalar LOOSE_BOUNDS_TH = 1e+16;
+
     // Solver state variables
     int iter;
     Vn x;
@@ -187,7 +189,7 @@ private:
     void constr_type_init(const QPType &qp)
     {
         for (int i = 0; i < qp.l.RowsAtCompileTime; i++) {
-            if (qp.l[i] < -1e-16 && qp.u[i] > 1e-16) {
+            if (qp.l[i] < -LOOSE_BOUNDS_TH && qp.u[i] > LOOSE_BOUNDS_TH) {
                 constr_type[i] = LOOSE_BOUNDS;
             } else if (qp.u[i] - qp.l[i] < 1e-4) {
                 constr_type[i] = EQUALITY_CONSTRAINT;

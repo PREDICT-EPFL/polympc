@@ -121,6 +121,9 @@ public:
     {
         Vnm rhs, x_tilde_nu;
 
+#ifdef OSQP_PRINTING
+        print_settings(settings);
+#endif
         if (!settings.warm_start) {
             x.setZero();
             z.setZero();
@@ -167,6 +170,10 @@ public:
                     lin_sys_solver.setup(kkt_mat);
                 }
             }
+
+#ifdef OSQP_PRINTING
+            print_status(qp);
+#endif
         }
 
         // TODO: return summary
@@ -293,6 +300,34 @@ private:
 
         return false;
     }
+
+#ifdef OSQP_PRINTING
+    void print_status(const QPType &qp) const
+    {
+        Scalar rp, rd, obj;
+        rp = residual_prim(qp).template lpNorm<Eigen::Infinity>();
+        rd = residual_dual(qp).template lpNorm<Eigen::Infinity>();
+        obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
+
+        if (iter == 1) {
+            printf("iter   obj       rp        rd\n");
+        }
+        printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, rp, rd);
+    }
+
+    void print_settings(const Settings &settings) const
+    {
+        printf("ADMM settings:\n");
+        printf("  sigma %.2e\n", settings.sigma);
+        printf("  rho %.2e\n", settings.rho);
+        printf("  alpha %.2f\n", settings.alpha);
+        printf("  eps_rel %.1e\n", settings.eps_rel);
+        printf("  eps_abs %.1e\n", settings.eps_abs);
+        printf("  max_iter %d\n", settings.max_iter);
+        printf("  adaptive_rho %d\n", settings.adaptive_rho);
+        printf("  warm_start %d\n", settings.warm_start);
+    }
+#endif
 };
 
 } // namespace osqp_solver

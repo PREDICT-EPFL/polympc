@@ -20,7 +20,7 @@ TEST(OSQPTestCase, TestSimpleQP) {
 
     OSQPSolver<SimpleQP>::Settings settings;
     settings.rho = 0.1;
-    settings.max_iter = 50;
+    settings.max_iter = 1000;
     settings.eps_rel = 1e-4f; // set below isApprox() threshold
     settings.eps_abs = 1e-4f;
 
@@ -30,6 +30,7 @@ TEST(OSQPTestCase, TestSimpleQP) {
     // solution
     expect << 0.3, 0.7;
     EXPECT_TRUE(sol.isApprox(expect, 1e-3));
+    EXPECT_LT(prob.iter, settings.max_iter);
 
     // check feasibility (with some epsilon margin)
     Eigen::Vector3d lower = qp.A*sol - qp.l;
@@ -90,18 +91,10 @@ TEST(OSQPTestCase, QP2) {
     qp.u << 1.2,  0.1, 0.45, 0.55;
 
     OSQPSolver<qp_t>::Settings settings;
-    settings.rho = 0.1;
-    settings.max_iter = 100;
-    settings.eps_rel = 1e-4f; // set below isApprox() threshold
-    settings.eps_abs = 1e-4f;
+    settings.max_iter = 1000;
 
     prob.solve(qp, settings);
     sol = prob.x;
-
-    std::cout << "QP solution:" << std::endl;
-    std::cout << "x " <<  prob.x.transpose() << std::endl;
-    std::cout << "y " <<  prob.y.transpose() << std::endl;
-    std::cout << "iter " <<  prob.iter << std::endl;
 
     // solution
     expect << 0.10972805, 0.92581067;

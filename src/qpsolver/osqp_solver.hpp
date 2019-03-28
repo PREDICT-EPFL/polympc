@@ -111,11 +111,13 @@ public:
         LOOSE_BOUNDS
     } constr_type[m]; /**< constraint type classification */
 
+    Settings settings;
+
     KKT kkt_mat;
     // TODO: choose between direct and indirect method
     DirectLinSysSolver<KKT> lin_sys_solver;
 
-    void solve(const QPType &qp, const Settings &settings)
+    void solve(const QPType &qp)
     {
         Vnm rhs, x_tilde_nu;
 
@@ -128,14 +130,14 @@ public:
         constr_type_init(qp);
         rho_update(settings.rho);
 
-        form_KKT_mat(qp, settings, kkt_mat);
+        form_KKT_mat(qp, kkt_mat);
         lin_sys_solver.setup(kkt_mat);
 
         for (iter = 1; iter <= settings.max_iter; iter++) {
             z_prev = z;
 
             // update x_tilde z_tilde
-            form_KKT_rhs(qp, settings, rhs);
+            form_KKT_rhs(qp, rhs);
             x_tilde_nu = lin_sys_solver.solve(rhs);
 
             x_tilde = x_tilde_nu.template head<n>();
@@ -151,17 +153,17 @@ public:
             // update y
             y = y + rho.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
-            if (termination_criteria(qp, settings)) {
+            if (termination_criteria(qp)) {
                 break;
             }
 
             if (settings.adaptive_rho) {
-                Scalar new_rho = rho_estimate(rho_bar, qp, settings);
+                Scalar new_rho = rho_estimate(rho_bar, qp);
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
 
                 if (new_rho < rho_bar / ADAPTIVE_RHO_THRESH || new_rho > rho_bar * ADAPTIVE_RHO_THRESH) {
                     rho_update(new_rho);
-                    form_KKT_mat(qp, settings, kkt_mat);
+                    form_KKT_mat(qp, kkt_mat);
                     lin_sys_solver.setup(kkt_mat);
                 }
             }
@@ -171,7 +173,7 @@ public:
     }
 
 private:
-    void form_KKT_mat(const QPType &qp, const Settings &settings, KKT& kkt)
+    void form_KKT_mat(const QPType &qp, KKT& kkt)
     {
         kkt.template topLeftCorner<n, n>() = qp.P + settings.sigma * qp.P.Identity();
         kkt.template topRightCorner<n, m>() = qp.A.transpose();
@@ -179,7 +181,7 @@ private:
         kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv.asDiagonal();
     }
 
-    void form_KKT_rhs(const QPType &qp, const Settings &settings, Vnm& rhs)
+    void form_KKT_rhs(const QPType &qp, Vnm& rhs)
     {
         rhs.template head<n>() = settings.sigma * x - qp.q;
         rhs.template tail<m>() = z - rho_inv.cwiseProduct(y);
@@ -224,7 +226,7 @@ private:
         rho_bar = rho0;
     }
 
-    Scalar rho_estimate(const Scalar rho, const QPType &qp, const Settings &settings) const
+    Scalar rho_estimate(const Scalar rho, const QPType &qp) const
     {
         Scalar max_Ax_z_norm, max_Px_ATy_q_norm;
 
@@ -251,7 +253,7 @@ private:
         return rho_new;
     }
 
-    Scalar eps_prim(const QPType &qp, const Settings &settings) const
+    Scalar eps_prim(const QPType &qp) const
     {
         Scalar norm_Ax, norm_z;
         norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
@@ -259,7 +261,7 @@ private:
         return settings.eps_abs + settings.eps_rel * fmax(norm_Ax, norm_z);
     }
 
-    Scalar eps_dual(const QPType &qp, const Settings &settings) const
+    Scalar eps_dual(const QPType &qp) const
     {
         Scalar norm_Px, norm_ATy, norm_q;
         norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
@@ -278,14 +280,14 @@ private:
         return qp.P*x + qp.q + qp.A.transpose()*y;
     }
 
-    bool termination_criteria(const QPType &qp, const Settings &settings)
+    bool termination_criteria(const QPType &qp)
     {
         Scalar rp_norm, rd_norm;
         rp_norm = residual_prim(qp).template lpNorm<Eigen::Infinity>();
         rd_norm = residual_dual(qp).template lpNorm<Eigen::Infinity>();
 
         // check residual norms to detect optimality
-        if (rp_norm <= eps_prim(qp, settings) && rd_norm <= eps_dual(qp, settings)) {
+        if (rp_norm <= eps_prim(qp) && rd_norm <= eps_dual(qp)) {
             return true;
         }
 

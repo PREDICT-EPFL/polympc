@@ -18,19 +18,18 @@ TEST(OSQPTestCase, TestSimpleQP) {
     qp.l << 1, 0, 0;
     qp.u << 1, 0.7, 0.7;
 
-    OSQPSolver<SimpleQP>::Settings settings;
-    settings.rho = 0.1;
-    settings.max_iter = 1000;
-    settings.eps_rel = 1e-4f; // set below isApprox() threshold
-    settings.eps_abs = 1e-4f;
+    prob.settings.rho = 0.1;
+    prob.settings.max_iter = 1000;
+    prob.settings.eps_rel = 1e-4f; // set below isApprox() threshold
+    prob.settings.eps_abs = 1e-4f;
 
-    prob.solve(qp, settings);
+    prob.solve(qp);
     sol = prob.x;
 
     // solution
     expect << 0.3, 0.7;
     EXPECT_TRUE(sol.isApprox(expect, 1e-3));
-    EXPECT_LT(prob.iter, settings.max_iter);
+    EXPECT_LT(prob.iter, prob.settings.max_iter);
 
     // check feasibility (with some epsilon margin)
     Eigen::Vector3d lower = qp.A*sol - qp.l;
@@ -66,8 +65,7 @@ TEST(OSQPTestCase, TestConstraint) {
     qp.u(4) = 42;
     type_expect[4] = solver_t::EQUALITY_CONSTRAINT;
 
-    solver_t::Settings settings;
-    prob.solve(qp, settings);
+    prob.solve(qp);
 
     for (int i = 0; i < qp.l.rows(); i++) {
         EXPECT_EQ(prob.constr_type[i], type_expect[i]);
@@ -90,16 +88,15 @@ TEST(OSQPTestCase, QP2) {
     qp.l << -1e+16, -1e+16, -1e+16, -1e+16;
     qp.u << 1.2,  0.1, 0.45, 0.55;
 
-    OSQPSolver<qp_t>::Settings settings;
-    settings.max_iter = 1000;
+    prob.settings.max_iter = 1000;
 
-    prob.solve(qp, settings);
+    prob.solve(qp);
     sol = prob.x;
 
     // solution
     expect << 0.10972805, 0.92581067;
     EXPECT_TRUE(sol.isApprox(expect, 1e-3));
-    EXPECT_LT(prob.iter, settings.max_iter);
+    EXPECT_LT(prob.iter, prob.settings.max_iter);
 }
 
 int main(int argc, char **argv) {

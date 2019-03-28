@@ -78,6 +78,12 @@ public:
     dual_t rho_inv_vec;
     Scalar rho_bar;
 
+    Scalar res_prim;
+    Scalar res_dual;
+
+    Scalar _max_Ax_z_norm;
+    Scalar _max_Px_ATy_q_norm;
+
     enum {
         INEQUALITY_CONSTRAINT,
         EQUALITY_CONSTRAINT,
@@ -103,6 +109,7 @@ public:
 
     void solve(const qp_t &qp)
     {
+        bool check_termination = false;
         kkt_vec_t rhs, x_tilde_nu;
 
 #ifdef OSQP_PRINTING
@@ -141,6 +148,12 @@ public:
             y = y + rho_vec.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
             if (settings.check_termination != 0 && iter % settings.check_termination == 0) {
+                check_termination = true;
+            }
+
+            if (check_termination) {
+                update_state(qp);
+
 #ifdef OSQP_PRINTING
                 print_status(qp);
 #endif
@@ -150,6 +163,9 @@ public:
             }
 
             if (settings.adaptive_rho) {
+                if (!check_termination) {
+                    update_state(qp);
+                }
                 Scalar new_rho = rho_estimate(rho_bar, qp);
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
 
@@ -218,28 +234,28 @@ private:
         rho_bar = rho0;
     }
 
-    Scalar rho_estimate(const Scalar rho, const qp_t &qp) const
+    void update_state(const qp_t& qp)
     {
-        Scalar max_Ax_z_norm, max_Px_ATy_q_norm;
-
-        // TODO: remove duplicate code
         Scalar norm_Ax, norm_z;
         norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
         norm_z = z.template lpNorm<Eigen::Infinity>();
-        max_Ax_z_norm = fmax(norm_Ax, norm_z);
+        _max_Ax_z_norm = fmax(norm_Ax, norm_z);
 
         Scalar norm_Px, norm_ATy, norm_q;
         norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
         norm_ATy = (qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
         norm_q = qp.q.template lpNorm<Eigen::Infinity>();
-        max_Px_ATy_q_norm = fmax(norm_Px, fmax(norm_ATy, norm_q));
+        _max_Px_ATy_q_norm = fmax(norm_Px, fmax(norm_ATy, norm_q));
 
+        res_prim = residual_prim(qp);
+        res_dual = residual_dual(qp);
+    }
+
+    Scalar rho_estimate(const Scalar rho, const qp_t &qp) const
+    {
         Scalar rp_norm, rd_norm;
-        rp_norm = residual_prim(qp);
-        rd_norm = residual_dual(qp);
-
-        rp_norm = rp_norm / (max_Ax_z_norm + DIV_BY_ZERO_REGUL);
-        rd_norm = rd_norm / (max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
+        rp_norm = res_prim / (_max_Ax_z_norm + DIV_BY_ZERO_REGUL);
+        rd_norm = res_dual / (_max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
 
         Scalar rho_new = rho * sqrt(rp_norm/(rd_norm + DIV_BY_ZERO_REGUL));
         return rho_new;
@@ -274,12 +290,8 @@ private:
 
     bool termination_criteria(const qp_t &qp)
     {
-        Scalar rp_norm, rd_norm;
-        rp_norm = residual_prim(qp);
-        rd_norm = residual_dual(qp);
-
         // check residual norms to detect optimality
-        if (rp_norm <= eps_prim(qp) && rd_norm <= eps_dual(qp)) {
+        if (res_prim <= eps_prim(qp) && res_dual <= eps_dual(qp)) {
             return true;
         }
 
@@ -289,15 +301,12 @@ private:
 #ifdef OSQP_PRINTING
     void print_status(const qp_t &qp) const
     {
-        Scalar rp, rd, obj;
-        rp = residual_prim(qp);
-        rd = residual_dual(qp);
-        obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
+        Scalar obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
 
         if (iter == 1) {
             printf("iter   obj       rp        rd\n");
         }
-        printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, rp, rd);
+        printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, res_prim, res_dual);
     }
 
     void print_settings(const Settings &settings) const

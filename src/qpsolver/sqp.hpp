@@ -38,7 +38,6 @@ public:
 
     qp_t _qp;
     qp_solver_t _qp_solver;
-    qp_solver_t::Settings _qp_solver_settings;
 
     bool is_psd(hessian_t &h)
     {
@@ -130,10 +129,10 @@ public:
         // TODO: warm start, which variables are reused?
         // _qp_solver.reset();
 
-        _qp_solver.solve(_qp, _qp_solver_settings);
+        _qp_solver.solve(_qp);
 
         printf("iter %d\n", _qp_solver.iter);
-        if (_qp_solver.iter >= _qp_solver_settings.max_iter) {
+        if (_qp_solver.iter >= _qp_solver.settings.max_iter) {
             printf("QP: MAX ITERATIONS\n");
         }
 

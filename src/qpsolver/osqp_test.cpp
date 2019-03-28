@@ -38,6 +38,41 @@ TEST(OSQPTestCase, TestSimpleQP) {
     EXPECT_LE(upper.maxCoeff(), 1e-3);
 }
 
+TEST(OSQPTestCase, TestConstraint) {
+    using qp_t = QP<5, 5, double>;
+    using solver_t = OSQPSolver<qp_t>;
+    solver_t prob;
+
+    qp_t qp;
+    qp.P.setIdentity();
+    qp.q.setConstant(-1);
+    qp.A.setIdentity();
+
+    int type_expect[5];
+    qp.l(0) = -1e+17;
+    qp.u(0) = 1e+17;
+    type_expect[0] = solver_t::LOOSE_BOUNDS;
+    qp.l(1) = -101;
+    qp.u(1) = 1e+17;
+    type_expect[1] = solver_t::INEQUALITY_CONSTRAINT;
+    qp.l(2) = -1e+17;
+    qp.u(2) = 123;
+    type_expect[2] = solver_t::INEQUALITY_CONSTRAINT;
+    qp.l(3) = -1;
+    qp.u(3) = 1;
+    type_expect[3] = solver_t::INEQUALITY_CONSTRAINT;
+    qp.l(4) = 42;
+    qp.u(4) = 42;
+    type_expect[4] = solver_t::EQUALITY_CONSTRAINT;
+
+    solver_t::Settings settings;
+    prob.solve(qp, settings);
+
+    for (int i = 0; i < qp.l.rows(); i++) {
+        EXPECT_EQ(prob.constr_type[i], type_expect[i]);
+    }
+}
+
 TEST(OSQPTestCase, QP2) {
     using qp_t = QP<2, 4, double>;
     OSQPSolver<qp_t> prob;

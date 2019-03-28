@@ -37,6 +37,15 @@ TEST(OSQPTestCase, TestSimpleQP) {
     Eigen::Vector3d upper = qp.A*sol - qp.u;
     EXPECT_GE(lower.minCoeff(), -1e-3);
     EXPECT_LE(upper.maxCoeff(), 1e-3);
+
+    // check adaptive rho
+    prob.settings.warm_start = false;
+    prob.settings.adaptive_rho = true;
+    prob.settings.adaptive_rho_interval = 10;
+    int prev_iter = prob.iter;
+    prob.solve(qp);
+    EXPECT_LT(prob.iter, prob.settings.max_iter);
+    EXPECT_LT(prob.iter, prev_iter); // adaptive rho should improve :)
 }
 
 TEST(OSQPTestCase, TestConstraint) {

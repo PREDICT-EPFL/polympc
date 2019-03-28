@@ -29,8 +29,11 @@ struct OSQPSettings {
     Scalar eps_abs = 1e-3;      /**< Absolute tolerance for termination, 0 < eps_abs */
     int max_iter = 1000;        /**< Maximal number of iteration, 0 < max_iter */
     int check_termination = 25; /**< Check termination after every Nth iteration, 0 (disabled) or 0 < check_termination */
-    bool adaptive_rho = false;  /**< Adapt rho to optimal estimate */
     bool warm_start = false;    /**< Warm start solver, reuses previous x,z,y */
+    bool adaptive_rho = false;  /**< Adapt rho to optimal estimate */
+    Scalar adaptive_rho_tolerance = 5;  /**< Minimal for rho update factor, 1 < adaptive_rho_tolerance */
+    int adaptive_rho_interval = 25; /**< change rho every Nth iteration, 0 < adaptive_rho_interval,
+                                         set equal to check_termination to save computation  */
 };
 
 /**
@@ -62,7 +65,6 @@ public:
     static constexpr Scalar RHO_MAX = 1e+6;
     static constexpr Scalar RHO_TOL = 1e-4;
     static constexpr Scalar RHO_EQ_FACTOR = 1e+3;
-    static constexpr Scalar ADAPTIVE_RHO_THRESH = 5;
     static constexpr Scalar LOOSE_BOUNDS_THRESH = 1e+16;
     static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
 
@@ -76,11 +78,11 @@ public:
     constraint_t z_prev;
     dual_t rho_vec;
     dual_t rho_inv_vec;
-    Scalar rho_bar;
+    Scalar rho;
 
+    // State
     Scalar res_prim;
     Scalar res_dual;
-
     Scalar _max_Ax_z_norm;
     Scalar _max_Px_ATy_q_norm;
 
@@ -162,14 +164,16 @@ public:
                 }
             }
 
-            if (settings.adaptive_rho) {
+            if (settings.adaptive_rho && iter % settings.adaptive_rho_interval == 0) {
                 if (!check_termination) {
+                    // state was not yet updated
                     update_state(qp);
                 }
-                Scalar new_rho = rho_estimate(rho_bar, qp);
+                Scalar new_rho = rho_estimate(rho, qp);
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
 
-                if (new_rho < rho_bar / ADAPTIVE_RHO_THRESH || new_rho > rho_bar * ADAPTIVE_RHO_THRESH) {
+                if (new_rho < rho / settings.adaptive_rho_tolerance ||
+                    new_rho > rho * settings.adaptive_rho_tolerance) {
                     rho_update(new_rho);
                     KKT_mat_update(qp, kkt_mat);
                     lin_sys_solver.compute(kkt_mat);
@@ -231,7 +235,7 @@ private:
             };
         }
         rho_inv_vec = rho_vec.cwiseInverse();
-        rho_bar = rho0;
+        rho = rho0;
     }
 
     void update_state(const qp_t& qp)
@@ -251,13 +255,13 @@ private:
         res_dual = residual_dual(qp);
     }
 
-    Scalar rho_estimate(const Scalar rho, const qp_t &qp) const
+    Scalar rho_estimate(const Scalar rho0, const qp_t &qp) const
     {
         Scalar rp_norm, rd_norm;
         rp_norm = res_prim / (_max_Ax_z_norm + DIV_BY_ZERO_REGUL);
         rd_norm = res_dual / (_max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
 
-        Scalar rho_new = rho * sqrt(rp_norm/(rd_norm + DIV_BY_ZERO_REGUL));
+        Scalar rho_new = rho0 * sqrt(rp_norm/(rd_norm + DIV_BY_ZERO_REGUL));
         return rho_new;
     }
 

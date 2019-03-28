@@ -22,6 +22,7 @@ TEST(OSQPTestCase, TestSimpleQP) {
     prob.settings.max_iter = 1000;
     prob.settings.eps_rel = 1e-4f; // set below isApprox() threshold
     prob.settings.eps_abs = 1e-4f;
+    prob.settings.check_termination = 1;
 
     prob.solve(qp);
     sol = prob.x;

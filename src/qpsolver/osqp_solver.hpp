@@ -48,15 +48,16 @@ public:
 
 template <typename Scalar>
 struct OSQPSettings {
-    Scalar sigma = 1e-6;
-    Scalar rho = 1e-1;
-    Scalar alpha = 1.0;
-    Scalar eps_rel = 1e-3;
-    Scalar eps_abs = 1e-3;
-    int max_iter = 1000;
-    bool adaptive_rho = false;
-    bool warm_start = false;
-    // int check_termination_interval = 10; /**< check termination every iteration interval */
+    Scalar rho = 1e-1;          /**< ADMM rho step, 0 < rho */
+    Scalar sigma = 1e-6;        /**< ADMM sigma step, 0 < sigma, (small) */
+    Scalar alpha = 1.0;         /**< ADMM overrelaxation parameter, 0 < alpha < 2,
+                                     values in [1.5, 1.8] give good results (empirically) */
+    Scalar eps_rel = 1e-3;      /**< Relative tolerance for termination, 0 < eps_rel */
+    Scalar eps_abs = 1e-3;      /**< Absolute tolerance for termination, 0 < eps_abs */
+    int max_iter = 1000;        /**< Maximal number of iteration, 0 < max_iter */
+    int check_termination = 25; /**< Check termination after every Nth iteration, 0 (disabled) or 0 < check_termination */
+    bool adaptive_rho = false;  /**< Adapt rho to optimal estimate */
+    bool warm_start = false;    /**< Warm start solver, reuses previous x,z,y */
 };
 
 /**
@@ -117,6 +118,13 @@ public:
     // TODO: choose between direct and indirect method
     DirectLinSysSolver<KKT> lin_sys_solver;
 
+    OSQPSolver()
+    {
+        x.setZero();
+        z.setZero();
+        y.setZero();
+    }
+
     void solve(const QPType &qp)
     {
         Vnm rhs, x_tilde_nu;
@@ -156,8 +164,13 @@ public:
             // update y
             y = y + rho.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
 
-            if (termination_criteria(qp)) {
-                break;
+            if (settings.check_termination != 0 && iter % settings.check_termination == 0) {
+#ifdef OSQP_PRINTING
+                print_status(qp);
+#endif
+                if (termination_criteria(qp)) {
+                    break;
+                }
             }
 
             if (settings.adaptive_rho) {
@@ -170,10 +183,6 @@ public:
                     lin_sys_solver.setup(kkt_mat);
                 }
             }
-
-#ifdef OSQP_PRINTING
-            print_status(qp);
-#endif
         }
 
         // TODO: return summary

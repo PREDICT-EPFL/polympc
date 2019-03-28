@@ -111,8 +111,8 @@ public:
 
     void solve(const qp_t &qp)
     {
-        bool check_termination = false;
         kkt_vec_t rhs, x_tilde_nu;
+        bool check_termination = false;
 
 #ifdef OSQP_PRINTING
         print_settings(settings);
@@ -151,6 +151,8 @@ public:
 
             if (settings.check_termination != 0 && iter % settings.check_termination == 0) {
                 check_termination = true;
+            } else {
+                check_termination = false;
             }
 
             if (check_termination) {

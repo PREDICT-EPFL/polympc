@@ -15,21 +15,42 @@ struct SQPSettings {
     int max_iter = 100;
 };
 
+template <typename qp_t>
+void print_qp(qp_t qp)
+{
+    Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "]", "[", "]");
+    std::cout << "P = " << qp.P.format(fmt) << std::endl;
+    std::cout << "q = " << qp.q.transpose().format(fmt) << std::endl;
+    std::cout << "A = " << qp.A.format(fmt) << std::endl;
+    std::cout << "l = " << qp.l.transpose().format(fmt) << std::endl;
+    std::cout << "u = " << qp.u.transpose().format(fmt) << std::endl;
+}
+
 /*
  * minimize     f(x)
- * subject to   ci(x) >= 0
+ * subject to   ci(x) <= 0
  *              ce(x)  = 0
  */
+template <typename _Problem, typename _Scalar = double>
 class SQP {
 public:
-    using Scalar = double;
-    using qp_t = osqp_solver::QP<2, 4, Scalar>;
+    using Problem = _Problem;
+    enum {
+        NX = Problem::NX,
+        NIEQ = Problem::NIEQ,
+        NEQ = Problem::NEQ,
+        NC = Problem::NEQ+Problem::NIEQ
+    };
+
+    using Scalar = _Scalar;
+    using qp_t = osqp_solver::QP<NX, NC, Scalar>;
     using qp_solver_t = osqp_solver::OSQPSolver<qp_t>;
     using Settings = SQPSettings<Scalar>;
 
-    using x_t = Eigen::Matrix<Scalar, 2, 1>;
-    using dual_t = Eigen::Matrix<Scalar, 4, 1>;
-    using hessian_t = Eigen::Matrix<Scalar, 2, 2>;
+    using x_t = Eigen::Matrix<Scalar, NX, 1>;
+    using dual_t = Eigen::Matrix<Scalar, NC, 1>;
+    using constraint_t = Eigen::Matrix<Scalar, NC, 1>;
+    using hessian_t = Eigen::Matrix<Scalar, NX, NX>;
 
     // Solver state variables
     int iter;
@@ -39,10 +60,15 @@ public:
     qp_t _qp;
     qp_solver_t _qp_solver;
 
+    Problem _prob;
+    Settings settings;
+
+    // info
+    int _qp_last_iter = 0;
+
     bool is_psd(hessian_t &h)
     {
         Eigen::EigenSolver<hessian_t> eigensolver(h);
-        // std::cout << eigensolver.eigenvalues().transpose() << std::endl;
         for (int i = 0; i < eigensolver.eigenvalues().RowsAtCompileTime; i++) {
             double v = eigensolver.eigenvalues()(i).real();
             if (v <= 0) {
@@ -51,41 +77,16 @@ public:
         }
         return true;
     }
+
     void make_hessian_psd(hessian_t &h)
     {
-        // if (!is_psd(h)) {
-        //     printf("not PSD\n");
-        // }
-
-        // while (!is_psd(h)) {
-        //     h += 0.1*h.Identity();
-        // }
-
-        h.setIdentity();
+        while (!is_psd(h)) {
+            h += 0.1*h.Identity();
+        }
     }
 
-    x_t cost_gradient(const x_t& x)
-    {
-        x_t dx;
-        // dx << -1, -1; // solution: [1 1]
-        // dx << -1, 0; // solution: [1.41, 0]
-        // dx << 0, -1; // solution: [0, 1.41]
-        dx << 1, 1; // solution: [1, 0] or [0, 1]
-        // dx << 0, 1; // solution: [0, (1, 1.41)]
-        return dx;
-    }
-
-    hessian_t lagrangian_hessian(const x_t& x, const dual_t& lambda)
-    {
-        hessian_t L_xx;
-        L_xx.setIdentity();
-        L_xx += -2 * lambda(2) * hessian_t::Identity();
-        L_xx += - lambda(3) * (hessian_t() << -2,0,0,0).finished();
-        make_hessian_psd(L_xx);
-        return L_xx;
-    }
-
-    void solve_subproblem(x_t &p, dual_t &lambda)
+    // TODO: add box constraints?
+    void construct_subproblem()
     {
         /* Construct QP subproblem
          *
@@ -100,48 +101,50 @@ public:
          *                   l=u for equality constraints,
          *                   +/- INFINITY if unbounded on one side
          */
-        const Scalar UNBOUNDED = 1e16;
-        _qp.P = lagrangian_hessian(_x, _lambda);
-        _qp.q = cost_gradient(_x);
-        // constraint gradient
-        _qp.A << 1, 0,
-                 0, 1,
-                 2*_x(0), 2*_x(1),
-                 -2*_x(0), 1;
+        const Scalar UNBOUNDED = 1e20;
+        constraint_t b;
+
+        _qp.P.setIdentity(); // TODO: Lagrangian hessian
+        _prob.cost_gradient(_x, _qp.q);
+
         // constraint bounds:
         // transform    l     <= A.x + b <= u
         //        to    l - b <= A.x     <= u - b
-        _qp.l << -_x(0),
-                 -_x(1),
-                 -_x.squaredNorm() + 1,
-                 -(_x(1) - _x(0)*_x(0));
-        _qp.u << UNBOUNDED,
-                 UNBOUNDED,
-                 -_x.squaredNorm() + 2,
-                 -(_x(1) - _x(0)*_x(0));
+        _prob.constraint_jacobian(_x, _qp.A);
+        _prob.constraint(_x, b);
 
-        std::cout << "P\n" << _qp.P << std::endl;
-        std::cout << "q " << _qp.q.transpose() << std::endl;
-        std::cout << "A\n" << _qp.A << std::endl;
-        std::cout << "l " << _qp.l.transpose() << std::endl;
-        std::cout << "u " << _qp.u.transpose() << std::endl;
+        _qp.u = -1*b;
 
-        // TODO: warm start, which variables are reused?
-        // _qp_solver.reset();
+        // inequality constraint: l = -UNBOUNDED
+        _qp.l.template head<NIEQ>().setConstant(-UNBOUNDED);
 
+        // equality constraint: l = u
+        _qp.l.template tail<NEQ>() = _qp.u.template tail<NEQ>();
+    }
+
+    void solve_subproblem(x_t &p, dual_t &lambda)
+    {
+        print_qp(_qp);
+
+        _qp_solver.settings.warm_start = true;
+        _qp_solver.settings.check_termination = 1;
+        _qp_solver.settings.max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        printf("iter %d\n", _qp_solver.iter);
         if (_qp_solver.iter >= _qp_solver.settings.max_iter) {
-            printf("QP: MAX ITERATIONS\n");
+            printf("iter %d MAX ITERATIONS\n", _qp_solver.iter);
+        } else {
+            printf("iter %d\n", _qp_solver.iter);
         }
+        _qp_last_iter = _qp_solver.iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;
-        std::cout << "QP solution: " <<  p.transpose() << std::endl;
+        std::cout << "QP solution: \np " <<  p.transpose() << std::endl;
+        std::cout << "lambda " <<  lambda.transpose() << std::endl;
     }
 
-    void solve(const Settings& settings)
+    void solve(const x_t &x0)
     {
         x_t p; // search direction
         dual_t p_lambda; // dual search direction
@@ -149,8 +152,7 @@ public:
         Scalar mu;
 
         // initialize
-        _x.setZero();
-        _x << 1.2, 0.1; // feasible initial point
+        _x = x0;
         _lambda.setZero();
 
         // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
@@ -158,6 +160,7 @@ public:
             printf("\n############# SQP ITER %d #############\n", iter);
 
             // Solve QP
+            construct_subproblem();
             solve_subproblem(p, p_lambda);
             p_lambda -= _lambda;
 
@@ -170,8 +173,9 @@ public:
             _x = _x + alpha * p;
             _lambda = _lambda + alpha * p_lambda;
 
-            std::cout << "p " << p.transpose() << std::endl;
-            std::cout << "p_lambda " << p_lambda.transpose() << std::endl;
+            // std::cout << "p " << p.transpose() << std::endl;
+            // std::cout << "p_lambda " << p_lambda.transpose() << std::endl;
+            std::cout << "STEP" << std::endl;
             std::cout << "x " << _x.transpose() << std::endl;
             std::cout << "lambda " << _lambda.transpose() << std::endl;
 
@@ -187,7 +191,9 @@ public:
 
     bool termination_criteria()
     {
-        // TODO
+        if (_qp_last_iter == 1) {
+            return true;
+        }
         return false;
     }
 };

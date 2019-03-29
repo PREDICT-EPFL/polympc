@@ -39,12 +39,13 @@ struct SimpleNLP_2D {
              -2 + x.squaredNorm(); // -2 + x0^2 + x1^2 <= 0
     }
 
-    void constraint_jacobian(const x_t& x, constr_jac_t &jac)
+    void constraint_linearized(const x_t& x, constr_jac_t &A, constr_t &b)
     {
-        jac << -1, 0,
-               0, -1,
-               -2*x.transpose(),
-               2*x.transpose();
+        constraint(x, b);
+        A << -1, 0,
+             0, -1,
+             -2*x.transpose(),
+             2*x.transpose();
     }
 };
 

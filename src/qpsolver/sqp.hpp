@@ -110,8 +110,7 @@ public:
         // constraint bounds:
         // transform    l     <= A.x + b <= u
         //        to    l - b <= A.x     <= u - b
-        _prob.constraint_jacobian(_x, _qp.A);
-        _prob.constraint(_x, b);
+        _prob.constraint_linearized(_x, _qp.A, b);
 
         _qp.u = -1*b;
 

@@ -3,20 +3,29 @@
 
 using namespace osqp_solver;
 
-TEST(OSQPTestCase, TestSimpleQP) {
-    using SimpleQP = QP<2, 3, double>;
-    OSQPSolver<SimpleQP> prob;
-    Eigen::Vector2d sol, expect;
+class SimpleQP : public QP<2, 3, double>
+{
+public:
+    Eigen::Matrix<Scalar, 2, 1> SOLUTION;
+    SimpleQP()
+    {
+        P << 4, 1,
+             1, 2;
+        q << 1, 1;
+        A << 1, 1,
+             1, 0,
+             0, 1;
+        l << 1, 0, 0;
+        u << 1, 0.7, 0.7;
 
+        SOLUTION << 0.3, 0.7;
+    }
+};
+
+
+TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
-    qp.P << 4, 1,
-            1, 2;
-    qp.q << 1, 1;
-    qp.A << 1, 1,
-            1, 0,
-            0, 1;
-    qp.l << 1, 0, 0;
-    qp.u << 1, 0.7, 0.7;
+    OSQPSolver<SimpleQP> prob;
 
     prob.settings.rho = 0.1;
     prob.settings.max_iter = 1000;
@@ -25,11 +34,10 @@ TEST(OSQPTestCase, TestSimpleQP) {
     prob.settings.check_termination = 1;
 
     prob.solve(qp);
-    sol = prob.x;
+    Eigen::Vector2d sol = prob.x;
 
     // solution
-    expect << 0.3, 0.7;
-    EXPECT_TRUE(sol.isApprox(expect, 1e-3));
+    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-3));
     EXPECT_LT(prob.iter, prob.settings.max_iter);
 
     // check feasibility (with some epsilon margin)

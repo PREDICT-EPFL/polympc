@@ -23,36 +23,65 @@ public:
     }
 };
 
-
 TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
     OSQPSolver<SimpleQP> prob;
 
-    prob.settings.rho = 0.1;
     prob.settings.max_iter = 1000;
-    prob.settings.eps_rel = 1e-4f; // set below isApprox() threshold
-    prob.settings.eps_abs = 1e-4f;
-    prob.settings.check_termination = 1;
 
     prob.solve(qp);
     Eigen::Vector2d sol = prob.x;
 
     // solution
-    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-3));
+    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings.max_iter);
+}
+
+TEST(QPSolverTest, testConstraintViolation) {
+    SimpleQP qp;
+    OSQPSolver<SimpleQP> prob;
+
+    prob.settings.eps_rel = 1e-4f;
+    prob.settings.eps_abs = 1e-4f;
+
+    prob.solve(qp);
+    Eigen::Vector2d sol = prob.x;
 
     // check feasibility (with some epsilon margin)
     Eigen::Vector3d lower = qp.A*sol - qp.l;
     Eigen::Vector3d upper = qp.A*sol - qp.u;
     EXPECT_GE(lower.minCoeff(), -1e-3);
     EXPECT_LE(upper.maxCoeff(), 1e-3);
+}
 
-    // check adaptive rho
+TEST(QPSolverTest, testAdaptiveRho) {
+    SimpleQP qp;
+    OSQPSolver<SimpleQP> prob;
+
+    prob.settings.adaptive_rho = false;
+    prob.settings.adaptive_rho_interval = 10;
+
+    prob.solve(qp);
+}
+
+TEST(QPSolverTest, testAdaptiveRhoImprovesConvergence) {
+    SimpleQP qp;
+    OSQPSolver<SimpleQP> prob;
+
     prob.settings.warm_start = false;
+    prob.settings.max_iter = 1000;
+    prob.settings.rho = 0.1;
+
+    // solve whithout adaptive rho
+    prob.settings.adaptive_rho = false;
+    prob.solve(qp);
+    int prev_iter = prob.iter;
+
+    // solve with adaptive rho
     prob.settings.adaptive_rho = true;
     prob.settings.adaptive_rho_interval = 10;
-    int prev_iter = prob.iter;
     prob.solve(qp);
+
     EXPECT_LT(prob.iter, prob.settings.max_iter);
     EXPECT_LT(prob.iter, prev_iter); // adaptive rho should improve :)
 }

@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "osqp_solver.hpp"
+#include <Eigen/IterativeLinearSolvers>
 
 using namespace osqp_solver;
 
@@ -56,7 +57,19 @@ TEST(QPSolverTest, testSimpleQP) {
     EXPECT_LT(prob.iter, prev_iter); // adaptive rho should improve :)
 }
 
-TEST(OSQPTestCase, TestConstraint) {
+TEST(QPSolverTest, testConjugateGradientLinearSolver)
+{
+    SimpleQP qp;
+    OSQPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+
+    prob.solve(qp);
+    Eigen::Vector2d sol = prob.x;
+
+    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
+    EXPECT_LT(prob.iter, prob.settings.max_iter); // convergence test
+}
+
+TEST(QPSolverTest, TestConstraint) {
     using qp_t = QP<5, 5, double>;
     using solver_t = OSQPSolver<qp_t>;
     solver_t prob;
@@ -90,7 +103,7 @@ TEST(OSQPTestCase, TestConstraint) {
     }
 }
 
-TEST(OSQPTestCase, QP2) {
+TEST(QPSolverTest, QP2) {
     using qp_t = QP<2, 4, double>;
     OSQPSolver<qp_t> prob;
     Eigen::Vector2d sol, expect;

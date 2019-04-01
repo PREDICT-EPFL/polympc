@@ -45,7 +45,7 @@ struct OSQPSettings {
  *    Ax element of R^m
  */
 template <typename QPType,
-          template <typename, int> class LinearSolver = Eigen::LDLT,
+          template <typename, int, typename... Args> class LinearSolver = Eigen::LDLT,
           int LinearSolver_UpLo = Eigen::Lower>
 class OSQPSolver {
 public:

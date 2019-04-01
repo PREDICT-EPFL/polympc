@@ -50,13 +50,15 @@ struct SimpleNLP_2D {
 };
 
 TEST(SQPTestCase, TestSimpleNLP) {
-    SQP<SimpleNLP_2D> prob;
-    prob.settings.max_iter = 100;
+    SimpleNLP_2D problem;
+    SQP<SimpleNLP_2D> solver;
+    solver.settings.max_iter = 100;
     Eigen::Vector2d x0;
     x0 << 1.2, 0.1; // feasible initial point
-    prob.solve(x0);
+    solver.solve(problem, x0);
 
-    std::cout << "Solution: x = \n" << prob._x.transpose() << std::endl;
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
 }
 
 int main(int argc, char **argv) {

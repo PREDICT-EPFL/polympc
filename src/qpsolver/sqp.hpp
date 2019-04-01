@@ -12,6 +12,8 @@ template <typename Scalar>
 struct SQPSettings {
     Scalar eta = 0.25;
     Scalar tau = 0.5;
+    Scalar eps_prim = 1e-3; /**< primal step termination threshold, eps_prim > 0 */
+    Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
 };
 
@@ -31,7 +33,7 @@ void print_qp(qp_t qp)
  * subject to   ci(x) <= 0
  *              ce(x)  = 0
  */
-template <typename _Problem, typename _Scalar = double>
+template <typename _Problem>
 class SQP {
 public:
     using Problem = _Problem;
@@ -42,7 +44,7 @@ public:
         NC = Problem::NEQ+Problem::NIEQ
     };
 
-    using Scalar = _Scalar;
+    using Scalar = typename Problem::Scalar;
     using qp_t = osqp_solver::QP<NX, NC, Scalar>;
     using qp_solver_t = osqp_solver::OSQPSolver<qp_t>;
     using Settings = SQPSettings<Scalar>;
@@ -60,10 +62,11 @@ public:
     qp_t _qp;
     qp_solver_t _qp_solver;
 
-    Problem _prob;
     Settings settings;
 
     // info
+    Scalar _dual_step_norm;
+    Scalar _primal_step_norm;
     int _qp_last_iter = 0;
 
     bool is_psd(hessian_t &h)
@@ -86,9 +89,9 @@ public:
     }
 
     // TODO: add box constraints?
-    void construct_subproblem()
+    void construct_subproblem(Problem &prob)
     {
-        /* Construct QP subproblem
+        /* Construct QP subprob
          *
          * minimize     0.5 x'.P.x + q'.x
          * subject to   l < A.x < u
@@ -105,12 +108,12 @@ public:
         constraint_t b;
 
         _qp.P.setIdentity(); // TODO: Lagrangian hessian
-        _prob.cost_gradient(_x, _qp.q);
+        prob.cost_gradient(_x, _qp.q);
 
         // constraint bounds:
         // transform    l     <= A.x + b <= u
         //        to    l - b <= A.x     <= u - b
-        _prob.constraint_linearized(_x, _qp.A, b);
+        prob.constraint_linearized(_x, _qp.A, b);
 
         _qp.u = -1*b;
 
@@ -123,27 +126,18 @@ public:
 
     void solve_subproblem(x_t &p, dual_t &lambda)
     {
-        print_qp(_qp);
-
         _qp_solver.settings.warm_start = true;
         _qp_solver.settings.check_termination = 1;
         _qp_solver.settings.max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        if (_qp_solver.iter >= _qp_solver.settings.max_iter) {
-            printf("iter %d MAX ITERATIONS\n", _qp_solver.iter);
-        } else {
-            printf("iter %d\n", _qp_solver.iter);
-        }
         _qp_last_iter = _qp_solver.iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;
-        std::cout << "QP solution: \np " <<  p.transpose() << std::endl;
-        std::cout << "lambda " <<  lambda.transpose() << std::endl;
     }
 
-    void solve(const x_t &x0)
+    void solve(Problem &prob, const x_t &x0)
     {
         x_t p; // search direction
         dual_t p_lambda; // dual search direction
@@ -156,10 +150,8 @@ public:
 
         // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
         for (iter = 1; iter <= settings.max_iter; iter++) {
-            printf("\n############# SQP ITER %d #############\n", iter);
-
             // Solve QP
-            construct_subproblem();
+            construct_subproblem(prob);
             solve_subproblem(p, p_lambda);
             p_lambda -= _lambda;
 
@@ -168,15 +160,15 @@ public:
             // TODO: line search using merit function
             alpha = 0.1 * alpha;
 
-            // Take step
-            _x = _x + alpha * p;
-            _lambda = _lambda + alpha * p_lambda;
+            p = alpha * p;
+            p_lambda = alpha * p_lambda;
 
-            // std::cout << "p " << p.transpose() << std::endl;
-            // std::cout << "p_lambda " << p_lambda.transpose() << std::endl;
-            std::cout << "STEP" << std::endl;
-            std::cout << "x " << _x.transpose() << std::endl;
-            std::cout << "lambda " << _lambda.transpose() << std::endl;
+            _primal_step_norm = p.template lpNorm<Eigen::Infinity>();
+            _dual_step_norm = p_lambda.template lpNorm<Eigen::Infinity>();
+
+            // Take step
+            _x = _x + p;
+            _lambda = _lambda + p_lambda;
 
             // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
 
@@ -184,13 +176,12 @@ public:
                 break;
             }
         }
-
-        std::cout << "\n############# SQP END #############" << std::endl;
     }
 
     bool termination_criteria()
     {
-        if (_qp_last_iter == 1) {
+        if (_primal_step_norm <= settings.eps_prim &&
+            _dual_step_norm <= settings.eps_dual) {
             return true;
         }
         return false;

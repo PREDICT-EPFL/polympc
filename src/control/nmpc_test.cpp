@@ -2,7 +2,6 @@
 #include "control/simple_robot_model.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "qpsolver/osqp_solver.hpp"
-#include "qpsolver/sqp.hpp"
 
 #include "gtest/gtest.h"
 
@@ -15,19 +14,20 @@ TEST(NMPCTestCase, TestRobotNMPC)
     using controller_t = polympc::nmpc<Problem, Approximation>;
     controller_t robot_controller;
 
-    std::cout << "ode::var_t " << controller_t::ode_colloc_t::var_t::RowsAtCompileTime << std::endl;
-    std::cout << "ode::constr_t " << controller_t::ode_colloc_t::constr_t::RowsAtCompileTime << std::endl;
-    std::cout << "ode::jacobian_t " << controller_t::ode_colloc_t::jacobian_t::RowsAtCompileTime <<
-                 "x" << controller_t::ode_colloc_t::jacobian_t::ColsAtCompileTime << std::endl;
-    std::cout << "cost::var_t " << controller_t::cost_colloc_t::hessian_t::RowsAtCompileTime << std::endl;
-    std::cout << "cost::hessian_t " << controller_t::cost_colloc_t::hessian_t::RowsAtCompileTime << std::endl;
+    std::cout << controller_t::cost_colloc_t::hessian_t::RowsAtCompileTime << std::endl;
+    std::cout << controller_t::ode_colloc_t::jacobian_t::RowsAtCompileTime << std::endl;
 
-    sqp::SQP<controller_t> prob;
-    controller_t::var_t x0;
-    x0.setOnes();
-    prob.solve(x0);
+    controller_t::qp_t qp;
+    controller_t::var_t x = controller_t::var_t::Ones();
+    controller_t::Scalar cost;
 
-    std::cout << "Solution: x = \n" << prob._x.transpose() << std::endl;
+    robot_controller.construct_subproblem(x, qp);
+
+    std::cout << "P=\n" << qp.P << std::endl;
+    std::cout << "q=\n" << qp.q.transpose() << std::endl;
+    std::cout << "A=\n" << qp.A << std::endl;
+    std::cout << "l=\n" << qp.l.transpose() << std::endl;
+    std::cout << "u=\n" << qp.u.transpose() << std::endl;
 }
 
 int main(int argc, char **argv)

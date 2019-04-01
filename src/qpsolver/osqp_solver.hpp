@@ -44,22 +44,25 @@ struct OSQPSettings {
  *    x element of R^n
  *    Ax element of R^m
  */
-template <typename _QPType>
+template <typename QPType,
+          template <typename, int> class LinearSolver = Eigen::LDLT,
+          int LinearSolver_UpLo = Eigen::Lower>
 class OSQPSolver {
 public:
     enum {
-        n=_QPType::n,
-        m=_QPType::m
+        n=QPType::n,
+        m=QPType::m
     };
 
-    using qp_t = _QPType;
-    using Scalar = typename _QPType::Scalar;
+    using qp_t = QPType;
+    using Scalar = typename QPType::Scalar;
     using primal_t = Eigen::Matrix<Scalar, n, 1>;
     using constraint_t = Eigen::Matrix<Scalar, m, 1>;
     using dual_t = Eigen::Matrix<Scalar, m, 1>;
     using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
     using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
     using Settings = OSQPSettings<Scalar>;
+    using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
 
     static constexpr Scalar RHO_MIN = 1e-6;
     static constexpr Scalar RHO_MAX = 1e+6;
@@ -95,12 +98,7 @@ public:
     Settings settings;
 
     kkt_mat_t kkt_mat;
-
-    // TODO: choose between direct and indirect method
-    // TODO: Inplace matrix decompositions
-    // LDLT<Ref<KKT>>, with matrix passed to constructor!
-    // https://eigen.tuxfamily.org/dox/group__InplaceDecomposition.html
-    Eigen::LDLT<kkt_mat_t> lin_sys_solver;
+    linear_solver_t linear_solver;
 
     OSQPSolver()
     {
@@ -127,14 +125,14 @@ public:
         rho_update(settings.rho);
 
         KKT_mat_update(qp, kkt_mat);
-        lin_sys_solver.compute(kkt_mat);
+        linear_solver.compute(kkt_mat);
 
         for (iter = 1; iter <= settings.max_iter; iter++) {
             z_prev = z;
 
             // update x_tilde z_tilde
             form_KKT_rhs(qp, rhs);
-            x_tilde_nu = lin_sys_solver.solve(rhs);
+            x_tilde_nu = linear_solver.solve(rhs);
 
             x_tilde = x_tilde_nu.template head<n>();
             z_tilde = z_prev + rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<m>() - y);
@@ -178,7 +176,7 @@ public:
                     new_rho > rho * settings.adaptive_rho_tolerance) {
                     rho_update(new_rho);
                     KKT_mat_update(qp, kkt_mat);
-                    lin_sys_solver.compute(kkt_mat);
+                    linear_solver.compute(kkt_mat);
                 }
             }
         }

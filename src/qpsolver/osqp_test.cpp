@@ -4,24 +4,27 @@
 
 using namespace osqp_solver;
 
-class SimpleQP : public QP<2, 3, double>
+template <typename _Scalar=double>
+class _SimpleQP : public QP<2, 3, _Scalar>
 {
 public:
-    Eigen::Matrix<Scalar, 2, 1> SOLUTION;
-    SimpleQP()
+    Eigen::Matrix<_Scalar, 2, 1> SOLUTION;
+    _SimpleQP()
     {
-        P << 4, 1,
-             1, 2;
-        q << 1, 1;
-        A << 1, 1,
-             1, 0,
-             0, 1;
-        l << 1, 0, 0;
-        u << 1, 0.7, 0.7;
+        this->P << 4, 1,
+                   1, 2;
+        this->q << 1, 1;
+        this->A << 1, 1,
+                   1, 0,
+                   0, 1;
+        this->l << 1, 0, 0;
+        this->u << 1, 0.7, 0.7;
 
-        SOLUTION << 0.3, 0.7;
+        this->SOLUTION << 0.3, 0.7;
     }
 };
+
+using SimpleQP = _SimpleQP<double>;
 
 TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
@@ -32,7 +35,19 @@ TEST(QPSolverTest, testSimpleQP) {
     prob.solve(qp);
     Eigen::Vector2d sol = prob.x;
 
-    // solution
+    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
+    EXPECT_LT(prob.iter, prob.settings.max_iter);
+}
+
+
+TEST(QPSolverTest, testSinglePrecisionFloat) {
+    using SimpleQPf = _SimpleQP<float>;
+    SimpleQPf qp;
+    OSQPSolver<SimpleQPf> prob;
+
+    prob.solve(qp);
+    Eigen::Vector2f sol = prob.x;
+
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings.max_iter);
 }

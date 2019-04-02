@@ -10,8 +10,8 @@ namespace sqp {
 
 template <typename Scalar>
 struct SQPSettings {
-    Scalar eta = 0.25;
-    Scalar tau = 0.5;
+    Scalar tau = 0.5;       /**< line search iteration decrease, 0 < tau < 1 */
+    Scalar eta = 0.25;      /**< line search parameter, 0 < eta < 1 */
     Scalar eps_prim = 1e-3; /**< primal step termination threshold, eps_prim > 0 */
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
@@ -142,6 +142,7 @@ public:
         x_t p; // search direction
         dual_t p_lambda; // dual search direction
         Scalar alpha; // step size
+        Scalar tau; // line search step decrease
         Scalar mu;
 
         // initialize
@@ -155,20 +156,47 @@ public:
             solve_subproblem(p, p_lambda);
             p_lambda -= _lambda;
 
+
+            /* Line search */
             mu = 1e5; // TODO: choose mu with sigma = 1
+            tau = settings.tau; // 0 < tau < settings.tau
             alpha = 1;
             // TODO: line search using merit function
-            alpha = 0.1 * alpha;
 
-            p = alpha * p;
-            p_lambda = alpha * p_lambda;
+            Scalar cost, phi_l1, Dp_phi_l1;
+            typename Problem::grad_t cost_gradient;
+            typename Problem::constr_t constr;
+            prob.cost(_x, cost);
+            prob.cost_gradient(_x, cost_gradient);
+            prob.constraint(_x, constr);
 
-            _primal_step_norm = p.template lpNorm<Eigen::Infinity>();
-            _dual_step_norm = p_lambda.template lpNorm<Eigen::Infinity>();
+            // TODO: handle inequality constraints differently
+            Scalar mu_constr_l1 = mu * constr.template lpNorm<1>();
+            phi_l1 = cost + mu_constr_l1;
+            Dp_phi_l1 =  p.dot(cost_gradient) - mu_constr_l1;
 
-            // Take step
-            _x = _x + p;
-            _lambda = _lambda + p_lambda;
+            while (1) { // TODO: iteration upper bound
+                x_t x_step = _x + alpha*p;
+                prob.cost(x_step, cost);
+                prob.constraint(x_step, constr);
+
+                Scalar phi_l1_step = cost + mu * constr.template lpNorm<1>();
+
+                if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
+                    // accept step
+                    break;
+                } else {
+                    alpha = tau * alpha;
+                }
+            }
+
+            /* Step */
+            _x = _x + alpha * p;
+            _lambda = _lambda + alpha * p_lambda;
+
+            // update step info
+            _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
+            _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
 
             // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
 
@@ -178,6 +206,7 @@ public:
         }
     }
 
+private:
     bool termination_criteria()
     {
         if (_primal_step_norm <= settings.eps_prim &&

@@ -156,12 +156,10 @@ public:
             solve_subproblem(p, p_lambda);
             p_lambda -= _lambda;
 
-
             /* Line search */
             mu = 1e5; // TODO: choose mu with sigma = 1
             tau = settings.tau; // 0 < tau < settings.tau
             alpha = 1;
-            // TODO: line search using merit function
 
             Scalar cost, phi_l1, Dp_phi_l1;
             typename Problem::grad_t cost_gradient;
@@ -171,17 +169,26 @@ public:
             prob.constraint(_x, constr);
 
             // TODO: handle inequality constraints differently
+            Eigen::Matrix<bool, NIEQ, 1> mask;
+            mask = constr.template head<NIEQ>().array() <= 0;
+            setZero(constr, mask);
             Scalar mu_constr_l1 = mu * constr.template lpNorm<1>();
-            phi_l1 = cost + mu_constr_l1;
-            Dp_phi_l1 =  p.dot(cost_gradient) - mu_constr_l1;
 
-            while (1) { // TODO: iteration upper bound
+            phi_l1 = cost + mu_constr_l1;
+            Dp_phi_l1 =  cost_gradient.dot(p) - mu_constr_l1;
+
+            int _line_search_iter;
+            // TODO: iteration upper bound, line_search_max_iter or alpha_min
+            for (_line_search_iter = 1;; _line_search_iter++) {
                 x_t x_step = _x + alpha*p;
                 prob.cost(x_step, cost);
                 prob.constraint(x_step, constr);
 
-                Scalar phi_l1_step = cost + mu * constr.template lpNorm<1>();
+                Eigen::Matrix<bool, NIEQ, 1> mask;
+                mask = constr.template head<NIEQ>().array() <= 0;
+                setZero(constr, mask);
 
+                Scalar phi_l1_step = cost + mu * constr.template lpNorm<1>();
                 if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
                     // accept step
                     break;
@@ -207,7 +214,17 @@ public:
     }
 
 private:
-    bool termination_criteria()
+    /** helper function since Eigen does not yet provide boolean indexing */
+    void setZero(Eigen::Matrix<Scalar, NC, 1> &v, const Eigen::Matrix<bool, NIEQ, 1> &mask) const
+    {
+        for (unsigned int i = 0; i < mask.rows(); i++) {
+            if (mask(i)) {
+                v(i) = 0;
+            }
+        }
+    }
+
+    bool termination_criteria() const
     {
         if (_primal_step_norm <= settings.eps_prim &&
             _dual_step_norm <= settings.eps_dual) {

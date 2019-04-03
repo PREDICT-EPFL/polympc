@@ -12,6 +12,7 @@ template <typename Scalar>
 struct SQPSettings {
     Scalar tau = 0.5;       /**< line search iteration decrease, 0 < tau < 1 */
     Scalar eta = 0.25;      /**< line search parameter, 0 < eta < 1 */
+    Scalar rho = 0.5;       /**< line search parameter, 0 < rho < 1 */
     Scalar eps_prim = 1e-3; /**< primal step termination threshold, eps_prim > 0 */
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
@@ -53,6 +54,9 @@ public:
     using dual_t = Eigen::Matrix<Scalar, NC, 1>;
     using constraint_t = Eigen::Matrix<Scalar, NC, 1>;
     using hessian_t = Eigen::Matrix<Scalar, NX, NX>;
+
+    // Constants
+    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
 
     // Solver state variables
     int iter;
@@ -164,18 +168,21 @@ public:
             Scalar cost, phi_l1, Dp_phi_l1;
             typename Problem::grad_t cost_gradient;
             typename Problem::constr_t constr;
+            // TODO: reuse computation
             prob.cost(_x, cost);
             prob.cost_gradient(_x, cost_gradient);
             prob.constraint(_x, constr);
 
-            // TODO: handle inequality constraints differently
             Eigen::Matrix<bool, NIEQ, 1> mask;
             mask = constr.template head<NIEQ>().array() <= 0;
             setZero(constr, mask);
-            Scalar mu_constr_l1 = mu * constr.template lpNorm<1>();
+            Scalar constr_l1 = constr.template lpNorm<1>() + DIV_BY_ZERO_REGUL;
 
-            phi_l1 = cost + mu_constr_l1;
-            Dp_phi_l1 =  cost_gradient.dot(p) - mu_constr_l1;
+            // TODO: get mu from merit function model using hessian of Lagrangian
+            mu = cost_gradient.dot(p) / ((1 - settings.rho) * constr_l1);
+
+            phi_l1 = cost + mu * constr_l1;
+            Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
             int _line_search_iter;
             // TODO: iteration upper bound, line_search_max_iter or alpha_min

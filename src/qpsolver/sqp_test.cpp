@@ -52,14 +52,41 @@ struct SimpleNLP_2D {
 TEST(SQPTestCase, TestSimpleNLP) {
     SimpleNLP_2D problem;
     SQP<SimpleNLP_2D> solver;
-    solver.settings.max_iter = 100;
+
+    Eigen::Vector2d SOLUTION(1, 1);
     Eigen::Vector2d x0;
+
     x0 << 1.2, 0.1; // feasible initial point
+    solver.settings.max_iter = 100;
     solver.solve(problem, x0);
 
+    std::cout << "Feasible x0 " << std::endl;
     std::cout << "iter " << solver.iter << std::endl;
     std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
 }
+
+TEST(SQPTestCase, InfeasibleStart) {
+    SimpleNLP_2D problem;
+    SQP<SimpleNLP_2D> solver;
+
+    Eigen::Vector2d SOLUTION(1, 1);
+    Eigen::Vector2d x0;
+
+    x0 << 2, -1; // infeasible initial point
+    solver.settings.max_iter = 100;
+    solver.solve(problem, x0);
+
+    std::cout << "Infeasible x0 " << std::endl;
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
+
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -9,12 +9,16 @@
 TEST(NMPCTestCase, TestRobotNMPC)
 {
     using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
-    using Approximation = Chebyshev<3>;
+    using Approximation = Chebyshev<3>; // POLY_ORDER = 3
 
-    using SimpleQP = osqp_solver::QP<2, 3, double>;
-    using Solver = osqp_solver::OSQPSolver<SimpleQP>;
+    using controller_t = polympc::nmpc<Problem, Approximation, int>;
+    using var_t = controller_t::var_t;
 
-    polympc::nmpc<Problem, Approximation, Solver> robot_controller;
+    controller_t robot_controller;
+    Eigen::Vector3d x0 = {10, 10, 3.141};
+
+    var_t sol = robot_controller.solve(x0);
+    std::cout << sol.transpose() << std::endl;
 }
 
 int main(int argc, char **argv)

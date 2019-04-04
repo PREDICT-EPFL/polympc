@@ -42,7 +42,7 @@ public:
         NX = Problem::NX,
         NIEQ = Problem::NIEQ,
         NEQ = Problem::NEQ,
-        NC = Problem::NEQ+Problem::NIEQ
+        NC = NEQ+NIEQ
     };
 
     using Scalar = typename Problem::Scalar;
@@ -52,6 +52,7 @@ public:
 
     using x_t = Eigen::Matrix<Scalar, NX, 1>;
     using dual_t = Eigen::Matrix<Scalar, NC, 1>;
+    using cost_gradient_t = Eigen::Matrix<Scalar, NX, 1>;
     using constraint_t = Eigen::Matrix<Scalar, NC, 1>;
     using hessian_t = Eigen::Matrix<Scalar, NX, NX>;
 
@@ -166,8 +167,8 @@ public:
             alpha = 1;
 
             Scalar cost, phi_l1, Dp_phi_l1;
-            typename Problem::grad_t cost_gradient;
-            typename Problem::constr_t constr;
+            cost_gradient_t cost_gradient;
+            constraint_t constr;
             // TODO: reuse computation
             prob.cost(_x, cost);
             prob.cost_gradient(_x, cost_gradient);

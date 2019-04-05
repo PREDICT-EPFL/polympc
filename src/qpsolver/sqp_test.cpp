@@ -7,18 +7,18 @@ struct SimpleNLP_2D {
     enum {
         VAR_SIZE = 2,
         NUM_EQ = 0,
-        NUM_INEQ = 4,
-        NUM_BOX = 0,
+        NUM_INEQ = 2,
+        NUM_BOX = 1,
     };
     using Scalar = double;
     using x_t = Eigen::Vector2d;
     using grad_t = Eigen::Vector2d;
 
-    using c_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
+    using b_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
-    using c_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
+    using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using c_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
+    using b_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
     using A_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
 
     void cost(const x_t& x, Scalar &cst)
@@ -36,29 +36,28 @@ struct SimpleNLP_2D {
         // grad << 0, 1; // solution: [0, (1, 1.41)]
     }
 
-    void constraint(const x_t& x, c_eq_t& c_eq, c_ineq_t& c_ineq, c_box_t& c_box, c_box_t& l_box, c_box_t& u_box)
+    void constraint(const x_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
     {
-        c_ineq << -x(0), // -x0 <= 0
-             -x(1), // -x1 <= 0
-             1 - x.squaredNorm(), // 1 - x0^2 - x1^2 <= 0
-             -2 + x.squaredNorm(); // -2 + x0^2 + x1^2 <= 0
+        b_ineq << -x(0), -x(1); // x0 > 0 and x1 > 0
+        b_box << x.squaredNorm(); // 1 <= x0^2 + x1^2 <= 2
+        l_box << 1;
+        u_box << 2;
     }
 
     void constraint_linearized(const x_t& x,
                                A_eq_t& A_eq,
-                               c_eq_t& c_eq,
+                               b_eq_t& b_eq,
                                A_ineq_t& A_ineq,
-                               c_ineq_t& c_ineq,
+                               b_ineq_t& b_ineq,
                                A_box_t& A_box,
-                               c_box_t& c_box,
-                               c_box_t& l_box,
-                               c_box_t& u_box)
+                               b_box_t& b_box,
+                               b_box_t& l_box,
+                               b_box_t& u_box)
     {
-        constraint(x, c_eq, c_ineq, c_box, l_box, u_box);
-        A_ineq << -1, 0,
-                 0, -1,
-                 -2*x.transpose(),
-                 2*x.transpose();
+        constraint(x, b_eq, b_ineq, b_box, l_box, u_box);
+        A_ineq << -1,  0,
+                   0, -1;
+        A_box << 2*x.transpose();
     }
 };
 

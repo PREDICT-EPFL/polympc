@@ -91,9 +91,9 @@ public:
 
     void _constraint(const var_t& var, const varx_t& c_ode, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
     {
-        l_box << _constr_xl.template replicate<VARX_SIZE/NX-1, 1>(), _constr_xl.template replicate<VARU_SIZE/NU, 1>();
-        u_box << _constr_xu.template replicate<VARX_SIZE/NX-1, 1>(), _constr_xu.template replicate<VARU_SIZE/NU, 1>();
-        b_box << var.template head<VARX_SIZE+VARU_SIZE>();
+        l_box << _constr_xl.template replicate<VARX_SIZE/NX-1, 1>(), _constr_ul.template replicate<VARU_SIZE/NU, 1>();
+        u_box << _constr_xu.template replicate<VARX_SIZE/NX-1, 1>(), _constr_uu.template replicate<VARU_SIZE/NU, 1>();
+        b_box << var.template head<VARX_SIZE-NX>(), var.template segment<VARU_SIZE>(VARX_SIZE);
         b_eq << c_ode, var.template segment<NX>(VARX_SIZE - NX) - _x0;
     }
 
@@ -115,8 +115,8 @@ public:
         _constraint(var, c_ode, b_eq, b_ineq, b_box, l_box, u_box);
 
         A_eq.setZero();
-        A_eq.template bottomRows<VARX_SIZE>() = ode_jac;
-        A_eq.template topRows<NX>().setIdentity();
+        A_eq.template topRows<VARX_SIZE>() = ode_jac;
+        A_eq.template block<NX,NX>(VARX_SIZE, VARX_SIZE-NX).setIdentity();
 
         A_box.setZero();
         A_box.template block<VARX_SIZE-NX, VARX_SIZE-NX>(0,0).setIdentity();

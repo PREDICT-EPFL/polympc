@@ -162,10 +162,12 @@ public:
         // TODO: parametrize
         _constr_xu << 10, 10, 1e17;
         _constr_xl = -_constr_xu;
-        _constr_uu << 1, 0.5;
-        _constr_ul = -_constr_uu;
+        _constr_uu << 10, 1;
+        _constr_ul << 0, -1;
         var_t var0;
         var0.setOnes();
+        // var0.setZero();
+        var0.template segment<NX_>(VARX_SIZE-NX_) = x0;
         solver.solve(*this, var0);
         return solver._x;
     }

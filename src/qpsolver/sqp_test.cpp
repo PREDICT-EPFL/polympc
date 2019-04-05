@@ -1,0 +1,94 @@
+#include "gtest/gtest.h"
+#include "sqp.hpp"
+
+using namespace sqp;
+
+struct SimpleNLP_2D {
+    enum {
+        NX = 2,
+        NIEQ = 4,
+        NEQ = 0
+    };
+    using Scalar = double;
+    using x_t = Eigen::Vector2d;
+    using grad_t = Eigen::Vector2d;
+    using constr_t = Eigen::Vector4d;
+    using constr_jac_t = Eigen::Matrix<double, 4, 2>;
+
+    // cost function f(x) R^n -> R
+    void cost(const x_t& x, Scalar &cst)
+    {
+        cst = -x(0) -x(1);
+    }
+
+    void cost_gradient(const x_t& x, grad_t &grad)
+    {
+        grad << -1, -1; // solution: [1 1]
+        // grad << -1, 0; // solution: [1.41, 0]
+        // grad << 0, -1; // solution: [0, 1.41]
+        // grad << 1, 1; // solution: [1, 0] or [0, 1]
+        // grad << 0, 1; // solution: [0, (1, 1.41)]
+    }
+
+    // constraint c(x) R^n -> R^m
+    void constraint(const x_t& x, constr_t &c)
+    {
+        c << -x(0), // -x0 <= 0
+             -x(1), // -x1 <= 0
+             1 - x.squaredNorm(), // 1 - x0^2 - x1^2 <= 0
+             -2 + x.squaredNorm(); // -2 + x0^2 + x1^2 <= 0
+    }
+
+    void constraint_linearized(const x_t& x, constr_jac_t &A, constr_t &b)
+    {
+        constraint(x, b);
+        A << -1, 0,
+             0, -1,
+             -2*x.transpose(),
+             2*x.transpose();
+    }
+};
+
+TEST(SQPTestCase, TestSimpleNLP) {
+    SimpleNLP_2D problem;
+    SQP<SimpleNLP_2D> solver;
+
+    Eigen::Vector2d SOLUTION(1, 1);
+    Eigen::Vector2d x0;
+
+    x0 << 1.2, 0.1; // feasible initial point
+    solver.settings.max_iter = 100;
+    solver.solve(problem, x0);
+
+    std::cout << "Feasible x0 " << std::endl;
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
+
+TEST(SQPTestCase, InfeasibleStart) {
+    SimpleNLP_2D problem;
+    SQP<SimpleNLP_2D> solver;
+
+    Eigen::Vector2d SOLUTION(1, 1);
+    Eigen::Vector2d x0;
+
+    x0 << 2, -1; // infeasible initial point
+    solver.settings.max_iter = 100;
+    solver.solve(problem, x0);
+
+    std::cout << "Infeasible x0 " << std::endl;
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
+
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

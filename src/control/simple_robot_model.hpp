@@ -15,6 +15,13 @@ struct MobileRobot
     using Control    = Eigen::Matrix<Scalar, 2, 1>;
     using Parameters = Eigen::Matrix<Scalar, 1, 1>;
 
+    void operator() (const State &state, const Control &control, const Parameters &param, State &value) const
+    {
+        value[0] = control[0] * cos(state[2]) * cos(control[1]);
+        value[1] = control[0] * sin(state[2]) * cos(control[1]);
+        value[2] = control[0] * sin(control[1]) / param[0];
+    }
+
     /** the one for automatic differentiation */
     template<typename DerivedA, typename DerivedB, typename DerivedC>
     void operator() (const Eigen::MatrixBase<DerivedA> &state, const Eigen::MatrixBase<DerivedB> &control,

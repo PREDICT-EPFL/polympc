@@ -80,7 +80,7 @@ public:
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
-    int _qp_last_iter = 0;
+    int _qp_iter = 0;
 
     bool is_psd(hessian_t &h)
     {
@@ -175,7 +175,7 @@ public:
         _qp_solver.settings.max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        _qp_last_iter = _qp_solver.iter;
+        _qp_iter += _qp_solver.iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;
@@ -192,6 +192,7 @@ public:
         // initialize
         _x = x0;
         _lambda.setZero();
+        _qp_iter = 0;
 
         // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
         for (iter = 1; iter <= settings.max_iter; iter++) {

@@ -16,6 +16,7 @@ struct SQPSettings {
     Scalar eps_prim = 1e-3; /**< primal step termination threshold, eps_prim > 0 */
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
+    int line_search_max_iter = 100;
 };
 
 template <typename qp_t>
@@ -194,7 +195,6 @@ public:
         _lambda.setZero();
         _qp_iter = 0;
 
-        // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
         for (iter = 1; iter <= settings.max_iter; iter++) {
             // Solve QP
             construct_subproblem(prob);
@@ -219,9 +219,8 @@ public:
             phi_l1 = cost + mu * constr_l1;
             Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
-            int _line_search_iter;
-            // TODO: iteration upper bound, line_search_max_iter or alpha_min
-            for (_line_search_iter = 1; _line_search_iter < 100; _line_search_iter++) {
+            int ls_iter;
+            for (ls_iter = 1; ls_iter < settings.line_search_max_iter; ls_iter++) {
                 x_t x_step = _x + alpha*p;
                 prob.cost(x_step, cost);
 
@@ -236,11 +235,6 @@ public:
                 }
             }
 
-            if (_line_search_iter >= 100) {
-                printf("LINE SEARCH MAX ITER\n");
-                break;
-            }
-
             /* Step */
             _x = _x + alpha * p;
             _lambda = _lambda + alpha * p_lambda;
@@ -248,8 +242,6 @@ public:
             // update step info
             _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
             _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
-
-            // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
 
             if (termination_criteria()) {
                 break;
@@ -286,7 +278,7 @@ private:
             }
         }
         // alternative: but maybe more costly in FLOP count
-        // cl1 += (c_ineq.array() * (c_ineq.array() <= 0).cast<double>()).matrix().lpNorm<1>() 
+        // cl1 += (c_ineq.array() * (c_ineq.array() <= 0).cast<double>()).matrix().lpNorm<1>()
 
         // l <= c_box <= u
         for (int i = 0; i < NUM_BOX; i++) {

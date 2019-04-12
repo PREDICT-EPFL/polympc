@@ -44,7 +44,7 @@ struct Lagrange
     Eigen::Matrix<Scalar, State::RowsAtCompileTime, State::RowsAtCompileTime> Q;
     Eigen::Matrix<Scalar, Control::RowsAtCompileTime, Control::RowsAtCompileTime> R;
 
-    Lagrange(){Q << 1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0; R << 1.0, 0, 0, 1.0;}
+    Lagrange(){Q << 0.00001, 0, 0, 0, 0.00001, 0, 0, 0, 0.000001; R << 0.0001, 0, 0, 0.00001;}
     ~Lagrange(){}
 
 
@@ -64,7 +64,7 @@ struct Lagrange
 template<typename _Scalar = double>
 struct Mayer
 {
-    Mayer(){Q << 1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0;}
+    Mayer(){Q << 1.0, 0, 0, 0, 1.0, 0, 0, 0, 0.3;}
     ~Mayer(){}
 
     using Scalar = _Scalar;

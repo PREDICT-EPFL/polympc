@@ -76,26 +76,17 @@ public:
     void cost(const var_t& var, Scalar &cst)
     {
         cost_f(var, cst);
-        // std::cout << "cost    " << cst << std::endl;
     }
 
     void cost_linearized(const var_t& var, cost_gradient_t &grad, Scalar &cst)
     {
         cost_f.value_gradient(var, cst, grad);
-        Eigen::IOFormat fmt(1);
-        // std::cout << "grad    " << grad.transpose().format(fmt) << std::endl;
     }
 
     void constraint(const var_t& var, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box) {
         varx_t c_ode;
         ps_ode(var, c_ode);
         _constraint(var, c_ode, b_eq, b_ineq, b_box, l_box, u_box);
-        Eigen::IOFormat fmt(4);
-        // std::cout << "b_eq    " << b_eq.transpose().format(fmt) << std::endl;
-        // std::cout << "b_ineq  " << b_ineq.transpose().format(fmt) << std::endl;
-        // std::cout << "b_box   " << b_box.transpose().format(fmt) << std::endl;
-        // std::cout << "l_box   " << l_box.transpose().format(fmt) << std::endl;
-        // std::cout << "u_box   " << u_box.transpose().format(fmt) << std::endl;
     }
 
     void _constraint(const var_t& var, const varx_t& c_ode, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
@@ -130,27 +121,22 @@ public:
         A_box.setZero();
         A_box.template block<VARX_SIZE-NX, VARX_SIZE-NX>(0,0).setIdentity();
         A_box.template block<VARU_SIZE, VARU_SIZE>(VARX_SIZE-NX,VARX_SIZE).setIdentity();
-
-        Eigen::IOFormat fmt(2);
-        // std::cout << "ode_jac\n" << ode_jac.format(fmt) << std::endl;
-        // std::cout << "A_eq\n" << A_eq.format(fmt) << std::endl;
-        // std::cout << "A_box\n" << A_box.format(fmt) << std::endl;
     }
 
-    var_t solve(const State &x0)
+    var_t solve(const State& x0, const State& xl, const State& xu, const Control& ul, const Control& uu)
     {
         _x0 = x0;
-        // TODO: parametrize
-        _constr_xu << 10, 10, 1e20;
-        _constr_xl = -_constr_xu;
-        _constr_uu << 10, 1;
-        // _constr_ul << -10, -1;
-        _constr_ul << 0, -1;
+
+        _constr_xl = xl;
+        _constr_xu = xu;
+        _constr_ul = ul;
+        _constr_uu = uu;
+
         var_t var0;
         var0.setZero();
-        // var0.template segment<NX>(VARX_SIZE-NX) = x0;
         var0.template segment<VARX_SIZE>(0) = x0.template replicate<VARX_SIZE/NX, 1>();
         var0.template segment<1>(VARX_SIZE+VARU_SIZE).setConstant(1.0);
+
         solver.solve(*this, var0);
 
         return solver._x;

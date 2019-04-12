@@ -49,7 +49,16 @@ TEST(NMPCTestCase, TestRobotNMPC)
 
     for (auto& x0: x0_list) {
         std::cout << "x0 " << x0.transpose() << std::endl;
-        var_t sol = robot_controller.solve(x0);
+
+        // bounds
+        controller_t::State xu, xl;
+        xu << 10, 10, 1e20;
+        xl << -xu;
+        controller_t::Control uu, ul;
+        uu << 10, 1;
+        ul << 0, -1;
+
+        var_t sol = robot_controller.solve(x0, xl, xu, ul, uu);
 
         Eigen::IOFormat fmt(4, 0, ", ", ",", "[", "]");
         printf("xy\n");

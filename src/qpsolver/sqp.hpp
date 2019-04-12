@@ -16,6 +16,7 @@ struct SQPSettings {
     Scalar eps_prim = 1e-3; /**< primal step termination threshold, eps_prim > 0 */
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
+    int line_search_max_iter = 100;
 };
 
 template <typename qp_t>
@@ -31,30 +32,38 @@ void print_qp(qp_t qp)
 
 /*
  * minimize     f(x)
- * subject to   ci(x) <= 0
- *              ce(x)  = 0
+ * subject to   ce(x)  = 0
+ *              ci(x) <= 0
+ *         l <= cb(x) <= u
  */
 template <typename _Problem>
 class SQP {
 public:
     using Problem = _Problem;
     enum {
-        NX = Problem::NX,
-        NIEQ = Problem::NIEQ,
-        NEQ = Problem::NEQ,
-        NC = NEQ+NIEQ
+        VAR_SIZE = Problem::VAR_SIZE,
+        NUM_EQ = Problem::NUM_EQ,
+        NUM_INEQ = Problem::NUM_INEQ,
+        NUM_BOX = Problem::NUM_BOX,
+        NUM_CONSTR = NUM_EQ + NUM_INEQ + NUM_BOX
     };
 
     using Scalar = typename Problem::Scalar;
-    using qp_t = osqp_solver::QP<NX, NC, Scalar>;
+    using qp_t = osqp_solver::QP<VAR_SIZE, NUM_CONSTR, Scalar>;
     using qp_solver_t = osqp_solver::OSQPSolver<qp_t>;
     using Settings = SQPSettings<Scalar>;
 
-    using x_t = Eigen::Matrix<Scalar, NX, 1>;
-    using dual_t = Eigen::Matrix<Scalar, NC, 1>;
-    using cost_gradient_t = Eigen::Matrix<Scalar, NX, 1>;
-    using constraint_t = Eigen::Matrix<Scalar, NC, 1>;
-    using hessian_t = Eigen::Matrix<Scalar, NX, NX>;
+    using x_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
+    using dual_t = Eigen::Matrix<Scalar, NUM_CONSTR, 1>;
+    using cost_gradient_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
+    using hessian_t = Eigen::Matrix<Scalar, VAR_SIZE, VAR_SIZE>;
+
+    using constr_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
+    using jacobian_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
+    using constr_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
+    using jacobian_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
+    using constr_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
+    using jacobian_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
 
     // Constants
     static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
@@ -72,7 +81,7 @@ public:
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
-    int _qp_last_iter = 0;
+    int _qp_iter = 0;
 
     bool is_psd(hessian_t &h)
     {
@@ -93,40 +102,71 @@ public:
         }
     }
 
-    // TODO: add box constraints?
     void construct_subproblem(Problem &prob)
     {
-        /* Construct QP subprob
-         *
+        /* QP from linearized NLP:
          * minimize     0.5 x'.P.x + q'.x
-         * subject to   l < A.x < u
+         * subject to   Ae.x + be  = 0
+         *              Ai.x + bi <= 0
+         *         l <= Ab.x + bb <= u
          *
-         * with:        P, Lagrangian hessian
-         *              q, cost gradient
-         *              c, cost value
-         *              A, constraint gradient
-         *              l,u, constraint bounds
-         *                   l=u for equality constraints,
-         *                   +/- INFINITY if unbounded on one side
+         * with:
+         *   P      Hessian of Lagrangian
+         *   q      cost gradient
+         *   Ae,be  linearized equality constraint
+         *   Ai,bi  linearized inequality constraint
+         *   Ab,bb  linearized box constraint
+         *   l,u    box constraint bounds
+         *
+         * transform to:
+         * minimize     0.5 x'.P.x + q'.x
+         * subject to   l <= A.x <= u
+         *
+         * Where the constraint bounds l,u are l=u for equality constraints or
+         * set to +-INFINITY if unbounded.
          */
+        enum {
+            EQ_IDX = 0,
+            INEQ_IDX = NUM_EQ,
+            BOX_IDX = NUM_INEQ + NUM_EQ,
+        };
         const Scalar UNBOUNDED = 1e20;
-        constraint_t b;
+        Scalar cost;
 
         _qp.P.setIdentity(); // TODO: Lagrangian hessian
-        prob.cost_gradient(_x, _qp.q);
+        prob.cost_linearized(_x, _qp.q, cost);
 
-        // constraint bounds:
-        // transform    l     <= A.x + b <= u
-        //        to    l - b <= A.x     <= u - b
-        prob.constraint_linearized(_x, _qp.A, b);
+        // TODO: avoid stack allocation (stack overflow)
+        constr_eq_t b_eq;
+        jacobian_eq_t A_eq;
+        constr_ineq_t b_ineq;
+        jacobian_ineq_t A_ineq;
+        constr_box_t b_box, l_box, u_box;
+        jacobian_box_t A_box;
 
-        _qp.u = -1*b;
+        prob.constraint_linearized(_x, A_eq, b_eq, A_ineq, b_ineq,
+                                   A_box, b_box, l_box, u_box);
 
-        // inequality constraint: l = -UNBOUNDED
-        _qp.l.template head<NIEQ>().setConstant(-UNBOUNDED);
+        // Equality constraints
+        // from        A.x + b  = 0
+        // to    -b <= A.x     <= -b
+        _qp.u.template segment<NUM_EQ>(EQ_IDX) = -b_eq;
+        _qp.l.template segment<NUM_EQ>(EQ_IDX) = -b_eq;
+        _qp.A.template block<NUM_EQ, VAR_SIZE>(EQ_IDX, 0) = A_eq;
 
-        // equality constraint: l = u
-        _qp.l.template tail<NEQ>() = _qp.u.template tail<NEQ>();
+        // Inequality constraints
+        // from          A.x + b <= 0
+        // to    -INF <= A.x     <= -b
+        _qp.u.template segment<NUM_INEQ>(INEQ_IDX) = -b_ineq;
+        _qp.l.template segment<NUM_INEQ>(INEQ_IDX).setConstant(-UNBOUNDED);
+        _qp.A.template block<NUM_INEQ, VAR_SIZE>(INEQ_IDX, 0) = A_ineq;
+
+        // Box constraints
+        // from  l     <= A.x + b <= u
+        // to    l - b <= A.x     <= u - b
+        _qp.u.template segment<NUM_BOX>(BOX_IDX) = u_box - b_box;
+        _qp.l.template segment<NUM_BOX>(BOX_IDX) = l_box - b_box;
+        _qp.A.template block<NUM_BOX, VAR_SIZE>(BOX_IDX, 0) = A_box;
     }
 
     void solve_subproblem(x_t &p, dual_t &lambda)
@@ -136,7 +176,7 @@ public:
         _qp_solver.settings.max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        _qp_last_iter = _qp_solver.iter;
+        _qp_iter += _qp_solver.iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;
@@ -153,8 +193,8 @@ public:
         // initialize
         _x = x0;
         _lambda.setZero();
+        _qp_iter = 0;
 
-        // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
         for (iter = 1; iter <= settings.max_iter; iter++) {
             // Solve QP
             construct_subproblem(prob);
@@ -168,16 +208,10 @@ public:
 
             Scalar cost, phi_l1, Dp_phi_l1;
             cost_gradient_t cost_gradient;
-            constraint_t constr;
-            // TODO: reuse computation
-            prob.cost(_x, cost);
-            prob.cost_gradient(_x, cost_gradient);
-            prob.constraint(_x, constr);
 
-            Eigen::Matrix<bool, NIEQ, 1> mask;
-            mask = constr.template head<NIEQ>().array() <= 0;
-            setZero(constr, mask);
-            Scalar constr_l1 = constr.template lpNorm<1>() + DIV_BY_ZERO_REGUL;
+            // TODO: reuse computation
+            prob.cost_linearized(_x, cost_gradient, cost);
+            Scalar constr_l1 = l1_constraint_violation(_x, prob);
 
             // TODO: get mu from merit function model using hessian of Lagrangian
             mu = cost_gradient.dot(p) / ((1 - settings.rho) * constr_l1);
@@ -185,18 +219,14 @@ public:
             phi_l1 = cost + mu * constr_l1;
             Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
-            int _line_search_iter;
-            // TODO: iteration upper bound, line_search_max_iter or alpha_min
-            for (_line_search_iter = 1;; _line_search_iter++) {
+            int ls_iter;
+            for (ls_iter = 1; ls_iter < settings.line_search_max_iter; ls_iter++) {
                 x_t x_step = _x + alpha*p;
                 prob.cost(x_step, cost);
-                prob.constraint(x_step, constr);
 
-                Eigen::Matrix<bool, NIEQ, 1> mask;
-                mask = constr.template head<NIEQ>().array() <= 0;
-                setZero(constr, mask);
+                Scalar constr_l1 = l1_constraint_violation(x_step, prob);
 
-                Scalar phi_l1_step = cost + mu * constr.template lpNorm<1>();
+                Scalar phi_l1_step = cost + mu * constr_l1;
                 if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
                     // accept step
                     break;
@@ -213,8 +243,6 @@ public:
             _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
             _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
 
-            // Evaluate: f, gradient f, hessian f, hessian Lagrangian, c, jacobian c
-
             if (termination_criteria()) {
                 break;
             }
@@ -222,16 +250,6 @@ public:
     }
 
 private:
-    /** helper function since Eigen does not yet provide boolean indexing */
-    void setZero(Eigen::Matrix<Scalar, NC, 1> &v, const Eigen::Matrix<bool, NIEQ, 1> &mask) const
-    {
-        for (unsigned int i = 0; i < mask.rows(); i++) {
-            if (mask(i)) {
-                v(i) = 0;
-            }
-        }
-    }
-
     bool termination_criteria() const
     {
         if (_primal_step_norm <= settings.eps_prim &&
@@ -239,6 +257,39 @@ private:
             return true;
         }
         return false;
+    }
+
+    Scalar l1_constraint_violation(const x_t &x, Problem &prob) const
+    {
+        Scalar cl1 = DIV_BY_ZERO_REGUL;
+        constr_eq_t c_eq;
+        constr_ineq_t c_ineq;
+        constr_box_t c_box, l_box, u_box;
+
+        prob.constraint(x, c_eq, c_ineq, c_box, l_box, u_box);
+
+        // c_eq = 0
+        cl1 += c_eq.template lpNorm<1>();
+
+        // c_ineq <= 0
+        for (int i = 0; i < NUM_INEQ; i++) {
+            if (c_ineq(i) > 0) {
+                cl1 += c_ineq(i);
+            }
+        }
+        // alternative: but maybe more costly in FLOP count
+        // cl1 += (c_ineq.array() * (c_ineq.array() <= 0).cast<double>()).matrix().lpNorm<1>()
+
+        // l <= c_box <= u
+        for (int i = 0; i < NUM_BOX; i++) {
+            if (c_box(i) < l_box(i)) {
+                cl1 += l_box(i) - c_box(i);
+            } else if (u_box(i) < c_box(i)) {
+                cl1 += c_box(i) - u_box(i);
+            }
+        }
+
+        return cl1;
     }
 };
 

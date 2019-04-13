@@ -5,6 +5,11 @@
 
 #include "gtest/gtest.h"
 
+void iteration_callback(const Eigen::MatrixXd &var)
+{
+    std::cout << "SQP iteration callback:" << std::endl;
+    std::cout << var.transpose() << std::endl;
+}
 
 TEST(NMPCTestCase, TestRobotNMPC)
 {
@@ -34,6 +39,7 @@ TEST(NMPCTestCase, TestRobotNMPC)
     printf("controller_t::sqp_t::qp_solver_t size %lu\n", sizeof(controller_t::sqp_t::qp_solver_t));
 
     controller_t robot_controller;
+    robot_controller.solver.settings.iteration_callback = iteration_callback;
 
     Eigen::Vector3d x0_list[] = {
         {-1, 0, 0},

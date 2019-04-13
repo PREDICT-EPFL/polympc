@@ -17,6 +17,7 @@ struct SQPSettings {
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
     int line_search_max_iter = 100;
+    void (*iteration_callback)(const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> &x) = nullptr;
 };
 
 template <typename qp_t>
@@ -242,6 +243,10 @@ public:
             // update step info
             _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
             _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
+
+            if (settings.iteration_callback != nullptr) {
+                settings.iteration_callback(_x);
+            }
 
             if (termination_criteria()) {
                 break;

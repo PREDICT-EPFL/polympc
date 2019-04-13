@@ -188,8 +188,6 @@ public:
         x_t p; // search direction
         dual_t p_lambda; // dual search direction
         Scalar alpha; // step size
-        Scalar tau; // line search step decrease
-        Scalar mu;
 
         // initialize
         _x = x0;
@@ -202,39 +200,7 @@ public:
             solve_subproblem(p, p_lambda);
             p_lambda -= _lambda;
 
-            /* Line search */
-            mu = 1e5; // TODO: choose mu with sigma = 1
-            tau = settings.tau; // 0 < tau < settings.tau
-            alpha = 1;
-
-            Scalar cost, phi_l1, Dp_phi_l1;
-            cost_gradient_t cost_gradient;
-
-            // TODO: reuse computation
-            prob.cost_linearized(_x, cost_gradient, cost);
-            Scalar constr_l1 = l1_constraint_violation(_x, prob);
-
-            // TODO: get mu from merit function model using hessian of Lagrangian
-            mu = cost_gradient.dot(p) / ((1 - settings.rho) * constr_l1);
-
-            phi_l1 = cost + mu * constr_l1;
-            Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
-
-            int ls_iter;
-            for (ls_iter = 1; ls_iter < settings.line_search_max_iter; ls_iter++) {
-                x_t x_step = _x + alpha*p;
-                prob.cost(x_step, cost);
-
-                Scalar constr_l1 = l1_constraint_violation(x_step, prob);
-
-                Scalar phi_l1_step = cost + mu * constr_l1;
-                if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
-                    // accept step
-                    break;
-                } else {
-                    alpha = tau * alpha;
-                }
-            }
+            alpha = line_search(prob, p);
 
             /* Step */
             _x = _x + alpha * p;
@@ -262,6 +228,39 @@ private:
             return true;
         }
         return false;
+    }
+
+    /** Line search in direction p using l1 merit function. */
+    Scalar line_search(Problem &prob, const x_t& p)
+    {
+        Scalar cost, mu, phi_l1, Dp_phi_l1;
+        cost_gradient_t cost_gradient;
+        const Scalar tau = settings.tau; // line search step decrease, 0 < tau < settings.tau
+
+        // TODO: reuse computation
+        prob.cost_linearized(_x, cost_gradient, cost);
+        Scalar constr_l1 = l1_constraint_violation(_x, prob);
+
+        // TODO: get mu from merit function model using hessian of Lagrangian
+        mu = cost_gradient.dot(p) / ((1 - settings.rho) * constr_l1);
+
+        phi_l1 = cost + mu * constr_l1;
+        Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
+
+        Scalar alpha = 1.0;
+        for (int i = 1; i < settings.line_search_max_iter; i++) {
+            x_t x_step = _x + alpha*p;
+            prob.cost(x_step, cost);
+
+            Scalar phi_l1_step = cost + mu * l1_constraint_violation(x_step, prob);
+            if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
+                // accept step
+                break;
+            } else {
+                alpha = tau * alpha;
+            }
+        }
+        return alpha;
     }
 
     Scalar l1_constraint_violation(const x_t &x, Problem &prob) const

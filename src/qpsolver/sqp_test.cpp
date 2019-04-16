@@ -189,6 +189,60 @@ TEST(SQPTestCase, TestSimpleQP) {
 }
 
 
+struct Rosenbrock : public ProblemBase<double, 2, 1, 1, 0>  {
+    const Scalar a = 1;
+    const Scalar b = 0.1; //1; // 100;
+
+    void cost(const var_t& x, Scalar &cst)
+    {
+        // (a-x)^2 + b*(y-x^2)^2
+        cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
+    }
+
+    void cost_linearized(const var_t& x, grad_t &grad, Scalar &cst)
+    {
+        cost(x, cst);
+        grad << 2*a*(x(0) - 1) + 2 * b * (x(1) - pow(x(0), 2)) * (-2 * x(0)),
+                2 * b * (x(1) - pow(x(0), 2));
+    }
+
+    void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    {
+        // y >= x
+        b_ineq << x(0) - x(1);
+        // x^2+y^2 == 1
+        b_eq << x.squaredNorm() - 1;
+    }
+
+    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, A_box_t& A_box, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    {
+        constraint(x, b_eq, b_ineq, b_box, l_box, u_box);
+        A_ineq << 1, -1;
+        A_eq << 2 * x.transpose();
+    }
+};
+
+TEST(SQPTestCase, TestRosenbrock) {
+    Rosenbrock problem;
+    SQP<Rosenbrock> solver;
+
+    Eigen::Vector2d SOLUTION(0.7071067812, 0.7071067812);
+    Eigen::Vector2d x0;
+
+    x0 << 0, 0;
+    solver.settings.max_iter = 1000;
+    solver.settings.iteration_callback = iteration_callback;
+    solver.solve(problem, x0);
+
+    std::cout << "Rosenbrock" << std::endl;
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
+
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

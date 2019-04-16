@@ -7,8 +7,8 @@
 
 void iteration_callback(const Eigen::MatrixXd &var)
 {
-    std::cout << "SQP iteration callback:" << std::endl;
-    std::cout << var.transpose() << std::endl;
+    // std::cout << "SQP iteration callback:" << std::endl;
+    // std::cout << var.transpose() << std::endl;
 }
 
 TEST(NMPCTestCase, TestRobotNMPC)

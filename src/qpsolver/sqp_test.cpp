@@ -96,10 +96,6 @@ TEST(SQPTestCase, TestSimpleNLP) {
     solver.settings.max_iter = 100;
     solver.solve(problem, x0);
 
-    std::cout << "Feasible x0 " << std::endl;
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
-
     EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);
 }
@@ -114,10 +110,6 @@ TEST(SQPTestCase, InfeasibleStart) {
     x0 << 2, -1; // infeasible initial point
     solver.settings.max_iter = 100;
     solver.solve(problem, x0);
-
-    std::cout << "Infeasible x0 " << std::endl;
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
 
     EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);
@@ -158,14 +150,14 @@ struct SimpleQP : public ProblemBase<double, 2, 0, 0, 3> {
     void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
     {
         b_box << A * x;
+        l_box << l;
+        u_box << u;
     }
 
     void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, A_box_t& A_box, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
     {
         constraint(x, b_eq, b_ineq, b_box, l_box, u_box);
         A_box << A;
-        l_box << l;
-        u_box << u;
     }
 };
 
@@ -176,13 +168,7 @@ TEST(SQPTestCase, TestSimpleQP) {
     Eigen::Vector2d x0;
 
     x0 << 0, 0;
-    solver.settings.max_iter = 50;
-    solver.settings.iteration_callback = iteration_callback;
     solver.solve(problem, x0);
-
-    std::cout << "QP" << std::endl;
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
 
     EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);

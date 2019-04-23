@@ -9,10 +9,10 @@ namespace polymath
 
 SX quat_multiply(const SX &q1, const SX &q2)
 {
-    SX s1 = q1[0];
+    SX s1 = q1(0);
     SX v1 = q1(Slice(1,4),0);
 
-    SX s2 = q2[0];
+    SX s2 = q2(0);
     SX v2 = q2(Slice(1,4),0);
 
     SX s = (s1 * s2) - SX::dot(v1, v2);
@@ -25,7 +25,7 @@ SX quat_multiply(const SX &q1, const SX &q2)
 
 SX quat_inverse(const SX &q)
 {
-    SXVector tmp{q[0], -q[1], -q[2], -q[3]};
+    SXVector tmp{q(0), -q(1), -q(2), -q(3)};
     return SX::vertcat(tmp);
 }
 
@@ -72,7 +72,7 @@ void cheb(DM &CollocPoints, DM &DiffMatrix, const unsigned &N,
     DM dX = XM - XM.T();
     DM Dn  = DM::mtimes(c, (1 / c).T() ) / (dX + (DM::eye(N+1)));      /** off-diagonal entries */
 
-    DiffMatrix  = Dn - DM::diag( DM::sumRows(Dn.T() ));               /**  diagonal entries */
+    DiffMatrix  = Dn - DM::diag( DM::sum1(Dn.T() ));               /**  diagonal entries */
 }
 
 SX mat_func(const SX &matrix_in, Function &func)

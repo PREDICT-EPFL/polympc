@@ -1,26 +1,15 @@
 #include "casadi/casadi.hpp"
-#include "yaml-cpp/yaml.h"
 #include "ctime"
 #include "chrono"
 
-#include "ros/time.h"
-#include "eigen3/Eigen/Dense"
-#include "eigen3/Eigen/Sparse"
-#include "pseudospectral/chebyshev.hpp"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "chebyshev.hpp"
 
 using namespace casadi;
 
 int main()
 {
-    //load config information
-    YAML::Node config = YAML::LoadFile("umx_radian.yaml");
-    const std::string plane = config["name"].as<std::string>();
-    const double aspect_ratio = config["geometry"]["AR"].as<double>();
-
-    //config["inertia"]["mass"] = 1000.0;
-    //std::ofstream fout("umx_radian3.yaml");
-    //fout << config;
-
     SX sym = SX::sym("sym",4);
     SX x = SX::sym("x",3);
     std::vector<SX> y{sym, x, 0};
@@ -40,17 +29,6 @@ int main()
     SX jac = SX::jacobian(func,z);
 
     DM Matr = DM::diag(pow(DMVector{1,2,3,4},2));
-
-    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-    auto duration = now.time_since_epoch();
-    auto seconds = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-    double ros_time = static_cast<double>(seconds);
-    printf("Local time is %f \n", ros_time * 1e-6);
-
-    ros::Time::init();
-    double ros_true_time = ros::Time::now().toSec();
-    printf("True Local time is %f \n", ros_true_time);
-    std::cout << "Local time is: " << ros_time * 1e-6 << "\n";
 
     DM H = DM::horzcat(DMVector{DM::zeros(7,6), DM::eye(7)});
     std::cout << H << "\n";
@@ -106,7 +84,7 @@ int main()
     Eigen::VectorXd eig_vec = Eigen::VectorXd::Map(c.nonzeros().data(), c.nonzeros().size());
     std::cout << eig_vec << "\n";
 
-    std::cout << DM::sumRows(c) << "\n";
+    std::cout << DM::sum1(c) << "\n";
 
     DM EYE = DM::eye(7);
     Eigen::Matrix<double, 7, 7> eig_mat = Eigen::Matrix<double, 7, 7>::Map(DM::densify(EYE).nonzeros().data(), 7, 7);
@@ -126,40 +104,6 @@ int main()
     std::vector<SXElem> sold;
     sold.resize(static_cast<size_t>(sol.size()));
     Eigen::Map<Eigen::Matrix<SXElem, 2, 1>>(&sold[0], sol.size()) = sol;
-
-    std::cout << "|----------------------------SPARSITY EXPERIMENT--------------------------------------| \n";
-    /** create a sparse matrix */
-    Chebyshev<casadi::SX, 2, 2, 2, 1, 0>cheb;
-    casadi::DM Matrx = cheb.CompD();
-    std::cout << Matrx << "\n";
-
-    casadi::Sparsity SpA = Matrx.get_sparsity();
-    std::cout << "Nonzeros in rows: " << SpA.get_row() << "\n";
-    std::cout << "Nonzeros in columns: " << SpA.get_colind() << "\n";
-
-    std::vector<int> output_row, output_col;
-    SpA.get_triplet(output_row, output_col);
-    std::vector<double> values = Matrx.get_nonzeros();
-
-    std::cout << "Output row: " << output_row << "\n";
-    std::cout << "Output col: " << output_col << "\n";
-    std::cout << "Nonzeros: " << Matrx.get_nonzeros() << "\n";
-
-    using T = Eigen::Triplet<double>;
-    std::vector<T> TripletList;
-    TripletList.resize(values.size());
-    for(int k = 0; k < values.size(); ++k)
-        TripletList[k] = T(output_row[k], output_col[k], values[k]);
-
-    for(std::vector<T>::const_iterator it = TripletList.begin(); it != TripletList.end(); ++it)
-    {
-        std::cout << "triplet: " << (*it).row() << " " << (*it).col() << " " << (*it).value() << "\n";
-    }
-
-    Eigen::SparseMatrix<double> SpMatrx(Matrx.size1(), Matrx.size2());
-    SpMatrx.setFromTriplets(TripletList.begin(), TripletList.end());
-
-    std::cout << "Eigen sparse matrix: \n" << SpMatrx << "\n";
 
     return 0;
 }

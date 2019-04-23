@@ -257,29 +257,29 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::SX lagrange, residual;
     if(scale)
     {
-        casadi::SX sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v[0])})[0];
+        casadi::SX sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v(0))})[0];
         casadi::SX _invSX = invSX(casadi::Slice(0, NX), casadi::Slice(0, NX));
-        residual  = sym_path - output({casadi::SX::mtimes(_invSX, x)})[0];
-        lagrange  = casadi::SX::sumRows( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
-                    casadi::SX::sumRows( casadi::SX::mtimes(W, pow(reference_velocity - v[1], 2)) );
-        lagrange = lagrange + casadi::SX::sumRows( casadi::SX::mtimes(R, pow(u, 2)) );
+        residual  = sym_path - output(casadi::SXVector{casadi::SX::mtimes(_invSX, x)})[0];
+        lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
+                    casadi::SX::sum1( casadi::SX::mtimes(W, pow(reference_velocity - v(1), 2)) );
+        lagrange = lagrange + casadi::SX::sum1( casadi::SX::mtimes(R, pow(u, 2)) );
     }
     else
     {
-        casadi::SX sym_path = PathFunc(casadi::SXVector{v[0]})[0];
-        residual  = sym_path - output({x})[0];
-        lagrange  = casadi::SX::sumRows( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
-                    casadi::SX::sumRows( casadi::SX::mtimes(W, pow(reference_velocity - v[1], 2)) );
-        lagrange = lagrange + casadi::SX::sumRows( casadi::SX::mtimes(R, pow(u, 2)) );
+        casadi::SX sym_path = PathFunc(casadi::SXVector{v(0)})[0];
+        residual  = sym_path - output(casadi::SXVector{x})[0];
+        lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
+                    casadi::SX::sum1( casadi::SX::mtimes(W, pow(reference_velocity - v(1), 2)) );
+        lagrange = lagrange + casadi::SX::sum1( casadi::SX::mtimes(R, pow(u, 2)) );
     }
 
     casadi::Function LagrangeTerm = casadi::Function("Lagrange", {aug_state, aug_control}, {lagrange});
 
     /** trace functions */
     PathError = casadi::Function("PathError", {aug_state}, {residual});
-    VelError  = casadi::Function("VelError", {aug_state}, {reference_velocity - v[1]});
+    VelError  = casadi::Function("VelError", {aug_state}, {reference_velocity - v(1)});
 
-    casadi::SX mayer           =  casadi::SX::sumRows( casadi::SX::mtimes(Q, pow(residual, 2)) );
+    casadi::SX mayer           =  casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) );
     casadi::Function MayerTerm = casadi::Function("Mayer",{aug_state}, {mayer});
     casadi::SX performance_idx = spectral.CollocateCost(MayerTerm, LagrangeTerm, 0.0, tf);
 
@@ -351,14 +351,14 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
     /** rectify virtual state */
     casadi::DM X0 = _X0;
     bool rectify = false;
-    if(X0[nx].nonzeros()[0] > 2 * M_PI)
+    if(X0(nx).nonzeros()[0] > 2 * M_PI)
     {
-        X0[nx] -= 2 * M_PI;
+        X0(nx) -= 2 * M_PI;
         rectify = true;
     }
-    else if (X0[nx].nonzeros()[0] < -2 * M_PI)
+    else if (X0(nx).nonzeros()[0] < -2 * M_PI)
     {
-        X0[nx] += 2 * M_PI;
+        X0(nx) += 2 * M_PI;
         rectify = true;
     }
 
@@ -378,11 +378,11 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
         /** relax virtual state constraint */
         idx_theta = idx_out - 2;
-        ARG["lbx"](idx_theta) = X0[nx] - flexibility;
-        ARG["ubx"](idx_theta) = X0[nx] + flexibility;
+        ARG["lbx"](idx_theta) = X0(nx) - flexibility;
+        ARG["ubx"](idx_theta) = X0(nx) + flexibility;
 
-        ARG["lbx"](idx_theta + 1) = X0[nx + 1] - flexibility;
-        ARG["ubx"](idx_theta + 1) = X0[nx + 1] + flexibility;
+        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - flexibility;
+        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + flexibility;
 
         /** rectify initial guess */
         if(rectify)
@@ -390,10 +390,10 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
             for(int i = 0; i < (N + 1) * nx; i += nx)
             {
                 int idx = i + nx;
-                if(NLP_X[idx].nonzeros()[0] > critical_val)
-                    NLP_X[idx] -= critical_val;
-                else if (NLP_X[idx].nonzeros()[0] < -critical_val)
-                    NLP_X[idx] += critical_val;
+                if(NLP_X(idx).nonzeros()[0] > critical_val)
+                    NLP_X(idx) -= critical_val;
+                else if (NLP_X(idx).nonzeros()[0] < -critical_val)
+                    NLP_X(idx) += critical_val;
             }
         }
         ARG["x0"]     = NLP_X;
@@ -410,11 +410,11 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
         /** relax virtual state constraint */
         idx_theta = idx_out - 2;
-        ARG["lbx"](idx_theta) = X0[nx] - flexibility;
-        ARG["ubx"](idx_theta) = X0[nx] + flexibility;
+        ARG["lbx"](idx_theta) = X0(nx) - flexibility;
+        ARG["ubx"](idx_theta) = X0(nx) + flexibility;
 
-        ARG["lbx"](idx_theta + 1) = X0[nx + 1] - flexibility;
-        ARG["ubx"](idx_theta + 1) = X0[nx + 1] + flexibility;
+        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - flexibility;
+        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + flexibility;
     }
 
     //DMVector dbg_prf    = PerformanceIndex({ARG["x0"]});

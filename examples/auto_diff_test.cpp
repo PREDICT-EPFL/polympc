@@ -134,8 +134,8 @@ int main(void)
 
     /** check computations with CAsadi */
     casadi::SX x = casadi::SX::sym("x",3);
-    casadi::SX x_dot = lox.V * cos(x[2]) * cos(lox.phi);
-    casadi::SX y_dot = lox.V * sin(x[2]) * cos(lox.phi);
+    casadi::SX x_dot = lox.V * cos(x(2)) * cos(lox.phi);
+    casadi::SX y_dot = lox.V * sin(x(2)) * cos(lox.phi);
     casadi::SX theta_dot = lox.V * sin(lox.phi) / 1.0;
     casadi::SX f_sym = casadi::SX::vertcat({x_dot, y_dot, theta_dot});
 

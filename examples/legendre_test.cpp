@@ -148,14 +148,14 @@ int main()
             double omega = 0;
             for(int j = 0; j < N; ++j)
             {
-                arg += a[j] * leg.eval(nodes[n], j);
+                arg += a(j) * leg.eval(nodes[n], j);
                 omega += proj.coeff[j] * leg.eval(nodes[n], j);
             }
             double fi_k = leg.eval(nodes[n], k);
             casadi::SX f = ode({arg})[0];
             integral += (weights[n] * omega * fi_k) * f;
         }
-        sode[k] = nfactors[k] * integral;
+        sode(k) = nfactors[k] * integral;
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{a, u},{sode});

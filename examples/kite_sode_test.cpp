@@ -53,9 +53,9 @@ int main(void)
             double omega = 0;
             for(int j = 0; j < N; ++j)
             {
-                arg1 += x[j] * leg.eval(nodes[n], j);
-                arg2 += x[j + N] * leg.eval(nodes[n], j);
-                arg3 += x[j + 2 * N] * leg.eval(nodes[n], j);
+                arg1 += x(j) * leg.eval(nodes[n], j);
+                arg2 += x(j + N) * leg.eval(nodes[n], j);
+                arg3 += x(j + 2 * N) * leg.eval(nodes[n], j);
                 omega += proj.coeff[j] * leg.eval(nodes[n], j);
             }
             double fi_k = leg.eval(nodes[n], k);
@@ -66,9 +66,9 @@ int main(void)
             integral2 += (weights[n] * omega * fi_k) * f2_n;
             integral3 += (weights[n] * omega * fi_k) * f3_n;
         }
-        sode[k] = nfactors[k] * integral1;
-        sode[k + N] = nfactors[k] * integral2;
-        sode[k + 2 * N] = nfactors[k] * integral3;
+        sode(k) = nfactors[k] * integral1;
+        sode(k + N) = nfactors[k] * integral2;
+        sode(k + 2 * N) = nfactors[k] * integral3;
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{x, u},{sode});

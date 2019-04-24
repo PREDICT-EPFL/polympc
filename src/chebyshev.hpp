@@ -148,7 +148,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DiffMatrix()
     BaseClass dX = XM - XM.T();
     BaseClass Dn  = BaseClass::mtimes(c, (1 / c).T() ) / (dX + (BaseClass::eye(PolyOrder + 1)));      /** off-diagonal entries */
 
-    return Dn - BaseClass::diag( BaseClass::sumRows(Dn.T() ));               /**  diagonal entries */
+    return Dn - BaseClass::diag( BaseClass::sum1(Dn.T() ));               /**  diagonal entries */
 }
 
 /** @brief compute weights for Clenshaw-Curtis quadrature / ref {L. Trefethen "Spectral Methods in Matlab"}*/
@@ -171,8 +171,8 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::QuadWeights(
 
     if ( PolyOrder % 2 == 0 )
     {
-        w[0]         = 1 / (pow(PolyOrder, 2) - 1);
-        w[PolyOrder] = w[0];
+        w(0)         = 1 / (pow(PolyOrder, 2) - 1);
+        w(PolyOrder) = w(0);
 
         for(int k = 1; k <= PolyOrder / 2 - 1; ++k)
         {
@@ -182,8 +182,8 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::QuadWeights(
     }
     else
     {
-        w[0] = 1 / std::pow(PolyOrder, 2);
-        w[PolyOrder] = w[0];
+        w(0) = 1 / std::pow(PolyOrder, 2);
+        w(PolyOrder) = w(0);
         for (int k = 1; k <= (PolyOrder - 1) / 2; ++k)
         {
             v = v - 2 * cos(2 * k * theta(casadi::Slice(1, PolyOrder))) / (4 * pow(k, 2) - 1);
@@ -319,7 +319,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateCos
                     value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU))});
                 }
 
-                local_int += _QuadWeights[m] * value[0];
+                local_int += _QuadWeights(m) * value[0];
                 j += NU;
                 ++m;
             }

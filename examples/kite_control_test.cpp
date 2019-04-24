@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 
     DM lbx = DM::vertcat({0, -M_PI_2, -M_PI});
     DM ubx = DM::vertcat({M_PI_2, M_PI_2, M_PI});
-    controller.setLBU(lbx);
+    controller.setLBX(lbx);
     controller.setUBX(ubx);
 
     DM state = DM::vertcat({M_PI_4, 0, 0});

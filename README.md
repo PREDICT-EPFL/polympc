@@ -2,7 +2,7 @@
 PolyMPC: An Efficient and Extensible Tool for Real-Time Nonlinear Model Predictive Tracking and Path Following for Fast Mechatronic Systems. Developed at the Automatic Control laboratory EPFL as part of the AWESCO project.
 
 -- **Dependencies**:
- - CasADi (at least v3.0.0-rc2) : https://github.com/casadi
+ - CasADi (version v3.2.0 and higher) : https://github.com/casadi
  - Eigen3 : https://eigen.tuxfamily.org/
  
 -- **Build**:

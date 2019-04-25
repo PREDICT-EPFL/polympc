@@ -62,7 +62,7 @@ private:
 template<int PolyOrder, int NumSegments, int NX, int NU>
 class PSODESolver{
 public:
-    PSODESolver(casadi::Function ODE, const float &dt, const casadi::DMDict &props);
+    PSODESolver(casadi::Function ODE, const float &dt, const casadi::DMDict &props, const casadi::Dict &solver_opts = casadi::Dict());
     virtual ~PSODESolver(){}
     casadi::DM solve(const casadi::DM &X0, const casadi::DM &U, const bool full = false);
     casadi::DMDict solve_trajectory(const casadi::DM &X0, const casadi::DM &U, const bool full = false);
@@ -83,7 +83,7 @@ private:
 };
 
 template<int PolyOrder, int NumSegments, int NX, int NU>
-PSODESolver<PolyOrder, NumSegments, NX, NU>::PSODESolver(casadi::Function ODE, const float &dt, const casadi::DMDict &props)
+PSODESolver<PolyOrder, NumSegments, NX, NU>::PSODESolver(casadi::Function ODE, const float &dt, const casadi::DMDict &props, const casadi::Dict &solver_opts)
 {
     scale = 0;
     P = casadi::DM::eye(NX);
@@ -146,12 +146,17 @@ PSODESolver<PolyOrder, NumSegments, NX, NU>::PSODESolver(casadi::Function ODE, c
     NLP["f"] = 1e-3 * casadi::SX::dot(G,G);
     NLP["g"] = G;
 
-    OPTS["ipopt.linear_solver"]  = "ma97";
+    OPTS["ipopt.linear_solver"]  = "ma97"; // mumps
     OPTS["ipopt.print_level"]    = 5;
     OPTS["ipopt.tol"]            = 1e-4;
     OPTS["ipopt.acceptable_tol"] = 1e-4;
     OPTS["ipopt.max_iter"]       = 3000;
     OPTS["ipopt.hessian_approximation"] = "limited-memory";
+
+    /** set uder-defined options */
+    if(solver_opts.find("ipopt.linear_solver") != solver_opts.end())
+        OPTS["ipopt.linear_solver"] = solver_opts.find("ipopt.linear_solver")->second;
+
     NLP_Solver = nlpsol("solver", "ipopt", NLP, OPTS);
 
     std::cout << "problem set \n";

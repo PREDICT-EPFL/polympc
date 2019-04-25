@@ -1,4 +1,3 @@
-//#include "ebyshev.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "polynomials/projection.hpp"
 
@@ -12,9 +11,9 @@ struct Integrand
         double sgm = 3.0;
         double mu = 1.0;
 
-        double c = 1.0  / std::sqrtf(2 * M_PI * sgm * sgm);
-        double arg = std::powf(x - mu,2) / (2 * std::powf(sgm, 2));
-        return  c * std::expf(-arg);
+        double c = 1.0  / std::sqrt(2 * M_PI * sgm * sgm);
+        double arg = std::pow(x - mu,2) / (2 * std::pow(sgm, 2));
+        return  c * std::exp(-arg);
     }
 };
 

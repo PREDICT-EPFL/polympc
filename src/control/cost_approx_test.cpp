@@ -65,6 +65,7 @@ struct Mayer
         using ScalarT = typename Eigen::MatrixBase<StateT>::Scalar;
         value = state.dot(Q.template cast<ScalarT>() * state);
     }
+
 };
 
 int main(void)

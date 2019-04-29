@@ -1,7 +1,6 @@
 #include "control/nmpc.hpp"
 #include "control/simple_robot_model.hpp"
 #include "polynomials/ebyshev.hpp"
-#include "qpsolver/osqp_solver.hpp"
 
 #include "gtest/gtest.h"
 

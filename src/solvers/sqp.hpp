@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 #include <cmath>
-#include "osqp_solver.hpp"
+#include "qp_solver.hpp"
 
 namespace sqp {
 
@@ -50,8 +50,8 @@ public:
     };
 
     using Scalar = typename Problem::Scalar;
-    using qp_t = osqp_solver::QP<VAR_SIZE, NUM_CONSTR, Scalar>;
-    using qp_solver_t = osqp_solver::OSQPSolver<qp_t>;
+    using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, Scalar>;
+    using qp_solver_t = qp_solver::OSQPSolver<qp_t>;
     using Settings = SQPSettings<Scalar>;
 
     using x_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;

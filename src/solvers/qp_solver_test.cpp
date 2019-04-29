@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
-#include "osqp_solver.hpp"
+#include "qp_solver.hpp"
 #include <Eigen/IterativeLinearSolvers>
 
-using namespace osqp_solver;
+using namespace qp_solver;
 
 template <typename _Scalar=double>
 class _SimpleQP : public QP<2, 3, _Scalar>

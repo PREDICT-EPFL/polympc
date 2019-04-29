@@ -4,8 +4,7 @@
 #include "control/cost_collocation.hpp"
 #include "control/ode_collocation.hpp"
 #include "control/problem.hpp"
-#include "qpsolver/osqp_solver.hpp"
-#include "qpsolver/sqp.hpp"
+#include "solvers/sqp.hpp"
 
 namespace polympc {
 

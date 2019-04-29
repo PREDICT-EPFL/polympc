@@ -1,10 +1,10 @@
-#ifndef OSQP_SOLVER_H
-#define OSQP_SOLVER_H
+#ifndef QP_SOLVER_H
+#define QP_SOLVER_H
 
 #include <Eigen/Dense>
 #include <cmath>
 
-namespace osqp_solver {
+namespace qp_solver {
 
 template <int _n, int _m, typename _Scalar = double>
 struct QP {
@@ -328,6 +328,6 @@ private:
 #endif
 };
 
-} // namespace osqp_solver
+} // namespace qp_solver
 
-#endif // OSQP_SOLVER_H
+#endif // QP_SOLVER_H

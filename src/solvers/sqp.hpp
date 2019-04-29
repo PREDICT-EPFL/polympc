@@ -2,7 +2,6 @@
 #define SQP_H
 
 #include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
 #include <cmath>
 #include "qp_solver.hpp"
 
@@ -19,17 +18,6 @@ struct SQPSettings {
     int line_search_max_iter = 100;
     void (*iteration_callback)(const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> &x) = nullptr;
 };
-
-template <typename qp_t>
-void print_qp(qp_t qp)
-{
-    Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "]", "[", "]");
-    std::cout << "P = " << qp.P.format(fmt) << std::endl;
-    std::cout << "q = " << qp.q.transpose().format(fmt) << std::endl;
-    std::cout << "A = " << qp.A.format(fmt) << std::endl;
-    std::cout << "l = " << qp.l.transpose().format(fmt) << std::endl;
-    std::cout << "u = " << qp.u.transpose().format(fmt) << std::endl;
-}
 
 /*
  * minimize     f(x)
@@ -83,25 +71,6 @@ public:
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
     int _qp_iter = 0;
-
-    bool is_psd(hessian_t &h)
-    {
-        Eigen::EigenSolver<hessian_t> eigensolver(h);
-        for (int i = 0; i < eigensolver.eigenvalues().RowsAtCompileTime; i++) {
-            double v = eigensolver.eigenvalues()(i).real();
-            if (v <= 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    void make_hessian_psd(hessian_t &h)
-    {
-        while (!is_psd(h)) {
-            h += 0.1*h.Identity();
-        }
-    }
 
     void construct_subproblem(Problem &prob)
     {

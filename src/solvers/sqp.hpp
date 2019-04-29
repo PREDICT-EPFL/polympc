@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include "qp_solver.hpp"
+#include "bfgs.hpp"
 
 namespace sqp {
 
@@ -44,7 +45,7 @@ public:
 
     using x_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using dual_t = Eigen::Matrix<Scalar, NUM_CONSTR, 1>;
-    using cost_gradient_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
+    using gradient_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using hessian_t = Eigen::Matrix<Scalar, VAR_SIZE, VAR_SIZE>;
 
     using constr_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
@@ -61,6 +62,8 @@ public:
     int iter;
     x_t _x;
     dual_t _lambda;
+    x_t _step_prev;
+    gradient_t _grad_L;
 
     qp_t _qp;
     qp_solver_t _qp_solver;
@@ -72,7 +75,7 @@ public:
     Scalar _primal_step_norm;
     int _qp_iter = 0;
 
-    void construct_subproblem(Problem &prob)
+    void solve_qp(Problem &prob, x_t &p, dual_t &lambda)
     {
         /* QP from linearized NLP:
          * minimize     0.5 x'.P.x + q'.x
@@ -103,8 +106,10 @@ public:
         const Scalar UNBOUNDED = 1e20;
         Scalar cost;
 
-        _qp.P.setIdentity(); // TODO: Lagrangian hessian
-        prob.cost_linearized(_x, _qp.q, cost);
+        gradient_t& grad_f = _qp.q;
+        hessian_t& B = _qp.P;
+
+        prob.cost_linearized(_x, grad_f, cost);
 
         // TODO: avoid stack allocation (stack overflow)
         constr_eq_t b_eq;
@@ -116,6 +121,24 @@ public:
 
         prob.constraint_linearized(_x, A_eq, b_eq, A_ineq, b_ineq,
                                    A_box, b_box, l_box, u_box);
+
+        Eigen::Ref<constr_eq_t> lambda_eq = _lambda.template segment<NUM_EQ>(EQ_IDX);
+        Eigen::Ref<constr_ineq_t> lambda_ineq = _lambda.template segment<NUM_INEQ>(INEQ_IDX);
+        Eigen::Ref<constr_box_t> lambda_box = _lambda.template segment<NUM_BOX>(BOX_IDX);
+
+        gradient_t y = -_grad_L;
+        _grad_L = grad_f +
+                  A_eq.transpose() * lambda_eq +
+                  A_ineq.transpose() * lambda_ineq +
+                  A_box.transpose() * lambda_box;
+
+        // BFGS update
+        if (iter == 1) {
+            B.setIdentity();
+        } else {
+            y += _grad_L; // y = grad_L_prev - grad_L
+            BFGS_update(B, _step_prev, y);
+        }
 
         // Equality constraints
         // from        A.x + b  = 0
@@ -137,10 +160,8 @@ public:
         _qp.u.template segment<NUM_BOX>(BOX_IDX) = u_box - b_box;
         _qp.l.template segment<NUM_BOX>(BOX_IDX) = l_box - b_box;
         _qp.A.template block<NUM_BOX, VAR_SIZE>(BOX_IDX, 0) = A_box;
-    }
 
-    void solve_subproblem(x_t &p, dual_t &lambda)
-    {
+        // solve the QP
         _qp_solver.settings.warm_start = true;
         _qp_solver.settings.check_termination = 1;
         _qp_solver.settings.max_iter = 1000;
@@ -165,8 +186,7 @@ public:
 
         for (iter = 1; iter <= settings.max_iter; iter++) {
             // Solve QP
-            construct_subproblem(prob);
-            solve_subproblem(p, p_lambda);
+            solve_qp(prob, p, p_lambda);
             p_lambda -= _lambda;
 
             alpha = line_search(prob, p);
@@ -176,6 +196,7 @@ public:
             _lambda = _lambda + alpha * p_lambda;
 
             // update step info
+            _step_prev = alpha * p;
             _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
             _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
 
@@ -203,7 +224,7 @@ private:
     Scalar line_search(Problem &prob, const x_t& p)
     {
         Scalar cost, mu, phi_l1, Dp_phi_l1;
-        cost_gradient_t cost_gradient;
+        gradient_t cost_gradient;
         const Scalar tau = settings.tau; // line search step decrease, 0 < tau < settings.tau
 
         // TODO: reuse computation

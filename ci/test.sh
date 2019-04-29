@@ -5,6 +5,7 @@
 tests=(
     "./build/src/qpsolver/osqp_test"
     "./build/src/qpsolver/sqp_test"
+    "./build/src/qpsolver/bfgs_test"
 )
 
 FAIL=1

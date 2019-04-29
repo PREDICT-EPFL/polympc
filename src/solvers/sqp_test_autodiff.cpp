@@ -123,7 +123,51 @@ TEST(SQPTestCase, TestNLP) {
 
     x0 << 0, 0;
     solver.settings.max_iter = 1000;
-    solver.settings.iteration_callback = iteration_callback;
+    solver.settings.line_search_max_iter = 10;
+    // solver.settings.iteration_callback = iteration_callback;
+    solver.solve(problem, x0);
+
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
+
+
+struct Rosenbrock : public ProblemBase<Rosenbrock,
+                                       double,
+                                       /* Nx    */2,
+                                       /* Neq   */0,
+                                       /* Nineq */0,
+                                       /* Nbox  */0>  {
+    const Scalar a = 1;
+    const Scalar b = 100;
+    Eigen::Vector2d SOLUTION = {1.0, 1.0};
+
+    template <typename DerivedA, typename DerivedB>
+    void cost(const DerivedA& x, DerivedB &cst)
+    {
+        // (a-x)^2 + b*(y-x^2)^2
+        cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
+    }
+
+    template <typename A, typename B, typename C, typename D>
+    void constraint(const A& x, B& eq, C& ineq, D& box, b_box_t& l_box, b_box_t& u_box)
+    {
+        // unconstrained
+    }
+};
+
+TEST(SQPTestCase, TestRosenbrock) {
+    Rosenbrock problem;
+    SQP<Rosenbrock> solver;
+    Eigen::Vector2d x0;
+
+    x0 << 0, 0;
+    solver.settings.max_iter = 1000;
+    // solver.settings.line_search_max_iter = 4;
+    // solver.settings.iteration_callback = iteration_callback;
     solver.solve(problem, x0);
 
     std::cout << "iter " << solver.iter << std::endl;

@@ -5,6 +5,7 @@
 tests=(
     "./build/src/solvers/qp_solver_test"
     "./build/src/solvers/sqp_test"
+    "./build/src/solvers/sqp_test_autodiff"
     "./build/src/solvers/bfgs_test"
     "./build/src/control/nmpc_test"
 )

@@ -59,14 +59,14 @@ struct ProblemBase {
 
         for (int i = 0; i < ad_eq.rows(); i++) {
             b_eq[i] = ad_eq[i].value();
-            Eigen::Ref<Eigen::MatrixXd> ref = A_eq.row(i);
-            ref = ad_eq[i].derivatives().transpose();
+            Eigen::Ref<Eigen::MatrixXd> deriv = ad_eq[i].derivatives().transpose();
+            A_eq.row(i) = deriv;
         }
 
         for (int i = 0; i < ad_ineq.rows(); i++) {
             b_ineq[i] = ad_ineq[i].value();
-            Eigen::Ref<Eigen::MatrixXd> ref = A_ineq.row(i);
-            ref = ad_ineq[i].derivatives().transpose();
+            Eigen::Ref<Eigen::MatrixXd> deriv = ad_ineq[i].derivatives().transpose();
+            A_ineq.row(i) = deriv;
         }
     }
 };
@@ -170,6 +170,45 @@ TEST(SQPTestCase, TestRosenbrock) {
     EXPECT_LT(solver.iter, solver.settings.max_iter);
 }
 
+struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
+    var_t SOLUTION = {1, 1};
+
+    template <typename A, typename B>
+    void cost(const A& x, B& cst)
+    {
+        cst = -x(0) -x(1);
+    }
+
+    template <typename A, typename B, typename C>
+    void constraint(const A& x, B& eq, C& ineq, var_t& lbx, var_t& ubx)
+    {
+        ineq << 1 - x.squaredNorm(),
+                  x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
+        lbx << 0, 0; // x0 > 0 and x1 > 0
+        ubx << INFINITY, INFINITY;
+    }
+
+};
+
+TEST(SQPTestCase, TestSimpleNLP) {
+    SimpleNLP problem;
+    SQP<SimpleNLP> solver;
+
+    // feasible initial point
+    Eigen::Vector2d x0 = {1.2, 0.1};
+
+    solver.settings.max_iter = 100;
+    solver.settings.line_search_max_iter = 4;
+    solver.settings.iteration_callback = iteration_callback;
+    solver.solve(problem, x0);
+
+    std::cout << "iter " << solver.iter << std::endl;
+    std::cout << "qp_iter " << solver._qp_iter << std::endl;
+    std::cout << "Solution " << solver._x.transpose() << std::endl;
+
+    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.iter, solver.settings.max_iter);
+}
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

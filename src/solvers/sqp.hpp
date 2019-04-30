@@ -34,8 +34,7 @@ public:
         VAR_SIZE = Problem::VAR_SIZE,
         NUM_EQ = Problem::NUM_EQ,
         NUM_INEQ = Problem::NUM_INEQ,
-        NUM_BOX = Problem::NUM_BOX,
-        NUM_CONSTR = NUM_EQ + NUM_INEQ + NUM_BOX
+        NUM_CONSTR = NUM_EQ + NUM_INEQ + VAR_SIZE
     };
 
     using Scalar = typename Problem::Scalar;
@@ -52,8 +51,7 @@ public:
     using jacobian_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
     using constr_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using jacobian_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using constr_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
-    using jacobian_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
+    using constr_box_t = x_t;
 
     // Constants
     static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
@@ -81,14 +79,13 @@ public:
          * minimize     0.5 x'.P.x + q'.x
          * subject to   Ae.x + be  = 0
          *              Ai.x + bi <= 0
-         *         l <= Ab.x + bb <= u
+         *              l <= x <= u
          *
          * with:
          *   P      Hessian of Lagrangian
          *   q      cost gradient
          *   Ae,be  linearized equality constraint
          *   Ai,bi  linearized inequality constraint
-         *   Ab,bb  linearized box constraint
          *   l,u    box constraint bounds
          *
          * transform to:
@@ -116,21 +113,19 @@ public:
         jacobian_eq_t A_eq;
         constr_ineq_t b_ineq;
         jacobian_ineq_t A_ineq;
-        constr_box_t b_box, l_box, u_box;
-        jacobian_box_t A_box;
+        constr_box_t lbx, ubx;
 
-        prob.constraint_linearized(_x, A_eq, b_eq, A_ineq, b_ineq,
-                                   A_box, b_box, l_box, u_box);
+        prob.constraint_linearized(_x, A_eq, b_eq, A_ineq, b_ineq, lbx, ubx);
 
         Eigen::Ref<constr_eq_t> lambda_eq = _lambda.template segment<NUM_EQ>(EQ_IDX);
         Eigen::Ref<constr_ineq_t> lambda_ineq = _lambda.template segment<NUM_INEQ>(INEQ_IDX);
-        Eigen::Ref<constr_box_t> lambda_box = _lambda.template segment<NUM_BOX>(BOX_IDX);
+        Eigen::Ref<constr_box_t> lambda_box = _lambda.template segment<VAR_SIZE>(BOX_IDX);
 
         gradient_t y = -_grad_L;
         _grad_L = grad_f +
                   A_eq.transpose() * lambda_eq +
                   A_ineq.transpose() * lambda_ineq +
-                  A_box.transpose() * lambda_box;
+                  lambda_box;
 
         // BFGS update
         if (iter == 1) {
@@ -155,11 +150,11 @@ public:
         _qp.A.template block<NUM_INEQ, VAR_SIZE>(INEQ_IDX, 0) = A_ineq;
 
         // Box constraints
-        // from  l     <= A.x + b <= u
-        // to    l - b <= A.x     <= u - b
-        _qp.u.template segment<NUM_BOX>(BOX_IDX) = u_box - b_box;
-        _qp.l.template segment<NUM_BOX>(BOX_IDX) = l_box - b_box;
-        _qp.A.template block<NUM_BOX, VAR_SIZE>(BOX_IDX, 0) = A_box;
+        // from     l <= x + p <= u
+        // to     l-x <= p     <= u-x
+        _qp.u.template segment<VAR_SIZE>(BOX_IDX) = ubx - _x;
+        _qp.l.template segment<VAR_SIZE>(BOX_IDX) = lbx - _x;
+        _qp.A.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
 
         // solve the QP
         _qp_solver.settings.warm_start = true;
@@ -258,9 +253,9 @@ private:
         Scalar cl1 = DIV_BY_ZERO_REGUL;
         constr_eq_t c_eq;
         constr_ineq_t c_ineq;
-        constr_box_t c_box, l_box, u_box;
+        constr_box_t lbx, ubx;
 
-        prob.constraint(x, c_eq, c_ineq, c_box, l_box, u_box);
+        prob.constraint(x, c_eq, c_ineq, lbx, ubx);
 
         // c_eq = 0
         cl1 += c_eq.template lpNorm<1>();
@@ -274,13 +269,9 @@ private:
         // alternative: but maybe more costly in FLOP count
         // cl1 += (c_ineq.array() * (c_ineq.array() <= 0).cast<double>()).matrix().lpNorm<1>()
 
-        // l <= c_box <= u
-        for (int i = 0; i < NUM_BOX; i++) {
-            if (c_box(i) < l_box(i)) {
-                cl1 += l_box(i) - c_box(i);
-            } else if (u_box(i) < c_box(i)) {
-                cl1 += c_box(i) - u_box(i);
-            }
+        // l <= x <= u
+        for (int i = 0; i < VAR_SIZE; i++) {
+            cl1 += fmax(0.0, fmax(lbx(i) - x(i), x(i) - ubx(i)));
         }
 
         return cl1;

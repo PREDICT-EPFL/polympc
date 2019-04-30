@@ -261,18 +261,11 @@ private:
         cl1 += c_eq.template lpNorm<1>();
 
         // c_ineq <= 0
-        for (int i = 0; i < NUM_INEQ; i++) {
-            if (c_ineq(i) > 0) {
-                cl1 += c_ineq(i);
-            }
-        }
-        // alternative: but maybe more costly in FLOP count
-        // cl1 += (c_ineq.array() * (c_ineq.array() <= 0).cast<double>()).matrix().lpNorm<1>()
+        cl1 += c_ineq.cwiseMax(0.0).sum();
 
         // l <= x <= u
-        for (int i = 0; i < VAR_SIZE; i++) {
-            cl1 += fmax(0.0, fmax(lbx(i) - x(i), x(i) - ubx(i)));
-        }
+        cl1 += (lbx - x).cwiseMax(0.0).sum();
+        cl1 += (x - ubx).cwiseMax(0.0).sum();
 
         return cl1;
     }

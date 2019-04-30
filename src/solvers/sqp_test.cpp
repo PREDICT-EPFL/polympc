@@ -3,13 +3,12 @@
 
 using namespace sqp;
 
-template <typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0, int _NUM_BOX=0>
+template <typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0>
 struct ProblemBase {
     enum {
         VAR_SIZE = _VAR_SIZE,
         NUM_EQ = _NUM_EQ,
         NUM_INEQ = _NUM_INEQ,
-        NUM_BOX = _NUM_BOX,
     };
 
     using Scalar = double;
@@ -21,8 +20,6 @@ struct ProblemBase {
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
     using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using b_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
-    using A_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
 };
 
 void iteration_callback(const Eigen::MatrixXd &x)
@@ -36,52 +33,47 @@ struct SimpleNLP_2D {
         VAR_SIZE = 2,
         NUM_EQ = 0,
         NUM_INEQ = 2,
-        NUM_BOX = 1,
     };
     using Scalar = double;
-    using x_t = Eigen::Vector2d;
+    using var_t = Eigen::Vector2d;
     using grad_t = Eigen::Vector2d;
 
     using b_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
     using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using b_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
-    using A_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
 
-    void cost(const x_t& x, Scalar &cst)
+    var_t SOLUTION = {1, 1};
+
+    void cost(const var_t& x, Scalar &cst)
     {
         cst = -x(0) -x(1);
     }
 
-    void cost_linearized(const x_t& x, grad_t &grad, Scalar &cst)
+    void cost_linearized(const var_t& x, grad_t &grad, Scalar &cst)
     {
         cost(x, cst);
-        grad << -1, -1; // solution: [1 1]
+        grad << -1, -1;
     }
 
-    void constraint(const x_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, var_t& lbx, var_t& ubx)
     {
-        b_ineq << -x(0), -x(1); // x0 > 0 and x1 > 0
-        b_box << x.squaredNorm(); // 1 <= x0^2 + x1^2 <= 2
-        l_box << 1;
-        u_box << 2;
+        b_ineq << 1 - x.squaredNorm(), x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
+        lbx << 0, 0; // x0 > 0 and x1 > 0
+        ubx << INFINITY, INFINITY;
     }
 
-    void constraint_linearized(const x_t& x,
+    void constraint_linearized(const var_t& x,
                                A_eq_t& A_eq,
                                b_eq_t& b_eq,
                                A_ineq_t& A_ineq,
                                b_ineq_t& b_ineq,
-                               A_box_t& A_box,
-                               b_box_t& b_box,
-                               b_box_t& l_box,
-                               b_box_t& u_box)
+                               var_t& lbx,
+                               var_t& ubx)
     {
-        constraint(x, b_eq, b_ineq, b_box, l_box, u_box);
-        A_ineq << -1,  0,
-                   0, -1;
-        A_box << 2*x.transpose();
+        constraint(x, b_eq, b_ineq, lbx, ubx);
+        A_ineq << -2*x.transpose(),
+                   2*x.transpose();
     }
 };
 
@@ -89,12 +81,15 @@ TEST(SQPTestCase, TestSimpleNLP) {
     SimpleNLP_2D problem;
     SQP<SimpleNLP_2D> solver;
 
-    Eigen::Vector2d SOLUTION(1, 1);
-    Eigen::Vector2d x0;
+    Eigen::Vector2d SOLUTION = {1, 1};
 
-    x0 << 1.2, 0.1; // feasible initial point
+    // feasible initial point
+    Eigen::Vector2d x0 = {1.2, 0.1};
+
     solver.settings.max_iter = 100;
     solver.solve(problem, x0);
+
+    std::cout << solver._x << std::endl;
 
     EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);
@@ -104,23 +99,24 @@ TEST(SQPTestCase, InfeasibleStart) {
     SimpleNLP_2D problem;
     SQP<SimpleNLP_2D> solver;
 
-    Eigen::Vector2d SOLUTION(1, 1);
-    Eigen::Vector2d x0;
+    Eigen::Vector2d SOLUTION = {1, 1};
 
-    x0 << 2, -1; // infeasible initial point
+    // infeasible initial point
+    Eigen::Vector2d x0 = {2, -1};
+
     solver.settings.max_iter = 100;
     solver.solve(problem, x0);
 
+    std::cout << problem.SOLUTION.transpose() << std::endl;
+    std::cout << solver._x << std::endl;
     EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);
 }
 
 
-struct SimpleQP : public ProblemBase<double, 2, 0, 0, 3> {
+struct SimpleQP : public ProblemBase<double, 2, 1, 0> {
     Eigen::Matrix2d P;
     Eigen::Vector2d q;
-    Eigen::Matrix<Scalar, 3, 2> A;
-    Eigen::Vector3d l,u;
     Eigen::Vector2d SOLUTION;
 
     SimpleQP()
@@ -128,11 +124,6 @@ struct SimpleQP : public ProblemBase<double, 2, 0, 0, 3> {
         P << 4, 1,
              1, 2;
         q << 1, 1;
-        A << 1, 1,
-             1, 0,
-             0, 1;
-        l << 1, 0, 0;
-        u << 1, 0.7, 0.7;
         SOLUTION << 0.3, 0.7;
     }
 
@@ -147,17 +138,17 @@ struct SimpleQP : public ProblemBase<double, 2, 0, 0, 3> {
         grad << P*x + q;
     }
 
-    void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, var_t& lbx, var_t& ubx)
     {
-        b_box << A * x;
-        l_box << l;
-        u_box << u;
+        b_eq << x.sum() - 1; // x1 + x2 = 1
+        lbx << 0, 0;
+        ubx << 0.7, 0.7;
     }
 
-    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, A_box_t& A_box, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, var_t& lbx, var_t& ubx)
     {
-        constraint(x, b_eq, b_ineq, b_box, l_box, u_box);
-        A_box << A;
+        constraint(x, b_eq, b_ineq, lbx, ubx);
+        A_eq << 1, 1;
     }
 };
 
@@ -165,10 +156,9 @@ TEST(SQPTestCase, TestSimpleQP) {
     SimpleQP problem;
     SQP<SimpleQP> solver;
 
-    Eigen::Vector2d x0;
-
-    x0 << 0, 0;
+    Eigen::Vector2d x0 = {0, 0};
     solver.solve(problem, x0);
+    std::cout << solver._x << std::endl;
 
     EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.iter, solver.settings.max_iter);

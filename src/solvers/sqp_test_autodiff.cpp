@@ -5,13 +5,12 @@
 
 using namespace sqp;
 
-template <typename _Derived, typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0, int _NUM_BOX=0>
+template <typename _Derived, typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0>
 struct ProblemBase {
     enum {
         VAR_SIZE = _VAR_SIZE,
         NUM_EQ = _NUM_EQ,
         NUM_INEQ = _NUM_INEQ,
-        NUM_BOX = _NUM_BOX,
     };
 
     using Scalar = double;
@@ -23,14 +22,12 @@ struct ProblemBase {
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
     using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using b_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
-    using A_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
+    using box_t = var_t;
 
     using ADScalar = Eigen::AutoDiffScalar<grad_t>;
     using ad_var_t = Eigen::Matrix<ADScalar, VAR_SIZE, 1>;
     using ad_eq_t = Eigen::Matrix<ADScalar, NUM_EQ, 1>;
     using ad_ineq_t = Eigen::Matrix<ADScalar, NUM_INEQ, 1>;
-    using ad_box_t = Eigen::Matrix<ADScalar, NUM_BOX, 1>;
 
     template <typename vec>
     void AD_seed(vec &x)
@@ -51,15 +48,14 @@ struct ProblemBase {
         grad = _cst.derivatives();
     }
 
-    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, A_box_t& A_box, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, box_t& lbx, box_t& ubx)
     {
         ad_eq_t ad_eq;
         ad_ineq_t ad_ineq;
-        ad_box_t ad_box;
 
         ad_var_t _x = x;
         AD_seed(_x);
-        static_cast<_Derived*>(this)->constraint(_x, ad_eq, ad_ineq, ad_box, l_box, u_box);
+        static_cast<_Derived*>(this)->constraint(_x, ad_eq, ad_ineq, lbx, ubx);
 
         for (int i = 0; i < ad_eq.rows(); i++) {
             b_eq[i] = ad_eq[i].value();
@@ -72,12 +68,6 @@ struct ProblemBase {
             Eigen::Ref<Eigen::MatrixXd> ref = A_ineq.row(i);
             ref = ad_ineq[i].derivatives().transpose();
         }
-
-        for (int i = 0; i < NUM_BOX; i++) {
-            b_box[i] = ad_box[i].value();
-            Eigen::Ref<Eigen::MatrixXd> ref = A_box.row(i);
-            ref = ad_box[i].derivatives().transpose();
-        }
     }
 };
 
@@ -86,8 +76,7 @@ struct NLP : public ProblemBase<NLP,
                                 double,
                                 /* Nx    */2,
                                 /* Neq   */1,
-                                /* Nineq */1,
-                                /* Nbox  */0>  {
+                                /* Nineq */1>  {
     const Scalar a = 1;
     const Scalar b = 100;
     Eigen::Vector2d SOLUTION = {0.7071067812, 0.707106781};
@@ -99,13 +88,16 @@ struct NLP : public ProblemBase<NLP,
         cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
     }
 
-    template <typename A, typename B, typename C, typename D>
-    void constraint(const A& x, B& eq, C& ineq, D& box, b_box_t& l_box, b_box_t& u_box)
+    template <typename A, typename B, typename C>
+    void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
     {
         // y >= x
         ineq << x(0) - x(1);
         // x^2 + y^2 == 1
         eq << x.squaredNorm() - 1;
+
+        lbx << -INFINITY, -INFINITY;
+        ubx << INFINITY, INFINITY;
     }
 };
 
@@ -139,8 +131,7 @@ struct Rosenbrock : public ProblemBase<Rosenbrock,
                                        double,
                                        /* Nx    */2,
                                        /* Neq   */0,
-                                       /* Nineq */0,
-                                       /* Nbox  */0>  {
+                                       /* Nineq */0>  {
     const Scalar a = 1;
     const Scalar b = 100;
     Eigen::Vector2d SOLUTION = {1.0, 1.0};
@@ -152,10 +143,12 @@ struct Rosenbrock : public ProblemBase<Rosenbrock,
         cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
     }
 
-    template <typename A, typename B, typename C, typename D>
-    void constraint(const A& x, B& eq, C& ineq, D& box, b_box_t& l_box, b_box_t& u_box)
+    template <typename A, typename B, typename C>
+    void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
     {
         // unconstrained
+        lbx << -INFINITY, -INFINITY;
+        ubx << INFINITY, INFINITY;
     }
 };
 

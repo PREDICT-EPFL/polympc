@@ -111,19 +111,21 @@ void iteration_callback(const Eigen::MatrixXd &x)
 TEST(SQPTestCase, TestNLP) {
     NLP problem;
     SQP<NLP> solver;
-    Eigen::Vector2d x0;
+    Eigen::Vector2d x0, x;
 
     x0 << 0, 0;
-    solver.settings.max_iter = 1000;
-    solver.settings.line_search_max_iter = 10;
-    // solver.settings.iteration_callback = iteration_callback;
+    solver.settings().max_iter = 1000;
+    solver.settings().line_search_max_iter = 10;
+    // solver.settings().iteration_callback = iteration_callback;
     solver.solve(problem, x0);
 
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
+    x = solver.primal_solution();
 
-    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    std::cout << "iter " << solver.info().iter << std::endl;
+    std::cout << "Solution " << x.transpose() << std::endl;
+
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 
@@ -155,19 +157,21 @@ struct Rosenbrock : public ProblemBase<Rosenbrock,
 TEST(SQPTestCase, TestRosenbrock) {
     Rosenbrock problem;
     SQP<Rosenbrock> solver;
-    Eigen::Vector2d x0;
+    Eigen::Vector2d x0, x;
 
     x0 << 0, 0;
-    solver.settings.max_iter = 1000;
-    // solver.settings.line_search_max_iter = 4;
-    // solver.settings.iteration_callback = iteration_callback;
+    solver.settings().max_iter = 1000;
+    // solver.settings().line_search_max_iter = 4;
+    // solver.settings().iteration_callback = iteration_callback;
     solver.solve(problem, x0);
 
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
+    x = solver.primal_solution();
 
-    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    std::cout << "iter " << solver.info().iter << std::endl;
+    std::cout << "Solution " << x.transpose() << std::endl;
+
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
@@ -195,19 +199,22 @@ TEST(SQPTestCase, TestSimpleNLP) {
     SQP<SimpleNLP> solver;
 
     // feasible initial point
+    Eigen::Vector2d x;
     Eigen::Vector2d x0 = {1.2, 0.1};
 
-    solver.settings.max_iter = 100;
-    solver.settings.line_search_max_iter = 4;
-    solver.settings.iteration_callback = iteration_callback;
+    solver.settings().max_iter = 100;
+    solver.settings().line_search_max_iter = 4;
+    solver.settings().iteration_callback = iteration_callback;
     solver.solve(problem, x0);
 
-    std::cout << "iter " << solver.iter << std::endl;
-    std::cout << "qp_iter " << solver._qp_iter << std::endl;
-    std::cout << "Solution " << solver._x.transpose() << std::endl;
+    x = solver.primal_solution();
 
-    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    std::cout << "iter " << solver.info().iter << std::endl;
+    std::cout << "qp_iter " << solver._qp_iter << std::endl;
+    std::cout << "Solution " << x.transpose() << std::endl;
+
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 int main(int argc, char **argv) {

@@ -9,7 +9,7 @@
 namespace sqp {
 
 template <typename Scalar>
-struct SQPSettings {
+struct sqp_settings_t {
     Scalar tau = 0.5;       /**< line search iteration decrease, 0 < tau < 1 */
     Scalar eta = 0.25;      /**< line search parameter, 0 < eta < 1 */
     Scalar rho = 0.5;       /**< line search parameter, 0 < rho < 1 */
@@ -18,6 +18,33 @@ struct SQPSettings {
     int max_iter = 100;
     int line_search_max_iter = 100;
     void (*iteration_callback)(const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> &x) = nullptr;
+
+    bool validate()
+    {
+        bool valid;
+        valid = 0.0 < tau && tau < 1.0 &&
+                0.0 < eta && eta < 1.0 &&
+                0.0 < rho && rho < 1.0 &&
+                eps_prim < 0.0 &&
+                eps_dual < 0.0 &&
+                max_iter > 0 &&
+                line_search_max_iter > 0;
+        return valid;
+    }
+};
+
+struct sqp_status_t {
+    enum {
+        SOLVED,
+        MAX_ITER,
+        INVALID_SETTINGS
+    } value;
+};
+
+struct sqp_info_t {
+    int iter;
+    int qp_solver_iter;
+    sqp_status_t status;
 };
 
 /*
@@ -40,9 +67,9 @@ public:
     using Scalar = typename Problem::Scalar;
     using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, Scalar>;
     using qp_solver_t = qp_solver::OSQPSolver<qp_t>;
-    using Settings = SQPSettings<Scalar>;
+    using settings_t = sqp_settings_t<Scalar>;
 
-    using x_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
+    using var_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using dual_t = Eigen::Matrix<Scalar, NUM_CONSTR, 1>;
     using gradient_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using hessian_t = Eigen::Matrix<Scalar, VAR_SIZE, VAR_SIZE>;
@@ -51,29 +78,94 @@ public:
     using jacobian_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
     using constr_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using jacobian_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using constr_box_t = x_t;
+    using constr_box_t = var_t;
 
     // Constants
     static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
 
     // Solver state variables
-    int iter;
-    x_t _x;
+    var_t _x;
     dual_t _lambda;
-    x_t _step_prev;
+    var_t _step_prev;
     gradient_t _grad_L;
 
     qp_t _qp;
     qp_solver_t _qp_solver;
 
-    Settings settings;
+    settings_t _settings;
+    sqp_info_t _info;
 
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
     int _qp_iter = 0;
 
-    void solve_qp(Problem &prob, x_t &p, dual_t &lambda)
+    void solve(Problem &prob, const var_t &x0)
+    {
+        var_t p; // search direction
+        dual_t p_lambda; // dual search direction
+        Scalar alpha; // step size
+
+        // initialize
+        _x = x0;
+        _lambda.setZero();
+        _info.qp_solver_iter = 0;
+
+        int& iter = _info.iter;
+        for (iter = 1; iter <= _settings.max_iter; iter++) {
+            // Solve QP
+            solve_qp(prob, p, p_lambda);
+            p_lambda -= _lambda;
+
+            alpha = line_search(prob, p);
+
+            /* Step */
+            _x = _x + alpha * p;
+            _lambda = _lambda + alpha * p_lambda;
+
+            // update step info
+            _step_prev = alpha * p;
+            _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
+            _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
+
+            if (_settings.iteration_callback != nullptr) {
+                _settings.iteration_callback(_x);
+            }
+
+            if (termination_criteria()) {
+                _info.status.value = sqp_status_t::SOLVED;
+                break;
+            }
+        }
+
+        if (iter > _settings.max_iter) {
+            _info.status.value = sqp_status_t::MAX_ITER;
+        }
+    }
+
+    inline const var_t& primal_solution() const { return _x; }
+    inline var_t& primal_solution() { return _x; }
+
+    inline const dual_t& dual_solution() const { return _lambda; }
+    inline dual_t& dual_solution() { return _lambda; }
+
+    inline const settings_t& settings() const { return _settings; }
+    inline settings_t& settings() { return _settings; }
+
+    inline const sqp_info_t& info() const { return _info; }
+    inline sqp_info_t& info() { return _info; }
+
+private:
+    bool termination_criteria() const
+    {
+        if (_primal_step_norm <= _settings.eps_prim &&
+            _dual_step_norm <= _settings.eps_dual) {
+            return true;
+        }
+        return false;
+    }
+
+    void solve_qp(Problem &prob, var_t &p, dual_t &lambda)
     {
         /* QP from linearized NLP:
          * minimize     0.5 x'.P.x + q'.x
@@ -128,7 +220,7 @@ public:
                   lambda_box;
 
         // BFGS update
-        if (iter == 1) {
+        if (_info.iter == 1) {
             B.setIdentity();
         } else {
             y += _grad_L; // y = grad_L_prev - grad_L
@@ -162,83 +254,36 @@ public:
         _qp_solver.settings.max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        _qp_iter += _qp_solver.iter;
+        _info.qp_solver_iter += _qp_solver.iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;
     }
 
-    void solve(Problem &prob, const x_t &x0)
-    {
-        x_t p; // search direction
-        dual_t p_lambda; // dual search direction
-        Scalar alpha; // step size
-
-        // initialize
-        _x = x0;
-        _lambda.setZero();
-        _qp_iter = 0;
-
-        for (iter = 1; iter <= settings.max_iter; iter++) {
-            // Solve QP
-            solve_qp(prob, p, p_lambda);
-            p_lambda -= _lambda;
-
-            alpha = line_search(prob, p);
-
-            /* Step */
-            _x = _x + alpha * p;
-            _lambda = _lambda + alpha * p_lambda;
-
-            // update step info
-            _step_prev = alpha * p;
-            _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
-            _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
-
-            if (settings.iteration_callback != nullptr) {
-                settings.iteration_callback(_x);
-            }
-
-            if (termination_criteria()) {
-                break;
-            }
-        }
-    }
-
-private:
-    bool termination_criteria() const
-    {
-        if (_primal_step_norm <= settings.eps_prim &&
-            _dual_step_norm <= settings.eps_dual) {
-            return true;
-        }
-        return false;
-    }
-
     /** Line search in direction p using l1 merit function. */
-    Scalar line_search(Problem &prob, const x_t& p)
+    Scalar line_search(Problem &prob, const var_t& p)
     {
         Scalar cost, mu, phi_l1, Dp_phi_l1;
         gradient_t cost_gradient;
-        const Scalar tau = settings.tau; // line search step decrease, 0 < tau < settings.tau
+        const Scalar tau = _settings.tau; // line search step decrease, 0 < tau < settings.tau
 
         // TODO: reuse computation
         prob.cost_linearized(_x, cost_gradient, cost);
         Scalar constr_l1 = l1_constraint_violation(_x, prob);
 
         // TODO: get mu from merit function model using hessian of Lagrangian
-        mu = cost_gradient.dot(p) / ((1 - settings.rho) * constr_l1);
+        mu = cost_gradient.dot(p) / ((1 - _settings.rho) * constr_l1);
 
         phi_l1 = cost + mu * constr_l1;
         Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
         Scalar alpha = 1.0;
-        for (int i = 1; i < settings.line_search_max_iter; i++) {
-            x_t x_step = _x + alpha*p;
+        for (int i = 1; i < _settings.line_search_max_iter; i++) {
+            var_t x_step = _x + alpha*p;
             prob.cost(x_step, cost);
 
             Scalar phi_l1_step = cost + mu * l1_constraint_violation(x_step, prob);
-            if (phi_l1_step <= phi_l1 + alpha * settings.eta * Dp_phi_l1) {
+            if (phi_l1_step <= phi_l1 + alpha * _settings.eta * Dp_phi_l1) {
                 // accept step
                 break;
             } else {
@@ -248,7 +293,7 @@ private:
         return alpha;
     }
 
-    Scalar l1_constraint_violation(const x_t &x, Problem &prob) const
+    Scalar l1_constraint_violation(const var_t &x, Problem &prob) const
     {
         Scalar cl1 = DIV_BY_ZERO_REGUL;
         constr_eq_t c_eq;

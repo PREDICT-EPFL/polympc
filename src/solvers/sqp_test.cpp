@@ -80,37 +80,33 @@ struct SimpleNLP_2D {
 TEST(SQPTestCase, TestSimpleNLP) {
     SimpleNLP_2D problem;
     SQP<SimpleNLP_2D> solver;
-
-    Eigen::Vector2d SOLUTION = {1, 1};
+    Eigen::Vector2d x;
 
     // feasible initial point
     Eigen::Vector2d x0 = {1.2, 0.1};
 
-    solver.settings.max_iter = 100;
+    solver.settings().max_iter = 100;
     solver.solve(problem, x0);
+    x = solver.primal_solution();
 
-    std::cout << solver._x << std::endl;
-
-    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 TEST(SQPTestCase, InfeasibleStart) {
     SimpleNLP_2D problem;
     SQP<SimpleNLP_2D> solver;
-
-    Eigen::Vector2d SOLUTION = {1, 1};
+    Eigen::Vector2d x;
 
     // infeasible initial point
     Eigen::Vector2d x0 = {2, -1};
 
-    solver.settings.max_iter = 100;
+    solver.settings().max_iter = 100;
     solver.solve(problem, x0);
+    x = solver.primal_solution();
 
-    std::cout << problem.SOLUTION.transpose() << std::endl;
-    std::cout << solver._x << std::endl;
-    EXPECT_TRUE(solver._x.isApprox(SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 
@@ -155,13 +151,14 @@ struct SimpleQP : public ProblemBase<double, 2, 1, 0> {
 TEST(SQPTestCase, TestSimpleQP) {
     SimpleQP problem;
     SQP<SimpleQP> solver;
-
+    Eigen::Vector2d x;
     Eigen::Vector2d x0 = {0, 0};
-    solver.solve(problem, x0);
-    std::cout << solver._x << std::endl;
 
-    EXPECT_TRUE(solver._x.isApprox(problem.SOLUTION, 1e-2));
-    EXPECT_LT(solver.iter, solver.settings.max_iter);
+    solver.solve(problem, x0);
+    x = solver.primal_solution();
+
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
 int main(int argc, char **argv) {

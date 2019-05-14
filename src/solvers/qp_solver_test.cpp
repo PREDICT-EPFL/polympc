@@ -30,13 +30,13 @@ TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
     OSQPSolver<SimpleQP> prob;
 
-    prob.settings.max_iter = 1000;
+    prob.settings().max_iter = 1000;
 
     prob.solve(qp);
-    Eigen::Vector2d sol = prob.x;
+    Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
-    EXPECT_LT(prob.iter, prob.settings.max_iter);
+    EXPECT_LT(prob.iter, prob.settings().max_iter);
 }
 
 
@@ -46,21 +46,21 @@ TEST(QPSolverTest, testSinglePrecisionFloat) {
     OSQPSolver<SimpleQPf> prob;
 
     prob.solve(qp);
-    Eigen::Vector2f sol = prob.x;
+    Eigen::Vector2f sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
-    EXPECT_LT(prob.iter, prob.settings.max_iter);
+    EXPECT_LT(prob.iter, prob.settings().max_iter);
 }
 
 TEST(QPSolverTest, testConstraintViolation) {
     SimpleQP qp;
     OSQPSolver<SimpleQP> prob;
 
-    prob.settings.eps_rel = 1e-4f;
-    prob.settings.eps_abs = 1e-4f;
+    prob.settings().eps_rel = 1e-4f;
+    prob.settings().eps_abs = 1e-4f;
 
     prob.solve(qp);
-    Eigen::Vector2d sol = prob.x;
+    Eigen::Vector2d sol = prob.primal_solution();
 
     // check feasibility (with some epsilon margin)
     Eigen::Vector3d lower = qp.A*sol - qp.l;
@@ -73,32 +73,36 @@ TEST(QPSolverTest, testAdaptiveRho) {
     SimpleQP qp;
     OSQPSolver<SimpleQP> prob;
 
-    prob.settings.adaptive_rho = false;
-    prob.settings.adaptive_rho_interval = 10;
+    prob.settings().adaptive_rho = false;
+    prob.settings().adaptive_rho_interval = 10;
 
     prob.solve(qp);
+
+    EXPECT_EQ(prob.info().status, qp_solver_info_t::SOLVED);
 }
 
 TEST(QPSolverTest, testAdaptiveRhoImprovesConvergence) {
     SimpleQP qp;
     OSQPSolver<SimpleQP> prob;
 
-    prob.settings.warm_start = false;
-    prob.settings.max_iter = 1000;
-    prob.settings.rho = 0.1;
+    prob.settings().warm_start = false;
+    prob.settings().max_iter = 1000;
+    prob.settings().rho = 0.1;
 
     // solve whithout adaptive rho
-    prob.settings.adaptive_rho = false;
+    prob.settings().adaptive_rho = false;
     prob.solve(qp);
-    int prev_iter = prob.iter;
+    int prev_iter = prob.info().iter;
 
     // solve with adaptive rho
-    prob.settings.adaptive_rho = true;
-    prob.settings.adaptive_rho_interval = 10;
+    prob.settings().adaptive_rho = true;
+    prob.settings().adaptive_rho_interval = 10;
     prob.solve(qp);
 
-    EXPECT_LT(prob.iter, prob.settings.max_iter);
-    EXPECT_LT(prob.iter, prev_iter); // adaptive rho should improve :)
+    qp_solver_info_t info = prob.info();
+    EXPECT_LT(info.iter, prob.settings().max_iter);
+    EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
+    EXPECT_EQ(info.status, qp_solver_info_t::SOLVED);
 }
 
 TEST(QPSolverTest, testConjugateGradientLinearSolver)
@@ -107,10 +111,12 @@ TEST(QPSolverTest, testConjugateGradientLinearSolver)
     OSQPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
 
     prob.solve(qp);
-    Eigen::Vector2d sol = prob.x;
+    Eigen::Vector2d sol = prob.primal_solution();
 
+    qp_solver_info_t info = prob.info();
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
-    EXPECT_LT(prob.iter, prob.settings.max_iter); // convergence test
+    EXPECT_EQ(info.status, info.SOLVED);
+    EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
 }
 
 TEST(QPSolverTest, TestConstraint) {
@@ -145,33 +151,6 @@ TEST(QPSolverTest, TestConstraint) {
     for (int i = 0; i < qp.l.rows(); i++) {
         EXPECT_EQ(prob.constr_type[i], type_expect[i]);
     }
-}
-
-TEST(QPSolverTest, QP2) {
-    using qp_t = QP<2, 4, double>;
-    OSQPSolver<qp_t> prob;
-    Eigen::Vector2d sol, expect;
-
-    qp_t qp;
-    qp.P << 1, 0,
-            0, 1;
-    qp.q << -1, -1;
-    qp.A << -1, 0,
-            0, -1,
-            2.4, 0.2,
-            -2.4, -0.2;
-    qp.l << -1e+16, -1e+16, -1e+16, -1e+16;
-    qp.u << 1.2,  0.1, 0.45, 0.55;
-
-    prob.settings.max_iter = 1000;
-
-    prob.solve(qp);
-    sol = prob.x;
-
-    // solution
-    expect << 0.10972805, 0.92581067;
-    EXPECT_TRUE(sol.isApprox(expect, 1e-3));
-    EXPECT_LT(prob.iter, prob.settings.max_iter);
 }
 
 int main(int argc, char **argv) {

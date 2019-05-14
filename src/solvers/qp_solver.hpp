@@ -20,7 +20,7 @@ struct QP {
 };
 
 template <typename Scalar>
-struct OSQPSettings {
+struct qp_sover_settings_t {
     Scalar rho = 1e-1;          /**< ADMM rho step, 0 < rho */
     Scalar sigma = 1e-6;        /**< ADMM sigma step, 0 < sigma, (small) */
     Scalar alpha = 1.0;         /**< ADMM overrelaxation parameter, 0 < alpha < 2,
@@ -34,6 +34,14 @@ struct OSQPSettings {
     Scalar adaptive_rho_tolerance = 5;  /**< Minimal for rho update factor, 1 < adaptive_rho_tolerance */
     int adaptive_rho_interval = 25; /**< change rho every Nth iteration, 0 < adaptive_rho_interval,
                                          set equal to check_termination to save computation  */
+};
+
+struct qp_solver_info_t {
+    enum {
+        SOLVED,
+        MAX_ITER
+    } status;
+    int iter;
 };
 
 /**
@@ -56,12 +64,12 @@ public:
 
     using qp_t = QPType;
     using Scalar = typename QPType::Scalar;
-    using primal_t = Eigen::Matrix<Scalar, n, 1>;
+    using var_t = Eigen::Matrix<Scalar, n, 1>;
     using constraint_t = Eigen::Matrix<Scalar, m, 1>;
     using dual_t = Eigen::Matrix<Scalar, m, 1>;
     using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
     using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
-    using Settings = OSQPSettings<Scalar>;
+    using settings_t = qp_sover_settings_t<Scalar>;
     using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
 
     static constexpr Scalar RHO_MIN = 1e-6;
@@ -73,10 +81,10 @@ public:
 
     // Solver state variables
     int iter;
-    primal_t x;
+    var_t x;
     constraint_t z;
     dual_t y;
-    primal_t x_tilde;
+    var_t x_tilde;
     constraint_t z_tilde;
     constraint_t z_prev;
     dual_t rho_vec;
@@ -95,7 +103,8 @@ public:
         LOOSE_BOUNDS
     } constr_type[m]; /**< constraint type classification */
 
-    Settings settings;
+    settings_t _settings;
+    qp_solver_info_t _info;
 
     kkt_mat_t kkt_mat;
     linear_solver_t linear_solver;
@@ -113,21 +122,21 @@ public:
         bool check_termination = false;
 
 #ifdef OSQP_PRINTING
-        print_settings(settings);
+        print_settings(_settings);
 #endif
-        if (!settings.warm_start) {
+        if (!_settings.warm_start) {
             x.setZero();
             z.setZero();
             y.setZero();
         }
 
         constr_type_init(qp);
-        rho_update(settings.rho);
+        rho_update(_settings.rho);
 
         KKT_mat_update(qp, kkt_mat);
         linear_solver.compute(kkt_mat);
 
-        for (iter = 1; iter <= settings.max_iter; iter++) {
+        for (iter = 1; iter <= _settings.max_iter; iter++) {
             z_prev = z;
 
             // update x_tilde z_tilde
@@ -138,16 +147,16 @@ public:
             z_tilde = z_prev + rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<m>() - y);
 
             // update x
-            x = settings.alpha * x_tilde + (1 - settings.alpha) * x;
+            x = _settings.alpha * x_tilde + (1 - _settings.alpha) * x;
 
             // update z
-            z = settings.alpha * z_tilde + (1 - settings.alpha) * z_prev + rho_inv_vec.cwiseProduct(y);
+            z = _settings.alpha * z_tilde + (1 - _settings.alpha) * z_prev + rho_inv_vec.cwiseProduct(y);
             clip_z(z, qp.l, qp.u); // euclidean projection
 
             // update y
-            y = y + rho_vec.cwiseProduct(settings.alpha * z_tilde + (1 - settings.alpha) * z_prev - z);
+            y = y + rho_vec.cwiseProduct(_settings.alpha * z_tilde + (1 - _settings.alpha) * z_prev - z);
 
-            if (settings.check_termination != 0 && iter % settings.check_termination == 0) {
+            if (_settings.check_termination != 0 && iter % _settings.check_termination == 0) {
                 check_termination = true;
             } else {
                 check_termination = false;
@@ -160,11 +169,12 @@ public:
                 print_status(qp);
 #endif
                 if (termination_criteria(qp)) {
+                    _info.status = qp_solver_info_t::SOLVED;
                     break;
                 }
             }
 
-            if (settings.adaptive_rho && iter % settings.adaptive_rho_interval == 0) {
+            if (_settings.adaptive_rho && iter % _settings.adaptive_rho_interval == 0) {
                 if (!check_termination) {
                     // state was not yet updated
                     update_state(qp);
@@ -172,8 +182,8 @@ public:
                 Scalar new_rho = rho_estimate(rho, qp);
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
 
-                if (new_rho < rho / settings.adaptive_rho_tolerance ||
-                    new_rho > rho * settings.adaptive_rho_tolerance) {
+                if (new_rho < rho / _settings.adaptive_rho_tolerance ||
+                    new_rho > rho * _settings.adaptive_rho_tolerance) {
                     rho_update(new_rho);
                     KKT_mat_update(qp, kkt_mat);
                     linear_solver.compute(kkt_mat);
@@ -181,13 +191,28 @@ public:
             }
         }
 
-        // TODO: return summary
+        if (iter > _settings.max_iter) {
+            _info.status = qp_solver_info_t::MAX_ITER;
+        }
+        _info.iter = iter;
     }
+
+    inline const var_t& primal_solution() const { return x; }
+    inline var_t& primal_solution() { return x; }
+
+    inline const dual_t& dual_solution() const { return y; }
+    inline dual_t& dual_solution() { return y; }
+
+    inline const settings_t& settings() const { return _settings; }
+    inline settings_t& settings() { return _settings; }
+
+    inline const qp_solver_info_t& info() const { return _info; }
+    inline qp_solver_info_t& info() { return _info; }
 
 private:
     void KKT_mat_update(const qp_t &qp, kkt_mat_t& kkt)
     {
-        kkt.template topLeftCorner<n, n>() = qp.P + settings.sigma * qp.P.Identity();
+        kkt.template topLeftCorner<n, n>() = qp.P + _settings.sigma * qp.P.Identity();
         kkt.template topRightCorner<n, m>() = qp.A.transpose();
         kkt.template bottomLeftCorner<m, n>() = qp.A;
         kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
@@ -195,7 +220,7 @@ private:
 
     void form_KKT_rhs(const qp_t &qp, kkt_vec_t& rhs)
     {
-        rhs.template head<n>() = settings.sigma * x - qp.q;
+        rhs.template head<n>() = _settings.sigma * x - qp.q;
         rhs.template tail<m>() = z - rho_inv_vec.cwiseProduct(y);
     }
 
@@ -270,7 +295,7 @@ private:
         Scalar norm_Ax, norm_z;
         norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
         norm_z = z.template lpNorm<Eigen::Infinity>();
-        return settings.eps_abs + settings.eps_rel * fmax(norm_Ax, norm_z);
+        return _settings.eps_abs + _settings.eps_rel * fmax(norm_Ax, norm_z);
     }
 
     Scalar eps_dual(const qp_t &qp) const
@@ -279,7 +304,7 @@ private:
         norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
         norm_ATy = (qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
         norm_q = qp.q.template lpNorm<Eigen::Infinity>();
-        return settings.eps_abs + settings.eps_rel * fmax(norm_Px, fmax(norm_ATy, norm_q));
+        return _settings.eps_abs + _settings.eps_rel * fmax(norm_Px, fmax(norm_ATy, norm_q));
     }
 
     Scalar residual_prim(const qp_t &qp) const
@@ -313,17 +338,17 @@ private:
         printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, res_prim, res_dual);
     }
 
-    void print_settings(const Settings &settings) const
+    void print_settings(const settings_t &settings) const
     {
         printf("ADMM settings:\n");
-        printf("  sigma %.2e\n", settings.sigma);
-        printf("  rho %.2e\n", settings.rho);
-        printf("  alpha %.2f\n", settings.alpha);
-        printf("  eps_rel %.1e\n", settings.eps_rel);
-        printf("  eps_abs %.1e\n", settings.eps_abs);
-        printf("  max_iter %d\n", settings.max_iter);
-        printf("  adaptive_rho %d\n", settings.adaptive_rho);
-        printf("  warm_start %d\n", settings.warm_start);
+        printf("  sigma %.2e\n", _settings.sigma);
+        printf("  rho %.2e\n", _settings.rho);
+        printf("  alpha %.2f\n", _settings.alpha);
+        printf("  eps_rel %.1e\n", _settings.eps_rel);
+        printf("  eps_abs %.1e\n", _settings.eps_abs);
+        printf("  max_iter %d\n", _settings.max_iter);
+        printf("  adaptive_rho %d\n", _settings.adaptive_rho);
+        printf("  warm_start %d\n", _settings.warm_start);
     }
 #endif
 };

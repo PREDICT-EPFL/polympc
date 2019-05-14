@@ -249,12 +249,12 @@ private:
         _qp.A.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
 
         // solve the QP
-        _qp_solver.settings.warm_start = true;
-        _qp_solver.settings.check_termination = 1;
-        _qp_solver.settings.max_iter = 1000;
+        _qp_solver.settings().warm_start = true;
+        _qp_solver.settings().check_termination = 1;
+        _qp_solver.settings().max_iter = 1000;
         _qp_solver.solve(_qp);
 
-        _info.qp_solver_iter += _qp_solver.iter;
+        _info.qp_solver_iter += _qp_solver.info().iter;
 
         p = _qp_solver.x;
         lambda = _qp_solver.y;

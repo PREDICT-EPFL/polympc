@@ -36,12 +36,15 @@ struct qp_sover_settings_t {
                                          set equal to check_termination to save computation  */
 };
 
+template <typename Scalar>
 struct qp_solver_info_t {
     enum {
         SOLVED,
         MAX_ITER
     } status;
     int iter;
+    Scalar res_prim;
+    Scalar res_dual;
 };
 
 /**
@@ -55,7 +58,7 @@ struct qp_solver_info_t {
 template <typename QPType,
           template <typename, int, typename... Args> class LinearSolver = Eigen::LDLT,
           int LinearSolver_UpLo = Eigen::Lower>
-class OSQPSolver {
+class QPSolver {
 public:
     enum {
         n=QPType::n,
@@ -70,6 +73,7 @@ public:
     using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
     using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
     using settings_t = qp_sover_settings_t<Scalar>;
+    using info_t = qp_solver_info_t<Scalar>;
     using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
 
     static constexpr Scalar RHO_MIN = 1e-6;
@@ -104,12 +108,12 @@ public:
     } constr_type[m]; /**< constraint type classification */
 
     settings_t _settings;
-    qp_solver_info_t _info;
+    info_t _info;
 
     kkt_mat_t kkt_mat;
     linear_solver_t linear_solver;
 
-    OSQPSolver()
+    QPSolver()
     {
         x.setZero();
         z.setZero();
@@ -151,7 +155,7 @@ public:
 
             // update z
             z = _settings.alpha * z_tilde + (1 - _settings.alpha) * z_prev + rho_inv_vec.cwiseProduct(y);
-            clip_z(z, qp.l, qp.u); // euclidean projection
+            box_projection(z, qp.l, qp.u); // euclidean projection
 
             // update y
             y = y + rho_vec.cwiseProduct(_settings.alpha * z_tilde + (1 - _settings.alpha) * z_prev - z);
@@ -169,7 +173,7 @@ public:
                 print_status(qp);
 #endif
                 if (termination_criteria(qp)) {
-                    _info.status = qp_solver_info_t::SOLVED;
+                    _info.status = info_t::SOLVED;
                     break;
                 }
             }
@@ -192,7 +196,7 @@ public:
         }
 
         if (iter > _settings.max_iter) {
-            _info.status = qp_solver_info_t::MAX_ITER;
+            _info.status = info_t::MAX_ITER;
         }
         _info.iter = iter;
     }
@@ -206,8 +210,8 @@ public:
     inline const settings_t& settings() const { return _settings; }
     inline settings_t& settings() { return _settings; }
 
-    inline const qp_solver_info_t& info() const { return _info; }
-    inline qp_solver_info_t& info() { return _info; }
+    inline const info_t& info() const { return _info; }
+    inline info_t& info() { return _info; }
 
 private:
     void KKT_mat_update(const qp_t &qp, kkt_mat_t& kkt)
@@ -224,11 +228,9 @@ private:
         rhs.template tail<m>() = z - rho_inv_vec.cwiseProduct(y);
     }
 
-    void clip_z(constraint_t& z, const constraint_t& l, const constraint_t& u)
+    void box_projection(constraint_t& z, const constraint_t& l, const constraint_t& u)
     {
-        for (int i = 0; i < z.RowsAtCompileTime; i++) {
-            z(i) = fmax(l(i), fmin(z(i), u(i)));
-        }
+        z = z.cwiseMax(l).cwiseMin(u);
     }
 
     void constr_type_init(const qp_t &qp)
@@ -276,15 +278,15 @@ private:
         norm_q = qp.q.template lpNorm<Eigen::Infinity>();
         _max_Px_ATy_q_norm = fmax(norm_Px, fmax(norm_ATy, norm_q));
 
-        res_prim = residual_prim(qp);
-        res_dual = residual_dual(qp);
+        _info.res_prim = residual_prim(qp);
+        _info.res_dual = residual_dual(qp);
     }
 
     Scalar rho_estimate(const Scalar rho0, const qp_t &qp) const
     {
         Scalar rp_norm, rd_norm;
-        rp_norm = res_prim / (_max_Ax_z_norm + DIV_BY_ZERO_REGUL);
-        rd_norm = res_dual / (_max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
+        rp_norm = _info.res_prim / (_max_Ax_z_norm + DIV_BY_ZERO_REGUL);
+        rd_norm = _info.res_dual / (_max_Px_ATy_q_norm + DIV_BY_ZERO_REGUL);
 
         Scalar rho_new = rho0 * sqrt(rp_norm/(rd_norm + DIV_BY_ZERO_REGUL));
         return rho_new;
@@ -320,7 +322,7 @@ private:
     bool termination_criteria(const qp_t &qp)
     {
         // check residual norms to detect optimality
-        if (res_prim <= eps_prim(qp) && res_dual <= eps_dual(qp)) {
+        if (_info.res_prim <= eps_prim(qp) && _info.res_dual <= eps_dual(qp)) {
             return true;
         }
 
@@ -335,7 +337,7 @@ private:
         if (iter == 1) {
             printf("iter   obj       rp        rd\n");
         }
-        printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, res_prim, res_dual);
+        printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, _info.res_prim, _info.res_dual);
     }
 
     void print_settings(const settings_t &settings) const

@@ -28,7 +28,8 @@ using SimpleQP = _SimpleQP<double>;
 
 TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
-    OSQPSolver<SimpleQP> prob;
+    QPSolver<SimpleQP> prob;
+    using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;
 
@@ -37,24 +38,27 @@ TEST(QPSolverTest, testSimpleQP) {
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
+    EXPECT_EQ(prob.info().status, info_t::SOLVED);
 }
 
 
 TEST(QPSolverTest, testSinglePrecisionFloat) {
     using SimpleQPf = _SimpleQP<float>;
+    using info_t = qp_solver_info_t<float>;
     SimpleQPf qp;
-    OSQPSolver<SimpleQPf> prob;
+    QPSolver<SimpleQPf> prob;
 
     prob.solve(qp);
     Eigen::Vector2f sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
+    EXPECT_EQ(prob.info().status, info_t::SOLVED);
 }
 
 TEST(QPSolverTest, testConstraintViolation) {
     SimpleQP qp;
-    OSQPSolver<SimpleQP> prob;
+    QPSolver<SimpleQP> prob;
 
     prob.settings().eps_rel = 1e-4f;
     prob.settings().eps_abs = 1e-4f;
@@ -71,19 +75,21 @@ TEST(QPSolverTest, testConstraintViolation) {
 
 TEST(QPSolverTest, testAdaptiveRho) {
     SimpleQP qp;
-    OSQPSolver<SimpleQP> prob;
+    QPSolver<SimpleQP> prob;
+    using info_t = qp_solver_info_t<double>;
 
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
 
     prob.solve(qp);
 
-    EXPECT_EQ(prob.info().status, qp_solver_info_t::SOLVED);
+    EXPECT_EQ(prob.info().status, info_t::SOLVED);
 }
 
 TEST(QPSolverTest, testAdaptiveRhoImprovesConvergence) {
     SimpleQP qp;
-    OSQPSolver<SimpleQP> prob;
+    QPSolver<SimpleQP> prob;
+    using info_t = qp_solver_info_t<double>;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -99,21 +105,22 @@ TEST(QPSolverTest, testAdaptiveRhoImprovesConvergence) {
     prob.settings().adaptive_rho_interval = 10;
     prob.solve(qp);
 
-    qp_solver_info_t info = prob.info();
+    info_t info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, qp_solver_info_t::SOLVED);
+    EXPECT_EQ(info.status, info_t::SOLVED);
 }
 
 TEST(QPSolverTest, testConjugateGradientLinearSolver)
 {
     SimpleQP qp;
-    OSQPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    QPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    using info_t = qp_solver_info_t<double>;
 
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
-    qp_solver_info_t info = prob.info();
+    info_t info = prob.info();
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_EQ(info.status, info.SOLVED);
     EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
@@ -121,7 +128,7 @@ TEST(QPSolverTest, testConjugateGradientLinearSolver)
 
 TEST(QPSolverTest, TestConstraint) {
     using qp_t = QP<5, 5, double>;
-    using solver_t = OSQPSolver<qp_t>;
+    using solver_t = QPSolver<qp_t>;
     solver_t prob;
 
     qp_t qp;

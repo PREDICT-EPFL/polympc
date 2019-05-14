@@ -66,7 +66,7 @@ public:
 
     using Scalar = typename Problem::Scalar;
     using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, Scalar>;
-    using qp_solver_t = qp_solver::OSQPSolver<qp_t>;
+    using qp_solver_t = qp_solver::QPSolver<qp_t>;
     using settings_t = sqp_settings_t<Scalar>;
 
     using var_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;

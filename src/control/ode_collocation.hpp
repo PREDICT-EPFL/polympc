@@ -66,8 +66,6 @@ public:
     Polynomial m_basis_f;
 
     comp_diff_mat_t m_DiffMat = comp_diff_mat_t::Zero();
-    Eigen::SparseMatrix<Scalar> m_SpDiffMat;
-
     void compute_diff_matrix();
 };
 
@@ -78,8 +76,6 @@ template <typename Dynamics, typename Polynomial, int NumSegments>
 ode_collocation<Dynamics, Polynomial, NumSegments>::ode_collocation()
 {
     compute_diff_matrix();
-    m_SpDiffMat = m_DiffMat.sparseView(); //Not for embedded systems
-
     initialize_derivatives();
 }
 

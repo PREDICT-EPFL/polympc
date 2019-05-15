@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 #include <chrono>
+#include "control/simple_robot_model.hpp"
 
 typedef std::chrono::time_point<std::chrono::system_clock> time_point;
 time_point get_time()
@@ -16,42 +17,12 @@ time_point get_time()
 }
 
 
-template <typename _Scalar>
-struct MobileRobot2
-{
-    MobileRobot2(){}
-    ~MobileRobot2(){}
-
-    using Scalar     = _Scalar;
-    using State      = Eigen::Matrix<Scalar, 3, 1>;
-    using Control    = Eigen::Matrix<Scalar, 2, 1>;
-    using Parameters = Eigen::Matrix<Scalar, 1, 1>;
-
-    void operator() (const State &state, const Control &control, const Parameters &param, State &value) const
-    {
-        value[0] = control[0] * cos(state[2]) * cos(control[1]);
-        value[1] = control[0] * sin(state[2]) * cos(control[1]);
-        value[2] = control[0] * sin(control[1]) / param[0];
-    }
-
-    /** the one for automatic differentiation */
-    template<typename DerivedA, typename DerivedB, typename DerivedC>
-    void operator() (const Eigen::MatrixBase<DerivedA> &state, const Eigen::MatrixBase<DerivedB> &control,
-                     const Eigen::MatrixBase<DerivedC> &param, Eigen::MatrixBase<DerivedA> &value) const
-    {
-        value[0] = control[0] * cos(state[2]) * cos(control[1]);
-        value[1] = control[0] * sin(state[2]) * cos(control[1]);
-        value[2] = control[0] * sin(control[1]) / param[0];
-    }
-};
-
-
-
 
 int main(void)
 {
     using chebyshev = Chebyshev<3>;
-    using collocation = polympc::ode_collocation<MobileRobot2<double>, chebyshev, 2>;
+    using collocation = polympc::ode_collocation<MobileRobot<double>, chebyshev, 2>;
+
 
     collocation ps_ode;
     collocation::var_t x = collocation::var_t::Ones();
@@ -65,6 +36,7 @@ int main(void)
 
     std::chrono::time_point<std::chrono::system_clock> start = get_time();
     ps_ode.linearized(x, A, b);
+    Eigen::SparseMatrix<double> As = A.sparseView();
     std::chrono::time_point<std::chrono::system_clock> stop = get_time();
 
     std::cout << "Constraint: " << b.transpose() << "\n";
@@ -75,10 +47,18 @@ int main(void)
               << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
 
     /** compute linearized PS constraints */
-
-    std::cout << "Jacobian: \n" << A.template rightCols<7>() << "\n";
+    std::cout << "Size: " << As.size() << "\n";
+    std::cout << "NNZ: " << As.nonZeros() << "\n";
+    std::cout << "Jacobian: \n" << A.template leftCols<10>() << "\n";
     Eigen::ColPivHouseholderQR< collocation::jacobian_t > lu(A);
     std::cout << "Jacobian: \n" << lu.rank() << "\n";
+
+    /**
+    std::cout << "Diff_MAT: \n" << ps_ode.m_DiffMat << "\n";
+    Eigen::SparseMatrix<double> SpA = ps_ode.m_DiffMat.sparseView();
+    std::cout << "Matrix size: " << ps_ode.m_DiffMat.size() << "\n";
+    std::cout << "NNZ: " << SpA.nonZeros() << "\n";
+    */
 
     return 0;
 }

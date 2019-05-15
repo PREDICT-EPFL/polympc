@@ -1,8 +1,9 @@
 #include "gtest/gtest.h"
-#define OSQP_PRINTING
+#define QP_SOLVER_PRINTING
+#define QP_SOLVER_USE_SPARSE
 #include "qp_solver_sparse.hpp"
 
-using namespace qp_solver_sparse;
+using namespace qp_solver;
 
 class SimpleQP : public QP<2, 3, double>
 {
@@ -25,7 +26,7 @@ public:
 
 TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
-    QPSolverSparse<SimpleQP> prob;
+    QPSolver<SimpleQP> prob;
     using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;
@@ -41,7 +42,7 @@ TEST(QPSolverTest, testSimpleQP) {
 
 TEST(QPSolverTest, testConjugateGradient) {
     SimpleQP qp;
-    QPSolverSparse<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    QPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
     using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;

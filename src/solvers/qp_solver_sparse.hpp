@@ -1,11 +1,11 @@
-#ifndef QP_SOLVER_SPARSE_H
-#define QP_SOLVER_SPARSE_H
+#ifndef QP_SOLVER_H
+#define QP_SOLVER_H
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <cmath>
 
-namespace qp_solver_sparse {
+namespace qp_solver {
 
 template <int _n, int _m, typename _Scalar = double>
 struct QP {
@@ -57,9 +57,13 @@ struct qp_solver_info_t {
  *    Ax element of R^m
  */
 template <typename QPType,
+#ifdef QP_SOLVER_USE_SPARSE
           template <typename, int, typename... Args> class LinearSolver = Eigen::SimplicialLDLT,
+#else
+          template <typename, int, typename... Args> class LinearSolver = Eigen::LDLT,
+#endif
           int LinearSolver_UpLo = Eigen::Lower>
-class QPSolverSparse {
+class QPSolver {
 public:
     enum {
         n=QPType::n,
@@ -73,7 +77,11 @@ public:
     using constraint_t = Eigen::Matrix<Scalar, m, 1>;
     using dual_t = Eigen::Matrix<Scalar, m, 1>;
     using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
+#ifdef QP_SOLVER_USE_SPARSE
     using kkt_mat_t = SpMat;
+#else
+    using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
+#endif
     using settings_t = qp_sover_settings_t<Scalar>;
     using info_t = qp_solver_info_t<Scalar>;
     using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
@@ -115,7 +123,7 @@ public:
     kkt_mat_t kkt_mat;
     linear_solver_t linear_solver;
 
-    QPSolverSparse()
+    QPSolver()
     {
         x.setZero();
         z.setZero();
@@ -129,7 +137,7 @@ public:
         kkt_vec_t rhs, x_tilde_nu;
         bool check_termination = false;
 
-#ifdef OSQP_PRINTING
+#ifdef QP_SOLVER_PRINTING
         print_settings(_settings);
 #endif
         if (!_settings.warm_start) {
@@ -174,7 +182,7 @@ public:
             if (check_termination) {
                 update_state(qp);
 
-#ifdef OSQP_PRINTING
+#ifdef QP_SOLVER_PRINTING
                 print_status(qp);
 #endif
                 if (termination_criteria(qp)) {
@@ -196,9 +204,13 @@ public:
                     rho_vec_update(new_rho);
                     update_KKT_rho();
 
+#ifdef QP_SOLVER_USE_SPARSE
                     /* Note: KKT Sparsity pattern unchanged by rho update.
                      *       Only do refactorization. */
                     linear_solver.factorize(kkt_mat);
+#else
+                    linear_solver.compute(kkt_mat);
+#endif
                     eigen_assert(linear_solver.info() == Eigen::Success);
                 }
             }
@@ -240,6 +252,7 @@ private:
                       LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower),
                       "LinearSolver_UpLo must be Lower or Upper|Lower");
 
+#ifdef QP_SOLVER_USE_SPARSE
         int nnz;
         nnz = qp.P.nonZeros() + n + qp.A.nonZeros() + m;
         if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
@@ -265,13 +278,25 @@ private:
         for (int i = 0; i < m; i++) {
             kkt_mat.insert(n+i, n+i) = -rho_inv_vec(i);
         }
+#else
+        kkt_mat.template topLeftCorner<n, n>() = qp.P + _settings.sigma * qp.P.Identity();
+        if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
+            kkt_mat.template topRightCorner<n, m>() = qp.A.transpose();
+        }
+        kkt_mat.template bottomLeftCorner<m, n>() = qp.A;
+        kkt_mat.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
+#endif
     }
 
     void update_KKT_rho()
     {
+#ifdef QP_SOLVER_USE_SPARSE
         for (int i = 0; i < m; i++) {
             kkt_mat.coeffRef(n+i, n+i) = -rho_inv_vec(i);
         }
+#else
+        kkt_mat.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
+#endif
     }
 
     void sparse_insert_at(SpMat &dst, int row, int col, const SpMat &src) const
@@ -390,7 +415,7 @@ private:
         return false;
     }
 
-#ifdef OSQP_PRINTING
+#ifdef QP_SOLVER_PRINTING
     void print_status(const qp_t &qp) const
     {
         Scalar obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
@@ -416,6 +441,6 @@ private:
 #endif
 };
 
-} // namespace qp_solver_sparse
+} // namespace qp_solver
 
-#endif // QP_SOLVER_SPARSE_H
+#endif // QP_SOLVER_H

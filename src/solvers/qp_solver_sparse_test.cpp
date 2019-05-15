@@ -29,6 +29,23 @@ TEST(QPSolverTest, testSimpleQP) {
     using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;
+    prob.settings().adaptive_rho = true;
+
+    prob.solve(qp);
+    Eigen::Vector2d sol = prob.primal_solution();
+
+    EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
+    EXPECT_LT(prob.iter, prob.settings().max_iter);
+    EXPECT_EQ(prob.info().status, info_t::SOLVED);
+}
+
+TEST(QPSolverTest, testConjugateGradient) {
+    SimpleQP qp;
+    QPSolverSparse<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    using info_t = qp_solver_info_t<double>;
+
+    prob.settings().max_iter = 1000;
+    prob.settings().adaptive_rho = true;
 
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();

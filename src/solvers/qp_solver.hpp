@@ -425,19 +425,12 @@ private:
 
     Scalar eps_prim(const qp_t &qp) const
     {
-        Scalar norm_Ax, norm_z;
-        norm_Ax = (qp.A*x).template lpNorm<Eigen::Infinity>();
-        norm_z = z.template lpNorm<Eigen::Infinity>();
-        return _settings.eps_abs + _settings.eps_rel * fmax(norm_Ax, norm_z);
+        return _settings.eps_abs + _settings.eps_rel * _max_Ax_z_norm;
     }
 
     Scalar eps_dual(const qp_t &qp) const
     {
-        Scalar norm_Px, norm_ATy, norm_q;
-        norm_Px = (qp.P*x).template lpNorm<Eigen::Infinity>();
-        norm_ATy = (qp.A.transpose()*y).template lpNorm<Eigen::Infinity>();
-        norm_q = qp.q.template lpNorm<Eigen::Infinity>();
-        return _settings.eps_abs + _settings.eps_rel * fmax(norm_Px, fmax(norm_ATy, norm_q));
+        return _settings.eps_abs + _settings.eps_rel * _max_Px_ATy_q_norm ;
     }
 
     Scalar residual_prim(const qp_t &qp) const

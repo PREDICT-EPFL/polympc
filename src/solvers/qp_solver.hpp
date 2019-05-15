@@ -35,17 +35,60 @@ struct qp_sover_settings_t {
     Scalar adaptive_rho_tolerance = 5;  /**< Minimal for rho update factor, 1 < adaptive_rho_tolerance */
     int adaptive_rho_interval = 25; /**< change rho every Nth iteration, 0 < adaptive_rho_interval,
                                          set equal to check_termination to save computation  */
+
+#ifdef QP_SOLVER_PRINTING
+    void print() const
+    {
+        printf("ADMM settings:\n");
+        printf("  sigma %.2e\n", sigma);
+        printf("  rho %.2e\n", rho);
+        printf("  alpha %.2f\n", alpha);
+        printf("  eps_rel %.1e\n", eps_rel);
+        printf("  eps_abs %.1e\n", eps_abs);
+        printf("  max_iter %d\n", max_iter);
+        printf("  adaptive_rho %d\n", adaptive_rho);
+        printf("  warm_start %d\n", warm_start);
+    }
+#endif
 };
+
+typedef enum {
+    SOLVED,
+    MAX_ITER,
+    UNSOLVED
+} status_t;
 
 template <typename Scalar>
 struct qp_solver_info_t {
-    enum {
-        SOLVED,
-        MAX_ITER
-    } status;
-    int iter;
-    Scalar res_prim;
-    Scalar res_dual;
+    status_t status = UNSOLVED; /**< Solver status */
+    int iter = 0;               /**< Number of iterations */
+    int rho_updates = 0;        /**< Number of rho updates (factorizations) */
+    Scalar rho_estimate = 0;    /**< Last rho estimate */
+    Scalar res_prim = 0;        /**< Primal residual */
+    Scalar res_dual = 0;        /**< Dual residual */
+
+#ifdef QP_SOLVER_PRINTING
+    void print() const
+    {
+        printf("ADMM info:\n");
+        printf("  status ");
+        switch (status) {
+        case SOLVED:
+            printf("SOLVED\n");
+            break;
+        case MAX_ITER:
+            printf("MAX_ITER\n");
+            break;
+        default:
+            printf("UNSOLVED\n");
+        };
+        printf("  iter %d\n", iter);
+        printf("  rho_updates %d\n", rho_updates);
+        printf("  rho_estimate %f\n", rho_estimate);
+        printf("  res_prim %f\n", res_prim);
+        printf("  res_dual %f\n", res_dual);
+    }
+#endif
 };
 
 /**
@@ -138,7 +181,7 @@ public:
         bool check_termination = false;
 
 #ifdef QP_SOLVER_PRINTING
-        print_settings(_settings);
+        _settings.print();
 #endif
         if (!_settings.warm_start) {
             x.setZero();
@@ -186,7 +229,7 @@ public:
                 print_status(qp);
 #endif
                 if (termination_criteria(qp)) {
-                    _info.status = info_t::SOLVED;
+                    _info.status = SOLVED;
                     break;
                 }
             }
@@ -198,6 +241,7 @@ public:
                 }
                 Scalar new_rho = rho_estimate(rho, qp);
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
+                _info.rho_estimate = new_rho;
 
                 if (new_rho < rho / _settings.adaptive_rho_tolerance ||
                     new_rho > rho * _settings.adaptive_rho_tolerance) {
@@ -217,7 +261,7 @@ public:
         }
 
         if (iter > _settings.max_iter) {
-            _info.status = info_t::MAX_ITER;
+            _info.status = MAX_ITER;
         }
         _info.iter = iter;
     }
@@ -349,6 +393,7 @@ private:
         }
         rho_inv_vec = rho_vec.cwiseInverse();
         rho = rho0;
+        _info.rho_updates += 1;
     }
 
     void update_state(const qp_t& qp)
@@ -420,23 +465,10 @@ private:
     {
         Scalar obj = 0.5 * x.dot(qp.P*x) + qp.q.dot(x);
 
-        if (iter == 1) {
+        if (iter == _settings.check_termination) {
             printf("iter   obj       rp        rd\n");
         }
         printf("%4d  %.2e  %.2e  %.2e\n", iter, obj, _info.res_prim, _info.res_dual);
-    }
-
-    void print_settings(const settings_t &settings) const
-    {
-        printf("ADMM settings:\n");
-        printf("  sigma %.2e\n", _settings.sigma);
-        printf("  rho %.2e\n", _settings.rho);
-        printf("  alpha %.2f\n", _settings.alpha);
-        printf("  eps_rel %.1e\n", _settings.eps_rel);
-        printf("  eps_abs %.1e\n", _settings.eps_abs);
-        printf("  max_iter %d\n", _settings.max_iter);
-        printf("  adaptive_rho %d\n", _settings.adaptive_rho);
-        printf("  warm_start %d\n", _settings.warm_start);
     }
 #endif
 };

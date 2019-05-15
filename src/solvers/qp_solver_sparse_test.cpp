@@ -24,10 +24,9 @@ public:
     }
 };
 
-TEST(QPSolverTest, testSimpleQP) {
+TEST(QPSolverSparseTest, testSimpleQP) {
     SimpleQP qp;
     QPSolver<SimpleQP> prob;
-    using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;
     prob.settings().adaptive_rho = true;
@@ -37,13 +36,13 @@ TEST(QPSolverTest, testSimpleQP) {
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, info_t::SOLVED);
+    EXPECT_EQ(prob.info().status, SOLVED);
+    prob.info().print();
 }
 
-TEST(QPSolverTest, testConjugateGradient) {
+TEST(QPSolverSparseTest, testConjugateGradient) {
     SimpleQP qp;
     QPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
-    using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;
     prob.settings().adaptive_rho = true;
@@ -53,7 +52,7 @@ TEST(QPSolverTest, testConjugateGradient) {
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, info_t::SOLVED);
+    EXPECT_EQ(prob.info().status, SOLVED);
 }
 
 int main(int argc, char **argv) {

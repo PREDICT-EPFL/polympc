@@ -1,10 +1,11 @@
-#ifndef QP_SOLVER_H
-#define QP_SOLVER_H
+#ifndef QP_SOLVER_SPARSE_H
+#define QP_SOLVER_SPARSE_H
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <cmath>
 
-namespace qp_solver {
+namespace qp_solver_sparse {
 
 template <int _n, int _m, typename _Scalar = double>
 struct QP {
@@ -56,9 +57,9 @@ struct qp_solver_info_t {
  *    Ax element of R^m
  */
 template <typename QPType,
-          template <typename, int, typename... Args> class LinearSolver = Eigen::LDLT,
+          template <typename, int, typename... Args> class LinearSolver = Eigen::SimplicialLDLT,
           int LinearSolver_UpLo = Eigen::Lower>
-class QPSolver {
+class QPSolverSparse {
 public:
     enum {
         n=QPType::n,
@@ -67,6 +68,7 @@ public:
 
     using qp_t = QPType;
     using Scalar = typename QPType::Scalar;
+    using SpMat = Eigen::SparseMatrix<Scalar>;
     using var_t = Eigen::Matrix<Scalar, n, 1>;
     using constraint_t = Eigen::Matrix<Scalar, m, 1>;
     using dual_t = Eigen::Matrix<Scalar, m, 1>;
@@ -74,7 +76,7 @@ public:
     using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
     using settings_t = qp_sover_settings_t<Scalar>;
     using info_t = qp_solver_info_t<Scalar>;
-    using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
+    using linear_solver_t = LinearSolver<SpMat, LinearSolver_UpLo>;
 
     static constexpr Scalar RHO_MIN = 1e-6;
     static constexpr Scalar RHO_MAX = 1e+6;
@@ -111,9 +113,10 @@ public:
     info_t _info;
 
     kkt_mat_t kkt_mat;
+    SpMat kkt_mat_sparse;
     linear_solver_t linear_solver;
 
-    QPSolver()
+    QPSolverSparse()
     {
         x.setZero();
         z.setZero();
@@ -138,7 +141,7 @@ public:
         rho_update(_settings.rho);
 
         KKT_mat_update(qp, kkt_mat);
-        linear_solver.compute(kkt_mat);
+        linear_solver.compute(kkt_mat_sparse);
 
         for (iter = 1; iter <= _settings.max_iter; iter++) {
             z_prev = z;
@@ -190,7 +193,8 @@ public:
                     new_rho > rho * _settings.adaptive_rho_tolerance) {
                     rho_update(new_rho);
                     KKT_mat_update(qp, kkt_mat);
-                    linear_solver.compute(kkt_mat);
+                    // assumes same sparsity pattern
+                    linear_solver.factorize(kkt_mat_sparse);
                 }
             }
         }
@@ -217,9 +221,14 @@ private:
     void KKT_mat_update(const qp_t &qp, kkt_mat_t& kkt)
     {
         kkt.template topLeftCorner<n, n>() = qp.P + _settings.sigma * qp.P.Identity();
-        kkt.template topRightCorner<n, m>() = qp.A.transpose();
+        if (LinearSolver_UpLo == Eigen::Upper|Eigen::Lower) {
+            kkt.template topRightCorner<n, m>() = qp.A.transpose();
+        }
         kkt.template bottomLeftCorner<m, n>() = qp.A;
         kkt.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
+
+        // TODO: quick hack
+        kkt_mat_sparse = kkt_mat.sparseView();
     }
 
     void form_KKT_rhs(const qp_t &qp, kkt_vec_t& rhs)
@@ -355,6 +364,6 @@ private:
 #endif
 };
 
-} // namespace qp_solver
+} // namespace qp_solver_sparse
 
-#endif // QP_SOLVER_H
+#endif // QP_SOLVER_SPARSE_H

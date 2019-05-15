@@ -2,7 +2,7 @@
 #define OSQP_PRINTING
 #include "qp_solver_sparse.hpp"
 
-using namespace qp_solver;
+using namespace qp_solver_sparse;
 
 class SimpleQP : public QP<2, 3, double>
 {
@@ -25,7 +25,7 @@ public:
 
 TEST(QPSolverTest, testSimpleQP) {
     SimpleQP qp;
-    QPSolver<SimpleQP> prob;
+    QPSolverSparse<SimpleQP> prob;
     using info_t = qp_solver_info_t<double>;
 
     prob.settings().max_iter = 1000;

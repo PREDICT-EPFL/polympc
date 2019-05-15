@@ -53,9 +53,5 @@ TEST(QPSolverSparseTest, testConjugateGradient) {
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
     EXPECT_EQ(prob.info().status, SOLVED);
-}
-
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+    prob.info().print();
 }

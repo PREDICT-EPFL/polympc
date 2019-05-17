@@ -318,6 +318,7 @@ private:
         if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
             nnz += qp.A.nonZeros();
         }
+        kkt_mat.setZero(); // TODO: allow value updates with same sparsity pattern
         kkt_mat.reserve(nnz);
 
         SpMat Ps = qp.P.sparseView();
@@ -338,6 +339,8 @@ private:
         for (int i = 0; i < m; i++) {
             kkt_mat.insert(n+i, n+i) = -rho_inv_vec(i);
         }
+
+        kkt_mat.makeCompressed();
 #else
         kkt_mat.template topLeftCorner<n, n>() = qp.P + _settings.sigma * qp.P.Identity();
         if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {

@@ -55,3 +55,14 @@ TEST(QPSolverSparseTest, testConjugateGradient) {
     EXPECT_EQ(prob.info().status, SOLVED);
     prob.info().print();
 }
+
+TEST(QPSolverSparseTest, testCanMultipleSolve) {
+    SimpleQP qp;
+    QPSolver<SimpleQP> prob;
+
+    prob.solve(qp);
+    EXPECT_EQ(prob.info().status, SOLVED);
+
+    prob.solve(qp);
+    EXPECT_EQ(prob.info().status, SOLVED);
+}

@@ -6,6 +6,9 @@ enable_testing()
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
+# Tests should be Debug build to enable Eigen asserts
+set(CMAKE_BUILD_TYPE "Debug")
+
 add_executable(qp_solver_test qp_solver_test.cpp qp_solver_sparse_test.cpp)
 target_link_libraries(qp_solver_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES})
 

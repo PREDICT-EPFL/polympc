@@ -35,6 +35,7 @@ struct qp_sover_settings_t {
     Scalar adaptive_rho_tolerance = 5;  /**< Minimal for rho update factor, 1 < adaptive_rho_tolerance */
     int adaptive_rho_interval = 25; /**< change rho every Nth iteration, 0 < adaptive_rho_interval,
                                          set equal to check_termination to save computation  */
+    bool verbose = false;
 
 #ifdef QP_SOLVER_PRINTING
     void print() const
@@ -175,13 +176,20 @@ public:
         kkt_mat.resize(n+m,n+m);
     }
 
+    void setup(const qp_t &qp)
+    {
+
+    }
+
     void solve(const qp_t &qp)
     {
         kkt_vec_t rhs, x_tilde_nu;
         bool check_termination = false;
 
 #ifdef QP_SOLVER_PRINTING
-        _settings.print();
+        if (_settings.verbose) {
+            _settings.print();
+        }
 #endif
         if (!_settings.warm_start) {
             x.setZero();
@@ -226,7 +234,9 @@ public:
                 update_state(qp);
 
 #ifdef QP_SOLVER_PRINTING
-                print_status(qp);
+                if (_settings.verbose) {
+                    print_status(qp);
+                }
 #endif
                 if (termination_criteria(qp)) {
                     _info.status = SOLVED;
@@ -264,6 +274,12 @@ public:
             _info.status = MAX_ITER;
         }
         _info.iter = iter;
+
+#ifdef QP_SOLVER_PRINTING
+        if (_settings.verbose) {
+            _info.print();
+        }
+#endif
     }
 
     inline const var_t& primal_solution() const { return x; }

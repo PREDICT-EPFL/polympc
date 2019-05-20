@@ -37,14 +37,15 @@ TEST(QPSolverSparseTest, testSimpleQP) {
 
     prob.settings().max_iter = 1000;
     prob.settings().adaptive_rho = true;
+    prob.settings().verbose = true;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
     EXPECT_EQ(prob.info().status, SOLVED);
-    prob.info().print();
 }
 
 TEST(QPSolverSparseTest, testConjugateGradient) {
@@ -53,23 +54,45 @@ TEST(QPSolverSparseTest, testConjugateGradient) {
 
     prob.settings().max_iter = 1000;
     prob.settings().adaptive_rho = true;
+    prob.settings().verbose = true;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(qp.SOLUTION, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
     EXPECT_EQ(prob.info().status, SOLVED);
-    prob.info().print();
 }
 
 TEST(QPSolverSparseTest, testCanMultipleSolve) {
     SimpleQP qp;
     QPSolver<SimpleQP> prob;
 
+    prob.setup(qp);
     prob.solve(qp);
     EXPECT_EQ(prob.info().status, SOLVED);
 
     prob.solve(qp);
+    EXPECT_EQ(prob.info().status, SOLVED);
+}
+
+TEST(QPSolverSparseTest, testCanUpdateQP) {
+    SimpleQP qp;
+    QPSolver<SimpleQP> prob;
+
+    prob.setup(qp);
+    prob.solve(qp);
+    EXPECT_TRUE(prob.primal_solution().isApprox(qp.SOLUTION, 1e-2));
+    EXPECT_EQ(prob.info().status, SOLVED);
+
+    qp.P.setIdentity(); // dont't change P_col_nnz!
+    qp.q << 0, 0;
+    qp.SOLUTION << 0.5, 0.5;
+
+    prob.update_qp(qp);
+    prob.solve(qp);
+
+    EXPECT_TRUE(prob.primal_solution().isApprox(qp.SOLUTION, 1e-2));
     EXPECT_EQ(prob.info().status, SOLVED);
 }

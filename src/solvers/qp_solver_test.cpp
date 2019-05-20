@@ -32,6 +32,7 @@ TEST(QPSolverTest, testSimpleQP) {
 
     prob.settings().max_iter = 1000;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
@@ -46,6 +47,7 @@ TEST(QPSolverTest, testSinglePrecisionFloat) {
     SimpleQPf qp;
     QPSolver<SimpleQPf> prob;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2f sol = prob.primal_solution();
 
@@ -61,6 +63,7 @@ TEST(QPSolverTest, testConstraintViolation) {
     prob.settings().eps_rel = 1e-4f;
     prob.settings().eps_abs = 1e-4f;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
@@ -78,6 +81,7 @@ TEST(QPSolverTest, testAdaptiveRho) {
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
 
+    prob.setup(qp);
     prob.solve(qp);
 
     EXPECT_EQ(prob.info().status, SOLVED);
@@ -93,6 +97,7 @@ TEST(QPSolverTest, testAdaptiveRhoImprovesConvergence) {
 
     // solve whithout adaptive rho
     prob.settings().adaptive_rho = false;
+    prob.setup(qp);
     prob.solve(qp);
     int prev_iter = prob.info().iter;
 
@@ -115,6 +120,7 @@ TEST(QPSolverTest, testConjugateGradientLinearSolver)
     SimpleQP qp;
     QPSolver<SimpleQP, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
 
+    prob.setup(qp);
     prob.solve(qp);
     Eigen::Vector2d sol = prob.primal_solution();
 
@@ -152,7 +158,7 @@ TEST(QPSolverTest, TestConstraint) {
     qp.u(4) = 42;
     type_expect[4] = solver_t::EQUALITY_CONSTRAINT;
 
-    prob.solve(qp);
+    prob.setup(qp);
 
     for (int i = 0; i < qp.l.rows(); i++) {
         EXPECT_EQ(prob.constr_type[i], type_expect[i]);

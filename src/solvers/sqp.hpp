@@ -249,9 +249,14 @@ private:
         _qp.A.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
 
         // solve the QP
-        _qp_solver.settings().warm_start = true;
-        _qp_solver.settings().check_termination = 1;
-        _qp_solver.settings().max_iter = 1000;
+        if (_info.iter == 1) {
+            _qp_solver.settings().warm_start = true;
+            _qp_solver.settings().check_termination = 1;
+            _qp_solver.settings().max_iter = 1000;
+            _qp_solver.setup(_qp);
+        } else {
+            _qp_solver.update_qp(_qp);
+        }
         _qp_solver.solve(_qp);
 
         _info.qp_solver_iter += _qp_solver.info().iter;

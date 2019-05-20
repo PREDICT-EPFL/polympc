@@ -186,18 +186,36 @@ public:
     kkt_mat_t kkt_mat;
     linear_solver_t linear_solver;
 
-    QPSolver()
+    QPSolver() { }
+
+    void setup(const qp_t &qp)
     {
         x.setZero();
         z.setZero();
         y.setZero();
 
-        kkt_mat.resize(n+m,n+m);
+        // Set QP constraint type
+        constr_type_init(qp);
+
+        // initialize step size (rho) vector
+        rho_vec_update(_settings.rho);
+
+        // construct KKT system and compute decomposition
+        construct_KKT_mat(qp);
+        compute_KKT();
     }
 
-    void setup(const qp_t &qp)
+    void update_qp(const qp_t &qp)
     {
+        // Set QP constraint type
+        constr_type_init(qp);
 
+        // initialize step size (rho) vector
+        rho_vec_update(_settings.rho);
+
+        // update KKT system and do factorization
+        update_KKT_mat(qp);
+        factorize_KKT();
     }
 
     void solve(const qp_t &qp)
@@ -215,13 +233,6 @@ public:
             z.setZero();
             y.setZero();
         }
-
-        constr_type_init(qp);
-        rho_vec_update(_settings.rho);
-
-        update_KKT_mat(qp);
-        linear_solver.compute(kkt_mat);
-        eigen_assert(linear_solver.info() == Eigen::Success);
 
         for (iter = 1; iter <= _settings.max_iter; iter++) {
             z_prev = z;
@@ -276,15 +287,8 @@ public:
                     new_rho > rho * _settings.adaptive_rho_tolerance) {
                     rho_vec_update(new_rho);
                     update_KKT_rho();
-
-#ifdef QP_SOLVER_USE_SPARSE
-                    /* Note: KKT Sparsity pattern unchanged by rho update.
-                     *       Only do refactorization. */
-                    linear_solver.factorize(kkt_mat);
-#else
-                    linear_solver.compute(kkt_mat);
-#endif
-                    eigen_assert(linear_solver.info() == Eigen::Success);
+                    /* Note: KKT Sparsity pattern unchanged by rho update. Only factorize. */
+                    factorize_KKT();
                 }
             }
         }
@@ -325,15 +329,14 @@ private:
      * Note: For Eigen::ConjugateGradient it is advised to set Upper|Lower for
      *       best performance.
      */
-    void update_KKT_mat(const qp_t &qp)
+    void construct_KKT_mat(const qp_t &qp)
     {
         static_assert(LinearSolver_UpLo == Eigen::Lower ||
                       LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower),
                       "LinearSolver_UpLo must be Lower or Upper|Lower");
 
 #ifdef QP_SOLVER_USE_SPARSE
-
-        kkt_mat.setZero(); // TODO: allow value updates with same sparsity pattern
+        kkt_mat.resize(n+m,n+m); // sets all elements to 0
         Eigen::Matrix<int, n+m, 1> nnz_col;
 
         nnz_col.setConstant(1);
@@ -344,17 +347,21 @@ private:
         }
         kkt_mat.reserve(nnz_col);
 
+        // top left:  P + sigma*I
         sparse_insert_at(kkt_mat, 0, 0, qp.P);
-        sparse_insert_at(kkt_mat, n, 0, qp.A);
-
-        if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
-            sparse_insert_at(kkt_mat, 0, n, qp.A.transpose());
-        }
-
         for (int i = 0; i < n; i++) {
             kkt_mat.coeffRef(i,i) += _settings.sigma;
         }
 
+        // bottom left:  A
+        sparse_insert_at(kkt_mat, n, 0, qp.A);
+
+        // top right:  A'
+        if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
+            sparse_insert_at(kkt_mat, 0, n, qp.A.transpose());
+        }
+
+        // bottom right:  -1/rho.*I
         for (int i = 0; i < m; i++) {
             kkt_mat.insert(n+i, n+i) = -rho_inv_vec(i);
         }
@@ -370,6 +377,17 @@ private:
 #endif
     }
 
+    /** KKT matrix value update, assumes same sparsity pattern */
+    void update_KKT_mat(const qp_t &qp)
+    {
+#ifdef QP_SOLVER_USE_SPARSE
+        // TODO: allow value updates with same sparsity pattern
+        construct_KKT_mat(qp);
+#else
+        construct_KKT_mat(qp);
+#endif // QP_SOLVER_USE_SPARSE
+    }
+
     void update_KKT_rho()
     {
 #ifdef QP_SOLVER_USE_SPARSE
@@ -381,6 +399,23 @@ private:
         kkt_mat.template bottomRightCorner<m, m>() = -1.0 * rho_inv_vec.asDiagonal();
 #endif
     }
+
+    void factorize_KKT()
+    {
+#ifdef QP_SOLVER_USE_SPARSE
+        linear_solver.factorize(kkt_mat);
+#else
+        linear_solver.compute(kkt_mat);
+#endif
+        eigen_assert(linear_solver.info() == Eigen::Success);
+    }
+
+    void compute_KKT()
+    {
+        linear_solver.compute(kkt_mat);
+        eigen_assert(linear_solver.info() == Eigen::Success);
+    }
+
 
 #ifdef QP_SOLVER_USE_SPARSE
     void sparse_insert_at(SpMat &dst, int row, int col, const SpMat &src) const

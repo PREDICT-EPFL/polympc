@@ -1,16 +1,19 @@
-#ifndef ODE_COLLOCATION_HPP
-#define ODE_COLLOCATION_HPP
+#ifndef SPARSE_ODE_COLLOCATION_HPP
+#define SPARSE_ODE_COLLOCATION_HPP
 
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include "unsupported/Eigen/KroneckerProduct"
 #include "unsupported/Eigen/AutoDiff"
 
+#include <iostream>
+
+
 namespace polympc
 {
 
 template <typename Dynamics, typename Polynomial, int NumSegments = 1>
-class ode_collocation
+class sparse_ode_collocation
 {
 public:
 
@@ -33,11 +36,11 @@ public:
     };
 
     /** composite differentiation matrix */
-    using comp_diff_mat_t = Eigen::Matrix<Scalar, VARX_SIZE, VARX_SIZE>;
+    using comp_diff_mat_t = Eigen::SparseMatrix<Scalar>; //Eigen::Matrix<Scalar, VARX_SIZE, VARX_SIZE>;
 
-    ode_collocation(const Dynamics &_f){}
-    ode_collocation();
-    ~ode_collocation(){}
+    sparse_ode_collocation(const Dynamics &_f){}
+    sparse_ode_collocation();
+    ~sparse_ode_collocation(){}
 
     /** type to store optimization variable var = [x, u, p] */
     using var_t     = Eigen::Matrix<Scalar, VARX_SIZE + VARU_SIZE + VARP_SIZE, 1>;
@@ -46,7 +49,7 @@ public:
                      const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1) ) const;
 
     /** linearized approximation */
-    using jacobian_t = Eigen::Matrix<Scalar, constr_t::RowsAtCompileTime, var_t::RowsAtCompileTime>;
+    using jacobian_t = Eigen::SparseMatrix<Scalar>; //Eigen::Matrix<Scalar, constr_t::RowsAtCompileTime, var_t::RowsAtCompileTime>;
     using local_jacobian_t = Eigen::Matrix<Scalar, NX, NX + NU>;
     using Derivatives = Eigen::Matrix<Scalar, NX + NU, 1>;
     using ADScalar = Eigen::AutoDiffScalar<Derivatives>;
@@ -60,35 +63,38 @@ public:
                     const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1));
 
     void initialize_derivatives();
+    void compute_inner_nnz();
 
 public:
     Dynamics m_f;
     Polynomial m_basis_f;
 
-    comp_diff_mat_t m_DiffMat = comp_diff_mat_t::Zero();
+    comp_diff_mat_t m_DiffMat, m_DiffMat_Ext;
+    Eigen::Matrix<int, var_t::RowsAtCompileTime, 1> m_jac_inner_nnz = Eigen::Matrix<int, var_t::RowsAtCompileTime, 1>::Zero();
     void compute_diff_matrix();
 };
 
 
 
-
 template <typename Dynamics, typename Polynomial, int NumSegments>
-ode_collocation<Dynamics, Polynomial, NumSegments>::ode_collocation()
+sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::sparse_ode_collocation()
 {
     compute_diff_matrix();
+    compute_inner_nnz();
     initialize_derivatives();
 }
 
 
 template <typename Dynamics, typename Polynomial, int NumSegments>
-void ode_collocation<Dynamics, Polynomial, NumSegments>::compute_diff_matrix()
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_diff_matrix()
 {
     diff_mat_t D = m_basis_f.D();
-    Eigen::Matrix<Scalar, NX, NX> E = Eigen::Matrix<Scalar, NX, NX>::Identity();
+    Eigen::SparseMatrix<Scalar> E(NX, NX); //= Eigen::Matrix<Scalar, NX, NX>::Identity().sparseView();
+    E.setIdentity();
 
     if(NumSegments < 2)
     {
-        m_DiffMat = Eigen::kroneckerProduct(D,E);
+        m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_t, Eigen::SparseMatrix<Scalar>>(D,E);
         return;
     }
     else
@@ -99,7 +105,13 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::compute_diff_matrix()
         for(int k = 0; k < (NumSegments - 1) * POLY_ORDER; k += POLY_ORDER)
             DM.template block<NUM_NODES - 1, NUM_NODES>(k, k) = D.template topLeftCorner<NUM_NODES - 1, NUM_NODES>();
 
-        m_DiffMat = Eigen::kroneckerProduct(DM,E);
+        Eigen::SparseMatrix<double> SpDM = DM.sparseView();
+        m_DiffMat = Eigen::KroneckerProductSparse<Eigen::SparseMatrix<Scalar>, Eigen::SparseMatrix<Scalar>>(SpDM,E);
+
+        m_DiffMat_Ext.resize(constr_t::RowsAtCompileTime, var_t::RowsAtCompileTime);
+        m_DiffMat_Ext.setZero();
+        m_DiffMat_Ext.template leftCols<VARX_SIZE>() = m_DiffMat;
+        m_DiffMat_Ext.makeCompressed();
 
         return;
     }
@@ -107,7 +119,7 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::compute_diff_matrix()
 
 /** Evaluate differential constraint */
 template <typename Dynamics, typename Polynomial, int NumSegments>
-void ode_collocation<Dynamics, Polynomial, NumSegments>::operator()(const var_t &var, constr_t &constr_value,
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::operator()(const var_t &var, constr_t &constr_value,
                                                                     const Scalar &t0, const Scalar &tf) const
 {
     constr_t value;
@@ -128,7 +140,7 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::operator()(const var_t 
 }
 
 template <typename Dynamics, typename Polynomial, int NumSegments>
-void ode_collocation<Dynamics, Polynomial, NumSegments>::initialize_derivatives()
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::initialize_derivatives()
 {
     int deriv_num = NX + NU;
     int deriv_idx = 0;
@@ -145,13 +157,23 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::initialize_derivatives(
     }
 }
 
+/** estimate number of nonzeros in Jacoabian */
+template <typename Dynamics, typename Polynomial, int NumSegments>
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_inner_nnz()
+{
+    int *lox = m_DiffMat.innerNonZeroPtr();
+    Eigen::Map<Eigen::Matrix<int, VARX_SIZE, 1>> mi(lox);
+    m_jac_inner_nnz. template head<VARX_SIZE>() = mi;
+    m_jac_inner_nnz. template head<VARX_SIZE>() += Eigen::Matrix<int, VARX_SIZE, 1>::Constant(NX-1);
+    m_jac_inner_nnz. template segment<VARU_SIZE>(VARX_SIZE) = Eigen::Matrix<int, VARU_SIZE, 1>::Constant(NX);
+}
 
 /** compute linearization of diferential constraints */
 template <typename Dynamics, typename Polynomial, int NumSegments>
-void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t &var, jacobian_t &A, constr_t &b,
-                                                                    const Scalar &t0, const Scalar &tf)
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t &var, jacobian_t &A, constr_t &b,
+                                                                           const Scalar &t0, const Scalar &tf)
 {
-    A = jacobian_t::Zero();
+    A.reserve(m_jac_inner_nnz);
     /** compute jacoabian of dynamics */
     local_jacobian_t jac;
 
@@ -180,8 +202,14 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t 
         }
 
         /** insert block jacobian */
-        A.template block<NX, NX>(k, k) = -t_scale * jac.template leftCols<NX>();
-        A.template block<NX, NU>(k, n + VARX_SIZE) = -t_scale * jac.template rightCols<NU>();
+        for(int j = 0; j < NX; ++j)
+        {
+            for(int m = 0; m < NX; ++m)
+                A.insert(j + k, m + k) = -t_scale * jac(j, m);
+
+            for(int m = 0; m < NU; ++m)
+                A.insert(j + k, m + n + VARX_SIZE) = -t_scale * jac(j, m + NX);
+        }
 
         n += NU;
     }
@@ -189,11 +217,12 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t 
     b = m_DiffMat * var.template head<VARX_SIZE>() - t_scale * value;
 
     A.template leftCols<VARX_SIZE>() = m_DiffMat + A.template leftCols<VARX_SIZE>();
+    //A.makeCompressed();
 }
 
 
 
-
-
 }
-#endif // ODE_COLLOCATION_HPP
+
+
+#endif // SPARSE_ODE_COLLOCATION_HPP

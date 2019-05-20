@@ -3,7 +3,7 @@
 set -e
 
 # CasADi
-wget -qO casadi.tar.gz "https://github.com/casadi/casadi/releases/download/3.0.0-rc2/osx__casadi-matlabR2015a-v3.0.0-rc2.tar.gz"
+wget -qO casadi.tar.gz "https://sourceforge.net/projects/casadi/files/CasADi/3.3.0/osx/casadi-matlabR2015a-v3.3.0.tar.gz"
 mkdir -p ~/casadi
 tar xzf casadi.tar.gz -C ~/casadi
 

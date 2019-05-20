@@ -47,7 +47,11 @@ int main(void)
     props["scale"] = 0;
     props["P"] = casadi::DM::diag(casadi::DM({0.1, 1/3.0, 1/3.0, 1/2.0, 1/5.0, 1/2.0, 1/3.0, 1/3.0, 1/3.0, 1.0, 1.0, 1.0, 1.0}));
     props["R"] = casadi::DM::diag(casadi::DM({1/0.15, 1/0.2618, 1/0.2618}));
-    PSODESolver<10,10,3,1>ps_solver(ode, tf, props);
+
+    casadi::Dict solver_options;
+    solver_options["ipopt.linear_solver"] = "mumps";
+
+    PSODESolver<10,10,3,1>ps_solver(ode, tf, props, solver_options);
 
     /** solve the problem */
     DM rk4_sol, cheb_sol, cv_sol, ps_sol;

@@ -8,6 +8,7 @@
 
 
 /** ------------------------------- */
+
 template <typename T, typename Dummy>
 struct has_lagrange
 {
@@ -20,6 +21,7 @@ struct has_lagrange
     static constexpr bool value = std::is_same<std::true_type, decltype(test<T>(nullptr))>::value;
 };
 
+
 template <typename T, typename Dummy>
 struct has_mayer
 {
@@ -31,6 +33,7 @@ struct has_mayer
     using type = decltype(test<T>(nullptr));
     static constexpr bool value = std::is_same<std::true_type, decltype(test<T>(nullptr))>::value;
 };
+
 
 
 namespace polympc {
@@ -55,8 +58,11 @@ public:
         VARU_SIZE = (NumSegments * POLY_ORDER + 1) * NU,
         VARP_SIZE = NP,
 
-        HAS_LAGRANGE = has_lagrange<LagrangeTerm, Scalar>::value,
-        HAS_MAYER    = has_mayer<MayerTerm, Scalar>::value
+        HAS_LAGRANGE = 1,
+        HAS_MAYER = 1
+
+        //HAS_LAGRANGE = has_lagrange<LagrangeTerm, Scalar>::value,
+        //HAS_MAYER    = has_mayer<MayerTerm, Scalar>::value
     };
 
     /** type to store optimization variable var = [x, u, p] */

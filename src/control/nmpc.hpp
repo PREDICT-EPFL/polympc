@@ -133,12 +133,12 @@ public:
         var0.template segment<VARX_SIZE>(0) = x0.template replicate<VARX_SIZE/NX, 1>();
         var0.template segment<1>(VARX_SIZE+VARU_SIZE) = _p0;
 
-        solver.settings.max_iter = 100;
-        solver.settings.line_search_max_iter = 10;
+        solver.settings().max_iter = 100;
+        solver.settings().line_search_max_iter = 10;
 
         solver.solve(*this, var0);
 
-        return solver._x;
+        return solver.primal_solution();
     }
 };
 }

@@ -38,7 +38,7 @@ TEST(NMPCTestCase, TestRobotNMPC)
     printf("controller_t::sqp_t::qp_solver_t size %lu\n", sizeof(controller_t::sqp_t::qp_solver_t));
 
     controller_t robot_controller;
-    robot_controller.solver.settings.iteration_callback = iteration_callback;
+    robot_controller.solver.settings().iteration_callback = iteration_callback;
 
     Eigen::Vector3d x0_list[] = {
         {-1, 0, 0},
@@ -84,7 +84,7 @@ TEST(NMPCTestCase, TestRobotNMPC)
         printf("p\n");
         std::cout << sol.tail<1>().format(fmt) << ",\n";
 
-        printf("iter %d\n", robot_controller.solver.iter);
+        printf("iter %d\n", robot_controller.solver.info().iter);
         printf("dual\n");
         std::cout << "  ode   " << robot_controller.solver._lambda.template segment<controller_t::VARX_SIZE>(0).transpose().format(fmt) << std::endl;
         std::cout << "  x0    " << robot_controller.solver._lambda.template segment<controller_t::NX>(controller_t::VARX_SIZE).transpose().format(fmt) << std::endl;

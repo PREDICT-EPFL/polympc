@@ -381,11 +381,35 @@ private:
     void update_KKT_mat(const qp_t &qp)
     {
 #ifdef QP_SOLVER_USE_SPARSE
-        // TODO: allow value updates with same sparsity pattern
-        construct_KKT_mat(qp);
+        // construct_KKT_mat(qp);
+        // TODO: more efficient update?
+        for (int k = 0; k < kkt_mat.outerSize(); ++k) {
+            for (typename SpMat::InnerIterator it(kkt_mat, k); it; ++it) {
+                int row, col;
+                row = it.row();
+                col = it.col();
+                if (row < n) {
+                    if (col < n) {
+                        // top left:  P + sigma*I
+                        it.valueRef() = qp.P.coeff(row, col) + _settings.sigma;
+                    } else {
+                        // top right:  A'
+                        it.valueRef() = qp.A.coeff(col, row-n);
+                    }
+                } else {
+                    if (col < n) {
+                        // bottom left:  A
+                        it.valueRef() = qp.A.coeff(row-n, col);
+                    } else {
+                        // bottom right:  -1/rho.*I
+                        it.valueRef() = -rho_inv_vec(row-n);
+                    }
+                }
+            }
+        }
 #else
         construct_KKT_mat(qp);
-#endif // QP_SOLVER_USE_SPARSE
+#endif
     }
 
     void update_KKT_rho()

@@ -2,11 +2,29 @@
 #define QP_SOLVER_H
 
 #include <Eigen/Dense>
+#ifdef QP_SOLVER_USE_SPARSE
 #include <Eigen/Sparse>
+#endif
 #include <cmath>
 
 namespace qp_solver {
 
+#ifdef QP_SOLVER_USE_SPARSE
+template <int _n, int _m, typename _Scalar = double>
+struct QP {
+    using Scalar = _Scalar;
+    enum {
+        n=_n,
+        m=_m
+    };
+    Eigen::SparseMatrix<Scalar> P;
+    Eigen::Matrix<int, n, 1> P_col_nnz;
+    Eigen::Matrix<Scalar, n, 1> q;
+    Eigen::SparseMatrix<Scalar> A;
+    Eigen::Matrix<int, n, 1> A_col_nnz;
+    Eigen::Matrix<Scalar, m, 1> l, u;
+};
+#else
 template <int _n, int _m, typename _Scalar = double>
 struct QP {
     using Scalar = _Scalar;
@@ -19,6 +37,7 @@ struct QP {
     Eigen::Matrix<Scalar, m, n> A;
     Eigen::Matrix<Scalar, m, 1> l, u;
 };
+#endif
 
 template <typename Scalar>
 struct qp_sover_settings_t {
@@ -116,12 +135,12 @@ public:
 
     using qp_t = QPType;
     using Scalar = typename QPType::Scalar;
-    using SpMat = Eigen::SparseMatrix<Scalar, Eigen::ColMajor>;
     using var_t = Eigen::Matrix<Scalar, n, 1>;
     using constraint_t = Eigen::Matrix<Scalar, m, 1>;
     using dual_t = Eigen::Matrix<Scalar, m, 1>;
     using kkt_vec_t = Eigen::Matrix<Scalar, n + m, 1>;
 #ifdef QP_SOLVER_USE_SPARSE
+    using SpMat = Eigen::SparseMatrix<Scalar, Eigen::ColMajor>;
     using kkt_mat_t = SpMat;
 #else
     using kkt_mat_t = Eigen::Matrix<Scalar, n + m, n + m>;
@@ -313,23 +332,23 @@ private:
                       "LinearSolver_UpLo must be Lower or Upper|Lower");
 
 #ifdef QP_SOLVER_USE_SPARSE
-        int nnz;
-        nnz = qp.P.nonZeros() + n + qp.A.nonZeros() + m;
-        if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
-            nnz += qp.A.nonZeros();
-        }
+
         kkt_mat.setZero(); // TODO: allow value updates with same sparsity pattern
-        kkt_mat.reserve(nnz);
+        Eigen::Matrix<int, n+m, 1> nnz_col;
 
-        SpMat Ps = qp.P.sparseView();
-        sparse_insert_at(kkt_mat, 0, 0, Ps);
+        nnz_col.setConstant(1);
+        nnz_col.template head<n>() = qp.P_col_nnz + qp.A_col_nnz;
+        if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
+            // We don't know nnz of A rows, assume worst case
+            nnz_col.template tail<m>().array() += n;
+        }
+        kkt_mat.reserve(nnz_col);
 
-        SpMat As = qp.A.sparseView();
-        sparse_insert_at(kkt_mat, n, 0, As);
+        sparse_insert_at(kkt_mat, 0, 0, qp.P);
+        sparse_insert_at(kkt_mat, n, 0, qp.A);
 
         if (LinearSolver_UpLo == (Eigen::Upper|Eigen::Lower)) {
-            SpMat Ats = qp.A.transpose().sparseView();
-            sparse_insert_at(kkt_mat, 0, n, Ats);
+            sparse_insert_at(kkt_mat, 0, n, qp.A.transpose());
         }
 
         for (int i = 0; i < n; i++) {
@@ -354,6 +373,7 @@ private:
     void update_KKT_rho()
     {
 #ifdef QP_SOLVER_USE_SPARSE
+        // Note: optimize by writing kkt_mat.valuePtr(). needs to be compressed and Eigen::Lower.
         for (int i = 0; i < m; i++) {
             kkt_mat.coeffRef(n+i, n+i) = -rho_inv_vec(i);
         }
@@ -362,6 +382,7 @@ private:
 #endif
     }
 
+#ifdef QP_SOLVER_USE_SPARSE
     void sparse_insert_at(SpMat &dst, int row, int col, const SpMat &src) const
     {
         for (int k = 0; k < src.outerSize(); ++k) {
@@ -370,6 +391,7 @@ private:
             }
         }
     }
+#endif
 
     void form_KKT_rhs(const qp_t &qp, kkt_vec_t& rhs)
     {

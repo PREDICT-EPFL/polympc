@@ -11,12 +11,19 @@ public:
     Eigen::Matrix<double, 2, 1> SOLUTION;
     SimpleQP()
     {
-        this->P << 4, 1,
-                   1, 2;
+        Eigen::MatrixXd P(2,2);
+        Eigen::MatrixXd A(3,2);
+        P << 4, 1,
+             1, 2;
+        A << 1, 1,
+             1, 0,
+             0, 1;
+
+        this->P = P.sparseView();
+        this->P_col_nnz << 2, 2;
         this->q << 1, 1;
-        this->A << 1, 1,
-                   1, 0,
-                   0, 1;
+        this->A = A.sparseView();
+        this->A_col_nnz << 2, 2;
         this->l << 1, 0, 0;
         this->u << 1, 0.7, 0.7;
 

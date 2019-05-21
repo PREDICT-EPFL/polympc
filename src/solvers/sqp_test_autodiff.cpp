@@ -5,6 +5,8 @@
 
 using namespace sqp;
 
+namespace sqp_test_autodiff {
+
 template <typename _Derived, typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0>
 struct ProblemBase {
     enum {
@@ -217,7 +219,4 @@ TEST(SQPTestCase, TestSimpleNLP) {
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+} // namespace sqp_test_autodiff

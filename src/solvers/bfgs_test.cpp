@@ -3,6 +3,8 @@
 #include "gtest/gtest.h"
 #include "bfgs.hpp"
 
+namespace bfgs_test {
+
 bool is_posdef(Eigen::MatrixXd H)
 {
     Eigen::EigenSolver<Eigen::MatrixXd> eigensolver(H);
@@ -63,7 +65,4 @@ TEST(BFGSTestCase, Test2D_indefinite) {
     std::cout << "B\n" << B << std::endl;
 }
 
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+} // namespace bfgs_test

@@ -23,6 +23,8 @@ struct QP {
     Eigen::SparseMatrix<Scalar> A;
     Eigen::Matrix<int, n, 1> A_col_nnz;
     Eigen::Matrix<Scalar, m, 1> l, u;
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 #else
 template <int _n, int _m, typename _Scalar = double>
@@ -36,6 +38,8 @@ struct QP {
     Eigen::Matrix<Scalar, n, 1> q;
     Eigen::Matrix<Scalar, m, n> A;
     Eigen::Matrix<Scalar, m, 1> l, u;
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 #endif
 
@@ -185,6 +189,9 @@ public:
 
     kkt_mat_t kkt_mat;
     linear_solver_t linear_solver;
+
+    // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     QPSolver() { }
 

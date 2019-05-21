@@ -100,6 +100,9 @@ public:
     Scalar _primal_step_norm;
     int _qp_iter = 0;
 
+    // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     void solve(Problem &prob, const var_t &x0)
     {
         var_t p; // search direction

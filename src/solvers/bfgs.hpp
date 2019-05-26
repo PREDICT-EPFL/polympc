@@ -3,18 +3,6 @@
 
 #include <Eigen/Dense>
 
-template <template<typename...> class Base>
-struct is_template_base_of_impl {
-    template <typename... Us> static std::true_type check(Base<Us...> *);
-    static std::false_type check(...);
-};
-
-template <template<typename...> class Base, typename T>
-using is_template_base_of = decltype(is_template_base_of_impl<Base>::check((T*)nullptr));
-
-template <typename T> using is_eigen_dense = is_template_base_of<Eigen::DenseBase, T>;
-
-
 /** Damped BFGS update
  * Implements "Procedure 18.2 Damped BFGS updating for SQP" form Numerical Optimization by Nocedal.
  *
@@ -25,8 +13,6 @@ template <typename T> using is_eigen_dense = is_template_base_of<Eigen::DenseBas
 template <typename Mat, typename Vec>
 void BFGS_update(Mat& B, const Vec& s, const Vec& y)
 {
-    static_assert(is_eigen_dense<Mat>::value && is_eigen_dense<Vec>::value,
-                  "Requires Eigen dense type");
     static_assert(Mat::RowsAtCompileTime == Mat::ColsAtCompileTime &&
                   Mat::RowsAtCompileTime == Vec::RowsAtCompileTime &&
                   Vec::ColsAtCompileTime == 1,

@@ -6,6 +6,13 @@
 #include "qp_solver.hpp"
 #include "bfgs.hpp"
 
+#ifdef SOLVER_DEBUG
+#include <Eigen/Eigenvalues>
+#define SOLVER_ASSERT(x) eigen_assert(x)
+#else
+#define SOLVER_ASSERT(x)
+#endif
+
 namespace sqp {
 
 template <typename Scalar>
@@ -159,6 +166,21 @@ public:
     inline sqp_info_t& info() { return _info; }
 
 private:
+
+#ifdef SOLVER_DEBUG
+    bool _is_posdef(hessian_t H)
+    {
+        Eigen::EigenSolver<hessian_t> eigensolver(H);
+        for (int i = 0; i < eigensolver.eigenvalues().rows(); i++) {
+            double v = eigensolver.eigenvalues()(i).real();
+            if (v <= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+#endif
+
     bool termination_criteria() const
     {
         if (_primal_step_norm <= _settings.eps_prim &&
@@ -228,6 +250,7 @@ private:
         } else {
             y += _grad_L; // y = grad_L_prev - grad_L
             BFGS_update(B, _step_prev, y);
+            SOLVER_ASSERT(_is_posdef(B));
         }
 
         // Equality constraints

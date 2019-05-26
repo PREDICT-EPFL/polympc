@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#define SOLVER_DEBUG
 #include "sqp.hpp"
 
 using namespace sqp;

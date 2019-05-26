@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/AutoDiff>
 #include "gtest/gtest.h"
+#define SOLVER_DEBUG
 #include "sqp.hpp"
 
 using namespace sqp;
@@ -19,6 +20,7 @@ struct ProblemBase {
     using var_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using grad_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
     using hessian_t = Eigen::Matrix<Scalar, VAR_SIZE, VAR_SIZE>;
+    using MatX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
 
     using b_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
@@ -61,13 +63,13 @@ struct ProblemBase {
 
         for (int i = 0; i < ad_eq.rows(); i++) {
             b_eq[i] = ad_eq[i].value();
-            Eigen::Ref<Eigen::MatrixXd> deriv = ad_eq[i].derivatives().transpose();
+            Eigen::Ref<MatX> deriv = ad_eq[i].derivatives().transpose();
             A_eq.row(i) = deriv;
         }
 
         for (int i = 0; i < ad_ineq.rows(); i++) {
             b_ineq[i] = ad_ineq[i].value();
-            Eigen::Ref<Eigen::MatrixXd> deriv = ad_ineq[i].derivatives().transpose();
+            Eigen::Ref<MatX> deriv = ad_ineq[i].derivatives().transpose();
             A_ineq.row(i) = deriv;
         }
     }
@@ -81,7 +83,7 @@ struct NLP : public ProblemBase<NLP,
                                 /* Nineq */1>  {
     const Scalar a = 1;
     const Scalar b = 100;
-    Eigen::Vector2d SOLUTION = {0.7071067812, 0.707106781};
+    Eigen::Matrix<Scalar, 2, 1> SOLUTION = {0.7071067812, 0.707106781};
 
     template <typename DerivedA, typename DerivedB>
     void cost(const DerivedA& x, DerivedB &cst)

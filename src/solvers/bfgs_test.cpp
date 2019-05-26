@@ -5,9 +5,10 @@
 
 namespace bfgs_test {
 
-bool is_posdef(Eigen::MatrixXd H)
+template <typename Mat>
+bool is_posdef(Mat H)
 {
-    Eigen::EigenSolver<Eigen::MatrixXd> eigensolver(H);
+    Eigen::EigenSolver<Mat> eigensolver(H);
     for (int i = 0; i < eigensolver.eigenvalues().rows(); i++) {
         double v = eigensolver.eigenvalues()(i).real();
         if (v <= 0) {
@@ -62,6 +63,24 @@ TEST(BFGSTestCase, Test2D_indefinite) {
 
         EXPECT_TRUE(is_posdef(B));
     }
+    std::cout << "B\n" << B << std::endl;
+}
+
+TEST(BFGSTestCase, TestSmallStep) {
+    using Scalar = float;
+    using Mat = Eigen::Matrix<Scalar, 2, 2>;
+    using Vec = Eigen::Matrix<Scalar, 2, 1>;
+
+    Vec step, y;
+    Mat B;
+
+    B << 418.112, 1213, 1213, 3522.27;
+    EXPECT_TRUE(is_posdef(B));
+    step << -1.2659e-06, 1.25816e-06;
+    y << -0.00963563, -0.00957048;
+    BFGS_update(B, step, y);
+    EXPECT_TRUE(is_posdef(B));
+
     std::cout << "B\n" << B << std::endl;
 }
 

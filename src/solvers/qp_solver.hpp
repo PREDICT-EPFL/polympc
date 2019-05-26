@@ -7,6 +7,12 @@
 #endif
 #include <cmath>
 
+#ifdef SOLVER_DEBUG
+#define SOLVER_ASSERT(x) eigen_assert(x)
+#else
+#define SOLVER_ASSERT(x)
+#endif
+
 namespace qp_solver {
 
 #ifdef QP_SOLVER_USE_SPARSE
@@ -438,13 +444,13 @@ private:
 #else
         linear_solver.compute(kkt_mat);
 #endif
-        eigen_assert(linear_solver.info() == Eigen::Success);
+        SOLVER_ASSERT(linear_solver.info() == Eigen::Success);
     }
 
     void compute_KKT()
     {
         linear_solver.compute(kkt_mat);
-        eigen_assert(linear_solver.info() == Eigen::Success);
+        SOLVER_ASSERT(linear_solver.info() == Eigen::Success);
     }
 
 

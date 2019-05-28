@@ -10,7 +10,7 @@ include_directories(${GTEST_INCLUDE_DIRS})
 set(CMAKE_BUILD_TYPE "Debug")
 
 add_executable(qp_solver_test qp_solver_test.cpp qp_solver_sparse_test.cpp test_main.cpp)
-target_link_libraries(qp_solver_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES})
+target_link_libraries(qp_solver_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
 
 add_executable(sqp_test sqp_test.cpp sqp_test_autodiff.cpp bfgs_test.cpp test_main.cpp)
-target_link_libraries(sqp_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES})
+target_link_libraries(sqp_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)

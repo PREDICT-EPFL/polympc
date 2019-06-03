@@ -254,7 +254,7 @@ void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::value_g
             /** extract hessian */
             for(int i = 0; i < NX + NU; ++i)
             {
-                hes.template middleRows(i,1) = ad_value.derivatives()(i).derivatives().transpose();
+                hes.template middleRows<1>(i) = ad_value.derivatives()(i).derivatives().transpose();
             }
             cost_hessian.template block<NX, NX>(k, k) = coeff * hes.template topLeftCorner<NX, NX>();
             cost_hessian.template block<NX, NU>(k, n + VARX_SIZE) = coeff * hes. template topRightCorner<NX, NU>();
@@ -291,7 +291,7 @@ void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::value_g
         cost_gradient.template head<NX + NU>() += ad_value.value().derivatives();
         for(int i = 0; i < NX + NU; ++i)
         {
-            hes.template middleRows(i,1) = ad_value.derivatives()(i).derivatives().transpose();
+            hes.template middleRows<1>(i) = ad_value.derivatives()(i).derivatives().transpose();
         }
         cost_hessian.template topLeftCorner<NX + NU, NX + NU>() += hes;
     }

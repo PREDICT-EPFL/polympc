@@ -61,6 +61,10 @@ public:
 
     void linearized(const var_t &var, jacobian_t &A, constr_t &b,
                     const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1));
+    void _linearized(const var_t &var, jacobian_t &A, constr_t &b,
+                     const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1));
+    void _linearized_same_pattern(const var_t &var, jacobian_t &A, constr_t &b,
+                                  const Scalar &t0 = Scalar(-1), const Scalar &tf = Scalar(1));
 
     void initialize_derivatives();
     void compute_inner_nnz();
@@ -105,7 +109,7 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_diff_mat
         for(int k = 0; k < (NumSegments - 1) * POLY_ORDER; k += POLY_ORDER)
             DM.template block<NUM_NODES - 1, NUM_NODES>(k, k) = D.template topLeftCorner<NUM_NODES - 1, NUM_NODES>();
 
-        Eigen::SparseMatrix<double> SpDM = DM.sparseView();
+        Eigen::SparseMatrix<Scalar> SpDM = DM.sparseView();
         m_DiffMat = Eigen::KroneckerProductSparse<Eigen::SparseMatrix<Scalar>, Eigen::SparseMatrix<Scalar>>(SpDM,E);
 
         m_DiffMat_Ext.resize(constr_t::RowsAtCompileTime, var_t::RowsAtCompileTime);
@@ -161,8 +165,8 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::initialize_deriv
 template <typename Dynamics, typename Polynomial, int NumSegments>
 void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_inner_nnz()
 {
-    int *lox = m_DiffMat.innerNonZeroPtr();
-    Eigen::Map<Eigen::Matrix<int, VARX_SIZE, 1>> mi(lox);
+    int *inner_nnz = m_DiffMat.innerNonZeroPtr();
+    Eigen::Map<Eigen::Matrix<int, VARX_SIZE, 1>> mi(inner_nnz);
     m_jac_inner_nnz. template head<VARX_SIZE>() = mi;
     m_jac_inner_nnz. template head<VARX_SIZE>() += Eigen::Matrix<int, VARX_SIZE, 1>::Constant(NX-1);
     m_jac_inner_nnz. template segment<VARU_SIZE>(VARX_SIZE) = Eigen::Matrix<int, VARU_SIZE, 1>::Constant(NX);
@@ -171,6 +175,16 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_inner_nn
 /** compute linearization of diferential constraints */
 template <typename Dynamics, typename Polynomial, int NumSegments>
 void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t &var, jacobian_t &A, constr_t &b,
+                                                                           const Scalar &t0, const Scalar &tf)
+{
+    if(A.nonZeros() != m_jac_inner_nnz.sum())
+        _linearized(var, A, b, t0, tf);
+    else
+        _linearized_same_pattern(var, A, b, t0, tf);
+}
+
+template <typename Dynamics, typename Polynomial, int NumSegments>
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::_linearized(const var_t &var, jacobian_t &A, constr_t &b,
                                                                            const Scalar &t0, const Scalar &tf)
 {
     A.reserve(m_jac_inner_nnz);
@@ -217,10 +231,65 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const
     b = m_DiffMat * var.template head<VARX_SIZE>() - t_scale * value;
 
     A.template leftCols<VARX_SIZE>() = m_DiffMat + A.template leftCols<VARX_SIZE>();
-    //A.makeCompressed();
+    A.makeCompressed();
 }
 
 
+template <typename Dynamics, typename Polynomial, int NumSegments>
+void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::_linearized_same_pattern(const var_t &var, jacobian_t &A, constr_t &b,
+                                                                                         const Scalar &t0, const Scalar &tf)
+{
+    /** compute jacoabian of dynamics */
+    local_jacobian_t jac;
+
+    constr_t value;
+    Scalar t_scale = (tf - t0) / (2 * NumSegments);
+
+    /** initialize AD veriables */
+    int n = 0;
+    int nnz_count = 0;
+    for(int k = 0; k < VARX_SIZE; k += NX)
+    {
+        /** @note is it an embedded cast ??*/
+        for(int i = 0; i < NX; i++)
+            m_ADx(i).value() = var.template segment<NX>(k)(i);
+
+        for(int i = 0; i < NU; i++)
+            m_ADu(i).value() = var.template segment<NU>(n + VARX_SIZE)(i);
+
+        m_f(m_ADx, m_ADu,
+            var.template segment<NP>(VARX_SIZE + VARU_SIZE), m_ADy);
+
+        /** compute value and first derivatives */
+        for(int i = 0; i< NX; i++)
+        {
+            value. template segment<NX>(k)(i) = m_ADy(i).value();
+            jac.row(i) = m_ADy(i).derivatives();
+        }
+
+        /** set block jacobian */
+        if(nnz_count > 3)
+            nnz_count = 1; // set to one to glue blocks
+
+        for(int j = 0; j < NX; ++j)
+        {
+            for(int m = 0; m < NX; ++m)
+                A.valuePtr()[A.outerIndexPtr()[k + j] + m + nnz_count]  = -t_scale * jac(m,j);
+        }
+
+        for(int j = 0; j < NU; ++j)
+        {
+            for (int m = 0; m < NX; ++m)
+                A.valuePtr()[A.outerIndexPtr()[j + n + VARX_SIZE] + m] = -t_scale * jac(m, j + NX);
+        }
+        ++nnz_count;
+
+        n += NU;
+    }
+
+    b = m_DiffMat * var.template head<VARX_SIZE>() - t_scale * value;
+    A.diagonal() = m_DiffMat.diagonal() + A.diagonal();
+}
 
 }
 

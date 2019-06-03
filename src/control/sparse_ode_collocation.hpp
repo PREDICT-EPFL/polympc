@@ -268,7 +268,7 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::_linearized_same
         }
 
         /** set block jacobian */
-        if(nnz_count > 3)
+        if(nnz_count > POLY_ORDER)
             nnz_count = 1; // set to one to glue blocks
 
         for(int j = 0; j < NX; ++j)

@@ -4,8 +4,7 @@
 #include "control/cost_collocation.hpp"
 #include "control/ode_collocation.hpp"
 #include "control/problem.hpp"
-#include "qpsolver/osqp_solver.hpp"
-#include "qpsolver/sqp.hpp"
+#include "solvers/sqp.hpp"
 
 namespace polympc {
 
@@ -35,10 +34,8 @@ public:
         VARP_SIZE = ode_colloc_t::VARP_SIZE,
         VAR_SIZE = var_t::RowsAtCompileTime,
 
-        NUM_EQ = VARX_SIZE + NX, // ode_collocation + x0
+        NUM_EQ = VARX_SIZE,
         NUM_INEQ = 0,
-        NUM_BOX = VARX_SIZE - NX + VARU_SIZE, // X without x0 and U
-        NUM_CONSTR  = NUM_EQ + NUM_INEQ + NUM_BOX,
     };
 
     using ode_jacobian_t = typename ode_colloc_t::jacobian_t;
@@ -48,18 +45,17 @@ public:
 
     using sqp_t = sqp::SQP<nmpc>;
 
-    using b_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
+    using eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
-    using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
+    using ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using b_box_t = Eigen::Matrix<Scalar, NUM_BOX, 1>;
-    using A_box_t = Eigen::Matrix<Scalar, NUM_BOX, VAR_SIZE>;
 
     cost_colloc_t cost_f;
     ode_colloc_t ps_ode;
     sqp_t solver;
 
     State _x0;
+    Parameters _p0;
     State _constr_xl, _constr_xu;
     Control _constr_ul, _constr_uu;
 
@@ -69,7 +65,7 @@ public:
      * constraints:
      * xl < x < xu
      * ul < u < uu
-     * x0 - x(t0) = 0
+     * x0 = x(t0)
      * ps_ode(X) = 0
      */
 
@@ -83,49 +79,49 @@ public:
         cost_f.value_gradient(var, cst, grad);
     }
 
-    void constraint(const var_t& var, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box) {
+    void constraint(const var_t& var, eq_t& b_eq, ineq_t& b_ineq, var_t& lbx, var_t& ubx) {
         varx_t c_ode;
         ps_ode(var, c_ode);
-        _constraint(var, c_ode, b_eq, b_ineq, b_box, l_box, u_box);
+        set_constraints(var, c_ode, b_eq, b_ineq, lbx, ubx);
     }
 
-    void _constraint(const var_t& var, const varx_t& c_ode, b_eq_t& b_eq, b_ineq_t& b_ineq, b_box_t& b_box, b_box_t& l_box, b_box_t& u_box)
+    void set_constraints(const var_t& var, const varx_t& c_ode, eq_t& eq, ineq_t& ineq, var_t& lbx, var_t& ubx)
     {
-        l_box << _constr_xl.template replicate<VARX_SIZE/NX-1, 1>(), _constr_ul.template replicate<VARU_SIZE/NU, 1>();
-        u_box << _constr_xu.template replicate<VARX_SIZE/NX-1, 1>(), _constr_uu.template replicate<VARU_SIZE/NU, 1>();
-        b_box << var.template head<VARX_SIZE-NX>(), var.template segment<VARU_SIZE>(VARX_SIZE);
-        b_eq << c_ode, var.template segment<NX>(VARX_SIZE - NX) - _x0;
+        (void) ineq; // unused
+        eq << c_ode;
+        lbx << _constr_xl.template replicate<VARX_SIZE/NX-1, 1>(),
+               _x0,
+               _constr_ul.template replicate<VARU_SIZE/NU, 1>(),
+               _p0;
+        ubx << _constr_xu.template replicate<VARX_SIZE/NX-1, 1>(),
+               _x0,
+               _constr_uu.template replicate<VARU_SIZE/NU, 1>(),
+               _p0;
     }
 
     void constraint_linearized(const var_t& var,
                                A_eq_t& A_eq,
-                               b_eq_t& b_eq,
+                               eq_t& eq,
                                A_ineq_t& A_ineq,
-                               b_ineq_t& b_ineq,
-                               A_box_t& A_box,
-                               b_box_t& b_box,
-                               b_box_t& l_box,
-                               b_box_t& u_box)
+                               ineq_t& ineq,
+                               var_t& lbx,
+                               var_t& ubx)
     {
         // TODO: avoid stack allocation
         varx_t c_ode;
         ode_jacobian_t ode_jac;
 
         ps_ode.linearized(var, ode_jac, c_ode);
-        _constraint(var, c_ode, b_eq, b_ineq, b_box, l_box, u_box);
+        set_constraints(var, c_ode, eq, ineq, lbx, ubx);
 
         A_eq.setZero();
         A_eq.template topRows<VARX_SIZE>() = ode_jac;
-        A_eq.template block<NX,NX>(VARX_SIZE, VARX_SIZE-NX).setIdentity();
-
-        A_box.setZero();
-        A_box.template block<VARX_SIZE-NX, VARX_SIZE-NX>(0,0).setIdentity();
-        A_box.template block<VARU_SIZE, VARU_SIZE>(VARX_SIZE-NX,VARX_SIZE).setIdentity();
     }
 
     var_t solve(const State& x0, const State& xl, const State& xu, const Control& ul, const Control& uu)
     {
         _x0 = x0;
+        _p0 << 1.0;
 
         _constr_xl = xl;
         _constr_xu = xu;
@@ -135,11 +131,14 @@ public:
         var_t var0;
         var0.setZero();
         var0.template segment<VARX_SIZE>(0) = x0.template replicate<VARX_SIZE/NX, 1>();
-        var0.template segment<1>(VARX_SIZE+VARU_SIZE).setConstant(1.0);
+        var0.template segment<1>(VARX_SIZE+VARU_SIZE) = _p0;
+
+        solver.settings().max_iter = 100;
+        solver.settings().line_search_max_iter = 10;
 
         solver.solve(*this, var0);
 
-        return solver._x;
+        return solver.primal_solution();
     }
 };
 }

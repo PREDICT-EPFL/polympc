@@ -25,12 +25,6 @@ struct ProblemBase {
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
 };
 
-void iteration_callback(const Eigen::MatrixXd &x)
-{
-    Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "],");
-    std::cout << x.transpose().format(fmt) << std::endl;
-}
-
 struct SimpleNLP_2D {
     enum {
         VAR_SIZE = 2,

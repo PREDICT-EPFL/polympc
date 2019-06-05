@@ -106,6 +106,7 @@ public:
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
+    Scalar _cost;
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -218,12 +219,11 @@ private:
             BOX_IDX = NUM_INEQ + NUM_EQ,
         };
         const Scalar UNBOUNDED = 1e20;
-        Scalar cost;
 
         gradient_t& grad_f = _qp.q;
         hessian_t& B = _qp.P;
 
-        prob.cost_linearized(_x, grad_f, cost);
+        prob.cost_linearized(_x, grad_f, _cost);
 
         // TODO: avoid stack allocation (stack overflow)
         constr_eq_t b_eq;
@@ -294,26 +294,27 @@ private:
     /** Line search in direction p using l1 merit function. */
     Scalar line_search(Problem &prob, const var_t& p)
     {
-        Scalar cost, mu, phi_l1, Dp_phi_l1;
-        gradient_t cost_gradient;
+        // Note: using members _cost and _qp.q, which are updated in solve_qp().
+
+        Scalar mu, phi_l1, Dp_phi_l1;
+        gradient_t& cost_gradient = _qp.q;
         const Scalar tau = _settings.tau; // line search step decrease, 0 < tau < settings.tau
 
-        // TODO: reuse computation
-        prob.cost_linearized(_x, cost_gradient, cost);
-        Scalar constr_l1 = l1_constraint_violation(_x, prob);
+        Scalar constr_l1 = constraint_norm(_x, prob);
 
         // TODO: get mu from merit function model using hessian of Lagrangian
         mu = cost_gradient.dot(p) / ((1 - _settings.rho) * constr_l1);
 
-        phi_l1 = cost + mu * constr_l1;
+        phi_l1 = _cost + mu * constr_l1;
         Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
         Scalar alpha = 1.0;
         for (int i = 1; i < _settings.line_search_max_iter; i++) {
+            Scalar cost_step;
             var_t x_step = _x + alpha*p;
-            prob.cost(x_step, cost);
+            prob.cost(x_step, cost_step);
 
-            Scalar phi_l1_step = cost + mu * l1_constraint_violation(x_step, prob);
+            Scalar phi_l1_step = cost_step + mu * constraint_norm(x_step, prob);
             if (phi_l1_step <= phi_l1 + alpha * _settings.eta * Dp_phi_l1) {
                 // accept step
                 break;
@@ -324,7 +325,8 @@ private:
         return alpha;
     }
 
-    Scalar l1_constraint_violation(const var_t &x, Problem &prob) const
+    /** L1 norm of constraint violation */
+    Scalar constraint_norm(const var_t &x, Problem &prob) const
     {
         Scalar cl1 = DIV_BY_ZERO_REGUL;
         constr_eq_t c_eq;

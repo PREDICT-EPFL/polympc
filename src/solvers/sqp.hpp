@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <limits>
 #include "qp_solver.hpp"
 #include "bfgs.hpp"
 
@@ -88,7 +89,7 @@ public:
     using constr_box_t = var_t;
 
     // Constants
-    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::min()*1e+10;
 
     // Solver state variables
     var_t _x;
@@ -105,7 +106,6 @@ public:
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
-    int _qp_iter = 0;
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

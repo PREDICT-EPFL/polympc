@@ -220,7 +220,7 @@ TEST(SQPTestCase, TestSimpleNLP) {
     x = solver.primal_solution();
 
     std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "qp_iter " << solver._qp_iter << std::endl;
+    std::cout << "qp_iter " << solver.info().qp_solver_iter << std::endl;
     std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));

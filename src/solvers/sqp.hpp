@@ -43,7 +43,7 @@ struct sqp_settings_t {
 struct sqp_status_t {
     enum {
         SOLVED,
-        MAX_ITER,
+        MAX_ITER_EXCEEDED,
         INVALID_SETTINGS
     } value;
 };
@@ -58,7 +58,7 @@ struct sqp_info_t {
  * minimize     f(x)
  * subject to   ce(x)  = 0
  *              ci(x) <= 0
- *         l <= cb(x) <= u
+ *              l <= x <= u
  */
 template <typename _Problem>
 class SQP {
@@ -129,7 +129,7 @@ public:
 
             alpha = line_search(prob, p);
 
-            /* Step */
+            // take step
             _x = _x + alpha * p;
             _lambda = _lambda + alpha * p_lambda;
 
@@ -149,7 +149,7 @@ public:
         }
 
         if (iter > _settings.max_iter) {
-            _info.status.value = sqp_status_t::MAX_ITER;
+            _info.status.value = sqp_status_t::MAX_ITER_EXCEEDED;
         }
     }
 

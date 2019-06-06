@@ -7,10 +7,8 @@
 #endif
 #include <cmath>
 
-#ifdef SOLVER_DEBUG
+#ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)
-#else
-#define SOLVER_ASSERT(x)
 #endif
 
 namespace qp_solver {

@@ -2,6 +2,7 @@
 #include <unsupported/Eigen/AutoDiff>
 #include "gtest/gtest.h"
 #define SOLVER_DEBUG
+#define SOLVER_ASSERT(x) EXPECT_TRUE(x)
 #include "sqp.hpp"
 
 using namespace sqp;
@@ -76,7 +77,7 @@ struct ProblemBase {
 };
 
 
-struct NLP : public ProblemBase<NLP,
+struct ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock,
                                 double,
                                 /* Nx    */2,
                                 /* Neq   */1,
@@ -114,18 +115,20 @@ void callback(void *solver_p)
     std::cout << s._x.transpose().format(fmt) << std::endl;
 }
 
-#if 0 // BFGS not positive definite assert fails
-TEST(SQPTestCase, TestNLP) {
-    using Solver = SQP<NLP>;
-    NLP problem;
+#if 0 // suspended, see issue #13
+TEST(SQPTestCase, TestConstrainedRosenbrock) {
+    using Solver = SQP<ConstrainedRosenbrock>;
+    ConstrainedRosenbrock problem;
     Solver solver;
     Eigen::Vector2d x0, x;
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     x0 << 0, 0;
     solver.settings().max_iter = 1000;
     solver.settings().line_search_max_iter = 10;
     // solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
 
     x = solver.primal_solution();
 

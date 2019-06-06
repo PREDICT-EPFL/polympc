@@ -9,9 +9,10 @@
 
 #ifdef SOLVER_DEBUG
 #include <Eigen/Eigenvalues>
+#endif
+
+#ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)
-#else
-#define SOLVER_ASSERT(x)
 #endif
 
 namespace sqp {
@@ -262,7 +263,9 @@ private:
         } else {
             y += _grad_L; // y = grad_L_prev - grad_L
             BFGS_update(B, _step_prev, y);
+#ifdef SOLVER_DEBUG
             SOLVER_ASSERT(_is_posdef(B));
+#endif
         }
 
         // Equality constraints

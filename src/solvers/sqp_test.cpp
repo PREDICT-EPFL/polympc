@@ -55,9 +55,10 @@ struct SimpleNLP_2D {
 
     void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, var_t& lbx, var_t& ubx)
     {
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
         b_ineq << 1 - x.squaredNorm(), x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
         lbx << 0, 0; // x0 > 0 and x1 > 0
-        ubx << INFINITY, INFINITY;
+        ubx << infinity, infinity;
     }
 
     void constraint_linearized(const var_t& x,

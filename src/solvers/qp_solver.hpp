@@ -6,6 +6,7 @@
 #include <Eigen/Sparse>
 #endif
 #include <cmath>
+#include <limits>
 
 #ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)
@@ -162,7 +163,7 @@ public:
     static constexpr Scalar RHO_TOL = 1e-4;
     static constexpr Scalar RHO_EQ_FACTOR = 1e+3;
     static constexpr Scalar LOOSE_BOUNDS_THRESH = 1e+16;
-    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::epsilon();
 
     // Solver state variables
     int iter;

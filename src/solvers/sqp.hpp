@@ -90,7 +90,7 @@ public:
     using constr_box_t = var_t;
 
     // Constants
-    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::min()*1e+10;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::epsilon();
 
     // Solver state variables
     var_t _x;

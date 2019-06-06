@@ -101,8 +101,9 @@ struct ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock,
         // x^2 + y^2 == 1
         eq << x.squaredNorm() - 1;
 
-        lbx << -INFINITY, -INFINITY;
-        ubx << INFINITY, INFINITY;
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
+        lbx << -infinity, -infinity;
+        ubx << infinity, infinity;
     }
 };
 
@@ -160,8 +161,9 @@ struct Rosenbrock : public ProblemBase<Rosenbrock,
     void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
     {
         // unconstrained
-        lbx << -INFINITY, -INFINITY;
-        ubx << INFINITY, INFINITY;
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
+        lbx << -infinity, -infinity;
+        ubx << infinity, infinity;
     }
 };
 
@@ -197,10 +199,11 @@ struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
     template <typename A, typename B, typename C>
     void constraint(const A& x, B& eq, C& ineq, var_t& lbx, var_t& ubx)
     {
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
         ineq << 1 - x.squaredNorm(),
                   x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
         lbx << 0, 0; // x0 > 0 and x1 > 0
-        ubx << INFINITY, INFINITY;
+        ubx << infinity, infinity;
     }
 
 };

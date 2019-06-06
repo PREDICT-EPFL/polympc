@@ -81,9 +81,11 @@ TEST(SQPTestCase, TestSimpleNLP) {
 
     // feasible initial point
     Eigen::Vector2d x0 = {1.2, 0.1};
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     solver.settings().max_iter = 100;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
@@ -97,9 +99,11 @@ TEST(SQPTestCase, InfeasibleStart) {
 
     // infeasible initial point
     Eigen::Vector2d x0 = {2, -1};
+    Eigen::Vector4d y0;
+    y0.setOnes();
 
     solver.settings().max_iter = 100;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
@@ -149,9 +153,8 @@ TEST(SQPTestCase, TestSimpleQP) {
     SimpleQP problem;
     SQP<SimpleQP> solver;
     Eigen::Vector2d x;
-    Eigen::Vector2d x0 = {0, 0};
 
-    solver.solve(problem, x0);
+    solver.solve(problem);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));

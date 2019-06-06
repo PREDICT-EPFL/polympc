@@ -44,6 +44,7 @@ public:
     using varu_t = typename Eigen::Matrix<Scalar, VARU_SIZE, 1>;
 
     using sqp_t = sqp::SQP<nmpc>;
+    using dual_t = typename sqp_t::dual_t;
 
     using eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
     using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
@@ -133,10 +134,13 @@ public:
         var0.template segment<VARX_SIZE>(0) = x0.template replicate<VARX_SIZE/NX, 1>();
         var0.template segment<1>(VARX_SIZE+VARU_SIZE) = _p0;
 
+        dual_t y0;
+        y0.setZero();
+
         solver.settings().max_iter = 100;
         solver.settings().line_search_max_iter = 10;
 
-        solver.solve(*this, var0);
+        solver.solve(*this, var0, y0);
 
         return solver.primal_solution();
     }

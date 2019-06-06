@@ -111,15 +111,41 @@ public:
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void solve(Problem &prob, const var_t &x0)
+    void solve(Problem &prob, const var_t &x0, const dual_t &lambda0)
+    {
+        _x = x0;
+        _lambda = lambda0;
+        _solve(prob);
+    }
+
+    void solve(Problem &prob)
+    {
+        _x.setZero();
+        _lambda.setZero();
+        _solve(prob);
+    }
+
+    inline const var_t& primal_solution() const { return _x; }
+    inline var_t& primal_solution() { return _x; }
+
+    inline const dual_t& dual_solution() const { return _lambda; }
+    inline dual_t& dual_solution() { return _lambda; }
+
+    inline const settings_t& settings() const { return _settings; }
+    inline settings_t& settings() { return _settings; }
+
+    inline const sqp_info_t& info() const { return _info; }
+    inline sqp_info_t& info() { return _info; }
+
+private:
+
+    void _solve(Problem &prob)
     {
         var_t p; // search direction
         dual_t p_lambda; // dual search direction
         Scalar alpha; // step size
 
         // initialize
-        _x = x0;
-        _lambda.setZero();
         _info.qp_solver_iter = 0;
 
         int& iter = _info.iter;
@@ -153,20 +179,6 @@ public:
             _info.status.value = sqp_status_t::MAX_ITER_EXCEEDED;
         }
     }
-
-    inline const var_t& primal_solution() const { return _x; }
-    inline var_t& primal_solution() { return _x; }
-
-    inline const dual_t& dual_solution() const { return _lambda; }
-    inline dual_t& dual_solution() { return _lambda; }
-
-    inline const settings_t& settings() const { return _settings; }
-    inline settings_t& settings() { return _settings; }
-
-    inline const sqp_info_t& info() const { return _info; }
-    inline sqp_info_t& info() { return _info; }
-
-private:
 
 #ifdef SOLVER_DEBUG
     bool _is_posdef(hessian_t H)

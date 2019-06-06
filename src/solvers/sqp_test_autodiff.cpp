@@ -166,13 +166,12 @@ TEST(SQPTestCase, TestRosenbrock) {
     using Solver = SQP<Rosenbrock>;
     Rosenbrock problem;
     Solver solver;
-    Eigen::Vector2d x0, x;
+    Eigen::Vector2d x;
 
-    x0 << 0, 0;
     solver.settings().max_iter = 1000;
     // solver.settings().line_search_max_iter = 4;
     solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem, x0);
+    solver.solve(problem);
 
     x = solver.primal_solution();
 
@@ -211,11 +210,13 @@ TEST(SQPTestCase, TestSimpleNLP) {
     // feasible initial point
     Eigen::Vector2d x;
     Eigen::Vector2d x0 = {1.2, 0.1};
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     solver.settings().max_iter = 100;
     solver.settings().line_search_max_iter = 4;
     solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
 
     x = solver.primal_solution();
 

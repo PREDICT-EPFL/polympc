@@ -216,7 +216,8 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::SX sym_dynamics = dynamics(casadi::SXVector({x,u}))[0];
     casadi::SX aug_dynamics = casadi::SX::vertcat({sym_dynamics, p_dynamics});
 
-    scale = true;
+    /** @bug : remove this */
+    scale = false;
 
     /** evaluate augmented dynamics */
     casadi::Function aug_dynamo = casadi::Function("AUG_DYNAMO", {aug_state, aug_control}, {aug_dynamics});
@@ -257,6 +258,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::SX lagrange, residual;
     if(scale)
     {
+        /** @bug dimensions bug here */
         casadi::SX sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v(0))})[0];
         casadi::SX _invSX = invSX(casadi::Slice(0, NX), casadi::Slice(0, NX));
         residual  = sym_path - output({casadi::SX::mtimes(_invSX, x)})[0];
@@ -436,7 +438,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
     OptimalControl = casadi::DM::mtimes(invSU, casadi::DM::reshape(opt_u, (NU + 1), N + 1));
 
     stats = NLP_Solver.stats();
-    std::cout << stats << "\n";
+    //std::cout << stats << "\n";
 
     std::string solve_status = static_cast<std::string>(stats["return_status"]);
     if(solve_status.compare("Invalid_Number_Detected") == 0)

@@ -1,0 +1,5 @@
+site_name: PolyMPC
+theme: readthedocs
+nav:
+  - Home: index.md
+  - Build documentation: build_doc.md

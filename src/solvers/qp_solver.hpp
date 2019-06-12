@@ -6,11 +6,10 @@
 #include <Eigen/Sparse>
 #endif
 #include <cmath>
+#include <limits>
 
-#ifdef SOLVER_DEBUG
+#ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)
-#else
-#define SOLVER_ASSERT(x)
 #endif
 
 namespace qp_solver {
@@ -84,13 +83,14 @@ struct qp_sover_settings_t {
 
 typedef enum {
     SOLVED,
-    MAX_ITER,
-    UNSOLVED
+    MAX_ITER_EXCEEDED,
+    UNSOLVED,
+    UNINITIALIZED
 } status_t;
 
 template <typename Scalar>
 struct qp_solver_info_t {
-    status_t status = UNSOLVED; /**< Solver status */
+    status_t status = UNINITIALIZED; /**< Solver status */
     int iter = 0;               /**< Number of iterations */
     int rho_updates = 0;        /**< Number of rho updates (factorizations) */
     Scalar rho_estimate = 0;    /**< Last rho estimate */
@@ -106,11 +106,14 @@ struct qp_solver_info_t {
         case SOLVED:
             printf("SOLVED\n");
             break;
-        case MAX_ITER:
-            printf("MAX_ITER\n");
+        case MAX_ITER_EXCEEDED:
+            printf("MAX_ITER_EXCEEDED\n");
+            break;
+        case UNSOLVED:
+            printf("UNSOLVED\n");
             break;
         default:
-            printf("UNSOLVED\n");
+            printf("UNINITIALIZED\n");
         };
         printf("  iter %d\n", iter);
         printf("  rho_updates %d\n", rho_updates);
@@ -164,7 +167,7 @@ public:
     static constexpr Scalar RHO_TOL = 1e-4;
     static constexpr Scalar RHO_EQ_FACTOR = 1e+3;
     static constexpr Scalar LOOSE_BOUNDS_THRESH = 1e+16;
-    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::epsilon();
 
     // Solver state variables
     int iter;
@@ -216,6 +219,8 @@ public:
         // construct KKT system and compute decomposition
         construct_KKT_mat(qp);
         compute_KKT();
+
+        _info.status = UNSOLVED;
     }
 
     void update_qp(const qp_t &qp)
@@ -229,12 +234,19 @@ public:
         // update KKT system and do factorization
         update_KKT_mat(qp);
         factorize_KKT();
+
+        _info.status = UNSOLVED;
     }
 
     void solve(const qp_t &qp)
     {
         kkt_vec_t rhs, x_tilde_nu;
         bool check_termination = false;
+
+        if (_info.status == UNINITIALIZED) {
+            SOLVER_ASSERT(_info.status == UNINITIALIZED);
+            return;
+        }
 
 #ifdef QP_SOLVER_PRINTING
         if (_settings.verbose) {
@@ -307,7 +319,7 @@ public:
         }
 
         if (iter > _settings.max_iter) {
-            _info.status = MAX_ITER;
+            _info.status = MAX_ITER_EXCEEDED;
         }
         _info.iter = iter;
 

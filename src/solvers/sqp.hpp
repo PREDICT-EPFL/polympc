@@ -3,14 +3,16 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <limits>
 #include "qp_solver.hpp"
 #include "bfgs.hpp"
 
 #ifdef SOLVER_DEBUG
 #include <Eigen/Eigenvalues>
+#endif
+
+#ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)
-#else
-#define SOLVER_ASSERT(x)
 #endif
 
 namespace sqp {
@@ -24,7 +26,7 @@ struct sqp_settings_t {
     Scalar eps_dual = 1e-3; /**< dual step termination threshold, eps_dual > 0 */
     int max_iter = 100;
     int line_search_max_iter = 100;
-    void (*iteration_callback)(const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> &x) = nullptr;
+    void (*iteration_callback)(void *solver) = nullptr;
 
     bool validate()
     {
@@ -43,7 +45,7 @@ struct sqp_settings_t {
 struct sqp_status_t {
     enum {
         SOLVED,
-        MAX_ITER,
+        MAX_ITER_EXCEEDED,
         INVALID_SETTINGS
     } value;
 };
@@ -58,7 +60,7 @@ struct sqp_info_t {
  * minimize     f(x)
  * subject to   ce(x)  = 0
  *              ci(x) <= 0
- *         l <= cb(x) <= u
+ *              l <= x <= u
  */
 template <typename _Problem>
 class SQP {
@@ -88,7 +90,7 @@ public:
     using constr_box_t = var_t;
 
     // Constants
-    static constexpr Scalar DIV_BY_ZERO_REGUL = 1e-10;
+    static constexpr Scalar DIV_BY_ZERO_REGUL = std::numeric_limits<Scalar>::epsilon();
 
     // Solver state variables
     var_t _x;
@@ -105,52 +107,23 @@ public:
     // info
     Scalar _dual_step_norm;
     Scalar _primal_step_norm;
-    int _qp_iter = 0;
+    Scalar _cost;
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void solve(Problem &prob, const var_t &x0)
+    void solve(Problem &prob, const var_t &x0, const dual_t &lambda0)
     {
-        var_t p; // search direction
-        dual_t p_lambda; // dual search direction
-        Scalar alpha; // step size
-
-        // initialize
         _x = x0;
+        _lambda = lambda0;
+        _solve(prob);
+    }
+
+    void solve(Problem &prob)
+    {
+        _x.setZero();
         _lambda.setZero();
-        _info.qp_solver_iter = 0;
-
-        int& iter = _info.iter;
-        for (iter = 1; iter <= _settings.max_iter; iter++) {
-            // Solve QP
-            solve_qp(prob, p, p_lambda);
-            p_lambda -= _lambda;
-
-            alpha = line_search(prob, p);
-
-            /* Step */
-            _x = _x + alpha * p;
-            _lambda = _lambda + alpha * p_lambda;
-
-            // update step info
-            _step_prev = alpha * p;
-            _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
-            _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
-
-            if (_settings.iteration_callback != nullptr) {
-                _settings.iteration_callback(_x);
-            }
-
-            if (termination_criteria()) {
-                _info.status.value = sqp_status_t::SOLVED;
-                break;
-            }
-        }
-
-        if (iter > _settings.max_iter) {
-            _info.status.value = sqp_status_t::MAX_ITER;
-        }
+        _solve(prob);
     }
 
     inline const var_t& primal_solution() const { return _x; }
@@ -166,6 +139,47 @@ public:
     inline sqp_info_t& info() { return _info; }
 
 private:
+
+    void _solve(Problem &prob)
+    {
+        var_t p; // search direction
+        dual_t p_lambda; // dual search direction
+        Scalar alpha; // step size
+
+        // initialize
+        _info.qp_solver_iter = 0;
+
+        int& iter = _info.iter;
+        for (iter = 1; iter <= _settings.max_iter; iter++) {
+            // Solve QP
+            solve_qp(prob, p, p_lambda);
+            p_lambda -= _lambda;
+
+            alpha = line_search(prob, p);
+
+            // take step
+            _x = _x + alpha * p;
+            _lambda = _lambda + alpha * p_lambda;
+
+            // update step info
+            _step_prev = alpha * p;
+            _primal_step_norm = alpha * p.template lpNorm<Eigen::Infinity>();
+            _dual_step_norm = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
+
+            if (_settings.iteration_callback != nullptr) {
+                _settings.iteration_callback(this);
+            }
+
+            if (termination_criteria()) {
+                _info.status.value = sqp_status_t::SOLVED;
+                break;
+            }
+        }
+
+        if (iter > _settings.max_iter) {
+            _info.status.value = sqp_status_t::MAX_ITER_EXCEEDED;
+        }
+    }
 
 #ifdef SOLVER_DEBUG
     bool _is_posdef(hessian_t H)
@@ -218,12 +232,11 @@ private:
             BOX_IDX = NUM_INEQ + NUM_EQ,
         };
         const Scalar UNBOUNDED = 1e20;
-        Scalar cost;
 
         gradient_t& grad_f = _qp.q;
         hessian_t& B = _qp.P;
 
-        prob.cost_linearized(_x, grad_f, cost);
+        prob.cost_linearized(_x, grad_f, _cost);
 
         // TODO: avoid stack allocation (stack overflow)
         constr_eq_t b_eq;
@@ -250,7 +263,9 @@ private:
         } else {
             y += _grad_L; // y = grad_L_prev - grad_L
             BFGS_update(B, _step_prev, y);
+#ifdef SOLVER_DEBUG
             SOLVER_ASSERT(_is_posdef(B));
+#endif
         }
 
         // Equality constraints
@@ -294,26 +309,27 @@ private:
     /** Line search in direction p using l1 merit function. */
     Scalar line_search(Problem &prob, const var_t& p)
     {
-        Scalar cost, mu, phi_l1, Dp_phi_l1;
-        gradient_t cost_gradient;
+        // Note: using members _cost and _qp.q, which are updated in solve_qp().
+
+        Scalar mu, phi_l1, Dp_phi_l1;
+        gradient_t& cost_gradient = _qp.q;
         const Scalar tau = _settings.tau; // line search step decrease, 0 < tau < settings.tau
 
-        // TODO: reuse computation
-        prob.cost_linearized(_x, cost_gradient, cost);
-        Scalar constr_l1 = l1_constraint_violation(_x, prob);
+        Scalar constr_l1 = constraint_norm(_x, prob);
 
         // TODO: get mu from merit function model using hessian of Lagrangian
         mu = cost_gradient.dot(p) / ((1 - _settings.rho) * constr_l1);
 
-        phi_l1 = cost + mu * constr_l1;
+        phi_l1 = _cost + mu * constr_l1;
         Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
 
         Scalar alpha = 1.0;
         for (int i = 1; i < _settings.line_search_max_iter; i++) {
+            Scalar cost_step;
             var_t x_step = _x + alpha*p;
-            prob.cost(x_step, cost);
+            prob.cost(x_step, cost_step);
 
-            Scalar phi_l1_step = cost + mu * l1_constraint_violation(x_step, prob);
+            Scalar phi_l1_step = cost_step + mu * constraint_norm(x_step, prob);
             if (phi_l1_step <= phi_l1 + alpha * _settings.eta * Dp_phi_l1) {
                 // accept step
                 break;
@@ -324,7 +340,8 @@ private:
         return alpha;
     }
 
-    Scalar l1_constraint_violation(const var_t &x, Problem &prob) const
+    /** L1 norm of constraint violation */
+    Scalar constraint_norm(const var_t &x, Problem &prob) const
     {
         Scalar cl1 = DIV_BY_ZERO_REGUL;
         constr_eq_t c_eq;

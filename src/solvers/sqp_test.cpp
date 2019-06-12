@@ -25,12 +25,6 @@ struct ProblemBase {
     using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
 };
 
-void iteration_callback(const Eigen::MatrixXd &x)
-{
-    Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "],");
-    std::cout << x.transpose().format(fmt) << std::endl;
-}
-
 struct SimpleNLP_2D {
     enum {
         VAR_SIZE = 2,
@@ -61,9 +55,10 @@ struct SimpleNLP_2D {
 
     void constraint(const var_t& x, b_eq_t& b_eq, b_ineq_t& b_ineq, var_t& lbx, var_t& ubx)
     {
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
         b_ineq << 1 - x.squaredNorm(), x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
         lbx << 0, 0; // x0 > 0 and x1 > 0
-        ubx << INFINITY, INFINITY;
+        ubx << infinity, infinity;
     }
 
     void constraint_linearized(const var_t& x,
@@ -87,9 +82,11 @@ TEST(SQPTestCase, TestSimpleNLP) {
 
     // feasible initial point
     Eigen::Vector2d x0 = {1.2, 0.1};
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     solver.settings().max_iter = 100;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
@@ -103,9 +100,11 @@ TEST(SQPTestCase, InfeasibleStart) {
 
     // infeasible initial point
     Eigen::Vector2d x0 = {2, -1};
+    Eigen::Vector4d y0;
+    y0.setOnes();
 
     solver.settings().max_iter = 100;
-    solver.solve(problem, x0);
+    solver.solve(problem, x0, y0);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
@@ -155,9 +154,8 @@ TEST(SQPTestCase, TestSimpleQP) {
     SimpleQP problem;
     SQP<SimpleQP> solver;
     Eigen::Vector2d x;
-    Eigen::Vector2d x0 = {0, 0};
 
-    solver.solve(problem, x0);
+    solver.solve(problem);
     x = solver.primal_solution();
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));

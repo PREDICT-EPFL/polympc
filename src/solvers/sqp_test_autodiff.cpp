@@ -2,6 +2,7 @@
 #include <unsupported/Eigen/AutoDiff>
 #include "gtest/gtest.h"
 #define SOLVER_DEBUG
+#define SOLVER_ASSERT(x) EXPECT_TRUE(x)
 #include "sqp.hpp"
 
 using namespace sqp;
@@ -76,7 +77,7 @@ struct ProblemBase {
 };
 
 
-struct NLP : public ProblemBase<NLP,
+struct ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock,
                                 double,
                                 /* Nx    */2,
                                 /* Neq   */1,
@@ -100,28 +101,35 @@ struct NLP : public ProblemBase<NLP,
         // x^2 + y^2 == 1
         eq << x.squaredNorm() - 1;
 
-        lbx << -INFINITY, -INFINITY;
-        ubx << INFINITY, INFINITY;
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
+        lbx << -infinity, -infinity;
+        ubx << infinity, infinity;
     }
 };
 
-
-void iteration_callback(const Eigen::MatrixXd &x)
+template <typename Solver>
+void callback(void *solver_p)
 {
+    Solver& s = *static_cast<Solver*>(solver_p);
+
     Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "],");
-    std::cout << x.transpose().format(fmt) << std::endl;
+    std::cout << s._x.transpose().format(fmt) << std::endl;
 }
 
-TEST(SQPTestCase, TestNLP) {
-    NLP problem;
-    SQP<NLP> solver;
+#if 0 // suspended, see issue #13
+TEST(SQPTestCase, TestConstrainedRosenbrock) {
+    using Solver = SQP<ConstrainedRosenbrock>;
+    ConstrainedRosenbrock problem;
+    Solver solver;
     Eigen::Vector2d x0, x;
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     x0 << 0, 0;
     solver.settings().max_iter = 1000;
     solver.settings().line_search_max_iter = 10;
-    // solver.settings().iteration_callback = iteration_callback;
-    solver.solve(problem, x0);
+    // solver.settings().iteration_callback = callback<Solver>;
+    solver.solve(problem, x0, y0);
 
     x = solver.primal_solution();
 
@@ -131,7 +139,7 @@ TEST(SQPTestCase, TestNLP) {
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
-
+#endif
 
 struct Rosenbrock : public ProblemBase<Rosenbrock,
                                        double,
@@ -153,21 +161,22 @@ struct Rosenbrock : public ProblemBase<Rosenbrock,
     void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
     {
         // unconstrained
-        lbx << -INFINITY, -INFINITY;
-        ubx << INFINITY, INFINITY;
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
+        lbx << -infinity, -infinity;
+        ubx << infinity, infinity;
     }
 };
 
 TEST(SQPTestCase, TestRosenbrock) {
+    using Solver = SQP<Rosenbrock>;
     Rosenbrock problem;
-    SQP<Rosenbrock> solver;
-    Eigen::Vector2d x0, x;
+    Solver solver;
+    Eigen::Vector2d x;
 
-    x0 << 0, 0;
     solver.settings().max_iter = 1000;
     // solver.settings().line_search_max_iter = 4;
-    // solver.settings().iteration_callback = iteration_callback;
-    solver.solve(problem, x0);
+    solver.settings().iteration_callback = callback<Solver>;
+    solver.solve(problem);
 
     x = solver.primal_solution();
 
@@ -190,31 +199,35 @@ struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
     template <typename A, typename B, typename C>
     void constraint(const A& x, B& eq, C& ineq, var_t& lbx, var_t& ubx)
     {
+        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
         ineq << 1 - x.squaredNorm(),
                   x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
         lbx << 0, 0; // x0 > 0 and x1 > 0
-        ubx << INFINITY, INFINITY;
+        ubx << infinity, infinity;
     }
 
 };
 
 TEST(SQPTestCase, TestSimpleNLP) {
+    using Solver = SQP<SimpleNLP>;
     SimpleNLP problem;
-    SQP<SimpleNLP> solver;
+    Solver solver;
 
     // feasible initial point
     Eigen::Vector2d x;
     Eigen::Vector2d x0 = {1.2, 0.1};
+    Eigen::Vector4d y0;
+    y0.setZero();
 
     solver.settings().max_iter = 100;
     solver.settings().line_search_max_iter = 4;
-    solver.settings().iteration_callback = iteration_callback;
-    solver.solve(problem, x0);
+    solver.settings().iteration_callback = callback<Solver>;
+    solver.solve(problem, x0, y0);
 
     x = solver.primal_solution();
 
     std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "qp_iter " << solver._qp_iter << std::endl;
+    std::cout << "qp_iter " << solver.info().qp_solver_iter << std::endl;
     std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));

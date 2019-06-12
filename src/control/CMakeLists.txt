@@ -22,3 +22,6 @@ target_link_libraries(dynamics_sparse_approx_test Eigen3::Eigen)
 
 add_executable(cost_approx_test cost_approx_test.cpp)
 target_link_libraries(cost_approx_test Eigen3::Eigen)
+
+add_executable(constraint_collocation_test constraint_collocation_test.cpp)
+target_link_libraries(constraint_collocation_test Eigen3::Eigen)

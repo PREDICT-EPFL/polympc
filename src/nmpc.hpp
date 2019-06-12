@@ -2,8 +2,7 @@
 #define NMPC_HPP
 
 #include <memory>
-//#include "polymath.h"
-#include "pseudospectral/chebyshev.hpp"
+#include "chebyshev.hpp"
 
 #define POLYMPC_USE_CONSTRAINTS
 

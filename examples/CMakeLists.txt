@@ -10,7 +10,7 @@ add_library(mobile_robot mobile_robot.cpp mobile_robot.hpp)
 target_link_libraries(mobile_robot ${CASADI_LIBRARIES})
 
 add_executable(robot_control_test robot_control_test.cpp)
-target_link_libraries(robot_control_test mobile_robot)
+target_link_libraries(robot_control_test mobile_robot Eigen3::Eigen)
 
 add_executable(kite_model_test kite_model_test.cpp)
 target_link_libraries(kite_model_test kite odesolver Eigen3::Eigen)

@@ -320,7 +320,7 @@ void nmpc<System, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi::Dict 
     casadi::DM feasible_control = casadi::DM::zeros(UBU.size());
 
     ARG["x0"] = casadi::DM::vertcat(casadi::DMVector{casadi::DM::repmat(feasible_state, poly_order * num_segments + 1, 1),
-                                     casadi::DM::repmat(feasible_control, poly_order * num_segments + 1, 1), plane_x0});
+                                     casadi::DM::repmat(feasible_control, poly_order * num_segments + 1, 1)});
 }
 
 template<typename System, int NX, int NU, int NumSegments, int PolyOrder>

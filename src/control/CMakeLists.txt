@@ -12,7 +12,7 @@ add_executable(ocproblem_test ocproblem_test.cpp)
 target_link_libraries(ocproblem_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
 
 add_executable(nmpc_test nmpc_test.cpp)
-target_link_libraries(nmpc_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
+target_link_libraries(nmpc_test Eigen3::Eigen)
 
 add_executable(dynamics_approx_test dynamics_approx_test.cpp)
 target_link_libraries(dynamics_approx_test Eigen3::Eigen)

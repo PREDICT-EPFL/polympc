@@ -119,15 +119,18 @@ public:
         A_eq.template topRows<VARX_SIZE>() = ode_jac;
     }
 
-    var_t solve(const State& x0, const State& xl, const State& xu, const Control& ul, const Control& uu)
+    void set_constraints(const State& xl, const State& xu, const Control& ul, const Control& uu)
     {
-        _x0 = x0;
-        _p0 << 1.0;
-
         _constr_xl = xl;
         _constr_xu = xu;
         _constr_ul = ul;
         _constr_uu = uu;
+    }
+
+    var_t solve(const State& x0, const Parameters& p0)
+    {
+        _x0 = x0;
+        _p0 = p0;
 
         var_t var0;
         var0.setZero();
@@ -142,6 +145,20 @@ public:
 
         solver.solve(*this, var0, y0);
 
+        return solver.primal_solution();
+    }
+
+    var_t solve_warm_start(const State& x0, const Parameters& p0)
+    {
+        _x0 = x0;
+        _p0 = p0;
+
+        var_t var0 = solver.primal_solution();
+        dual_t y0 = solver.dual_solution();
+
+        var0.template segment<NX>(VARX_SIZE-NX) = x0;
+
+        solver.solve(*this, var0, y0);
         return solver.primal_solution();
     }
 };

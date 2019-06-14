@@ -1,36 +1,46 @@
+#include <iostream>
+
 #include "control/nmpc.hpp"
 #include "control/simple_robot_model.hpp"
 #include "polynomials/ebyshev.hpp"
 
-#include "gtest/gtest.h"
-
 template <typename Solver>
 void callback(void *solver_p)
 {
-    // Solver& s = *static_cast<Solver*>(solver_p);
-    // std::cout << "SQP iteration callback:" << std::endl;
-    // std::cout << s._x.transpose() << std::endl;
+    Solver& s = *static_cast<Solver*>(solver_p);
+    std::cout << s._x.transpose() << std::endl;
 }
 
-TEST(NMPCTestCase, TestRobotNMPC)
+using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
+using Approximation = Chebyshev<3>; // POLY_ORDER = 3
+
+using controller_t = polympc::nmpc<Problem, Approximation, int>;
+using var_t = controller_t::var_t;
+using dual_t = controller_t::dual_t;
+using State = controller_t::State;
+using Control = controller_t::Control;
+using Parameters = controller_t::Parameters;
+
+enum
 {
-    using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
-    using Approximation = Chebyshev<3>; // POLY_ORDER = 3
+    NX = State::RowsAtCompileTime,
+    NU = Control::RowsAtCompileTime,
+    NP = Parameters::RowsAtCompileTime,
+    VARX_SIZE = controller_t::VARX_SIZE,
+    VARU_SIZE = controller_t::VARU_SIZE,
+    VARP_SIZE = controller_t::VARP_SIZE,
+    VAR_SIZE = var_t::RowsAtCompileTime,
+};
 
-    using controller_t = polympc::nmpc<Problem, Approximation, int>;
-    using var_t = controller_t::var_t;
-
-    /*
-    NumSegments = 2
-    POLY_ORDER = 3
-    NUM_NODES = 4
-    VARX_SIZE = (NumSegments * POLY_ORDER + 1) * VAR_SIZE = 21
-    VARU_SIZE = (NumSegments * POLY_ORDER + 1) * NU = 14
-    VARP_SIZE = NP = 1
-    VAR_SIZE = 3
-    NU = 2
-    NP = 1
-    */
+void print_info(void)
+{
+    printf("NX = %d\n", NX);
+    printf("NU = %d\n", NU);
+    printf("NP = %d\n", NP);
+    printf("VARX_SIZE = %d\n", VARX_SIZE);
+    printf("VARU_SIZE = %d\n", VARU_SIZE);
+    printf("VARP_SIZE = %d\n", VARP_SIZE);
+    printf("VAR_SIZE = %d\n", VAR_SIZE);
 
     printf("controller_t size %lu\n", sizeof(controller_t));
     printf("controller_t::cost_colloc_t size %lu\n", sizeof(controller_t::cost_colloc_t));
@@ -38,65 +48,85 @@ TEST(NMPCTestCase, TestRobotNMPC)
     printf("controller_t::sqp_t size %lu\n", sizeof(controller_t::sqp_t));
     printf("controller_t::sqp_t::qp_t size %lu\n", sizeof(controller_t::sqp_t::qp_t));
     printf("controller_t::sqp_t::qp_solver_t size %lu\n", sizeof(controller_t::sqp_t::qp_solver_t));
+}
 
-    controller_t robot_controller;
-    robot_controller.solver.settings().iteration_callback = callback<controller_t::sqp_t>;
+void print_duals(const dual_t& y)
+{
+    Eigen::IOFormat fmt(3, 0, ", ", ",", "[", "]");
+    std::cout << "duals" << std::endl;
+    std::cout << "ode   " << y.template segment<VARX_SIZE>(0).transpose().format(fmt) << std::endl;
+    std::cout << "x     " << y.template segment<VARX_SIZE-NX>(VARX_SIZE).transpose().format(fmt) << std::endl;
+    std::cout << "x0    " << y.template segment<NX>(2*VARX_SIZE-NX).transpose().format(fmt) << std::endl;
+    std::cout << "u     " << y.template segment<VARU_SIZE>(2*VARX_SIZE).transpose().format(fmt) << std::endl;
+}
 
-    Eigen::Vector3d x0_list[] = {
-        {-1, 0, 0},
-        {-1, -1, 0},
-        {-1, -1, 0.7},
-        {-1, -1, 1.6},
-        {-10, -10, 0},
-        {1, 1, 0},
-        {10, 10, 0},
-        {0, 1, 0.7},
-        {0, 1, 0},
-        {0, 0, 0},
-    };
-
-    for (auto& x0: x0_list) {
-        std::cout << "x0 " << x0.transpose() << std::endl;
-
-        // bounds
-        controller_t::State xu, xl;
-        xu << 10, 10, 1e20;
-        xl << -xu;
-        controller_t::Control uu, ul;
-        uu << 10, 1;
-        ul << 0, -1;
-
-        var_t sol = robot_controller.solve(x0, xl, xu, ul, uu);
-
-        Eigen::IOFormat fmt(4, 0, ", ", ",", "[", "]");
-        printf("xy\n");
-        for (int i = 0; i < 7; i++) {
-           std::cout << sol.segment<2>(3*i).transpose().format(fmt) << ",\n";
-        }
-
-        printf("theta\n");
-        for (int i = 0; i < 7; i++) {
-           std::cout << sol.segment<1>(3*i+2).transpose().format(fmt) << ",\n";
-        }
-
-        printf("u\n");
-        for (int i = 0; i < 7; i++) {
-           std::cout << sol.segment<2>(21+2*i).transpose().format(fmt) << ",\n";
-        }
-        printf("p\n");
-        std::cout << sol.tail<1>().format(fmt) << ",\n";
-
-        printf("iter %d\n", robot_controller.solver.info().iter);
-        printf("dual\n");
-        std::cout << "  ode   " << robot_controller.solver._lambda.template segment<controller_t::VARX_SIZE>(0).transpose().format(fmt) << std::endl;
-        std::cout << "  x0    " << robot_controller.solver._lambda.template segment<controller_t::NX>(controller_t::VARX_SIZE).transpose().format(fmt) << std::endl;
-        std::cout << "  x     " << robot_controller.solver._lambda.template segment<controller_t::VARX_SIZE-controller_t::NX>(controller_t::VARX_SIZE+controller_t::NX).transpose().format(fmt) << std::endl;
-        std::cout << "  u     " << robot_controller.solver._lambda.template segment<controller_t::VARU_SIZE>(2*controller_t::VARX_SIZE).transpose().format(fmt) << std::endl;
+void print_sol(const var_t& sol)
+{
+    Eigen::IOFormat fmt(4, 0, ", ", ",", "[", "]");
+    std::cout << "xyt" << std::endl;
+    for (int i = 0; i < VARX_SIZE/NX; i++) {
+       std::cout << sol.segment<NX>(NX*i).transpose().format(fmt) << ",\n";
+    }
+    std::cout << "u" << std::endl;
+    for (int i = 0; i < VARU_SIZE/NU; i++) {
+       std::cout << sol.segment<NU>(VARX_SIZE+NU*i).transpose().format(fmt) << ",\n";
     }
 }
 
 int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+    controller_t robot_controller;
+    // robot_controller.solver.settings().iteration_callback = callback<controller_t::sqp_t>;
+
+    State x = {-1, -1, 1.5};
+    State dx;
+    Control u;
+    Parameters p(1.0);
+
+    if (argc == 4) {
+        double x0, y0, t0;
+        x0 = atof(argv[1]);
+        y0 = atof(argv[2]);
+        t0 = atof(argv[3]);
+        x << x0, y0, t0;
+    }
+
+    // bounds
+    controller_t::State xu, xl;
+    xu << 10, 10, 1e20;
+    xl << -xu;
+    controller_t::Control uu, ul;
+    uu << 10, 1;
+    ul << -10, -1;
+
+    robot_controller.set_constraints(xl, xu, ul, uu);
+
+    print_info();
+    std::cout << "x0 " << x.transpose() << std::endl;
+
+    for (int i = 0; i < 100; i++) {
+
+        var_t sol;
+        if (i == 0) {
+            sol = robot_controller.solve(x, p);
+        } else {
+            // sol = robot_controller.solve(x, p);
+            sol = robot_controller.solve_warm_start(x, p);
+        }
+        print_sol(sol);
+        print_duals(robot_controller.solver.dual_solution());
+
+        u = sol.segment<2>(VARX_SIZE+VARU_SIZE-NU);
+
+        // crude integrator
+        const double dt = 0.001;
+        for (int j = 0; j < 1000; j++) {
+            robot_controller.ps_ode.m_f(x, u, p, dx);
+            x = x + dt * dx;
+        }
+
+        std::cout << "x " << x.transpose() << "    ";
+        std::cout << "u " << u.transpose() << std::endl;
+        std::cout << "iter " << robot_controller.solver.info().iter << std::endl;
+    }
 }

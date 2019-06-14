@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <vector>
 
 #include "control/nmpc.hpp"
 #include "control/simple_robot_model.hpp"
@@ -73,6 +75,22 @@ void print_sol(const var_t& sol)
     }
 }
 
+template <typename Var>
+void save_csv(const char *name, const std::vector<Var>& vec)
+{
+    std::ofstream out(name);
+    Eigen::IOFormat fmt(Eigen::FullPrecision, Eigen::DontAlignCols, ",", ",", "", "");
+    for (const Var& x : vec) {
+        out << x.transpose().format(fmt) << "\n";
+    }
+}
+
+template<typename Derived>
+inline bool is_nan(const Eigen::MatrixBase<Derived>& x)
+{
+    return !((x.array() == x.array())).all();
+}
+
 int main(int argc, char **argv)
 {
     controller_t robot_controller;
@@ -104,17 +122,22 @@ int main(int argc, char **argv)
     print_info();
     std::cout << "x0 " << x.transpose() << std::endl;
 
+    std::vector<var_t> var_log;
+    var_log.reserve(100);
+
+    std::vector<State> traj_log;
+    traj_log.reserve(100+1);
+    traj_log.push_back(x);
+
     for (int i = 0; i < 100; i++) {
 
         var_t sol;
         if (i == 0) {
             sol = robot_controller.solve(x, p);
         } else {
-            // sol = robot_controller.solve(x, p);
-            sol = robot_controller.solve_warm_start(x, p);
+            sol = robot_controller.solve(x, p);
+            // sol = robot_controller.solve_warm_start(x, p);
         }
-        print_sol(sol);
-        print_duals(robot_controller.solver.dual_solution());
 
         u = sol.segment<2>(VARX_SIZE+VARU_SIZE-NU);
 
@@ -125,8 +148,21 @@ int main(int argc, char **argv)
             x = x + dt * dx;
         }
 
+        // print_sol(sol);
+        // print_duals(robot_controller.solver.dual_solution());
+        std::cout << "iter " << robot_controller.solver.info().iter << "    ";
         std::cout << "x " << x.transpose() << "    ";
         std::cout << "u " << u.transpose() << std::endl;
-        std::cout << "iter " << robot_controller.solver.info().iter << std::endl;
+
+        if (is_nan<var_t>(sol)) {
+            std::cout << "ERROR: NAN" << std::endl;
+            break;
+        }
+
+        traj_log.push_back(x);
+        var_log.push_back(sol);
     }
+
+    save_csv<State>("traj_log.csv", traj_log);
+    save_csv<var_t>("var_log.csv", var_log);
 }

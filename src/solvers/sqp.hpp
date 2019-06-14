@@ -98,6 +98,12 @@ public:
     var_t _step_prev;
     gradient_t _grad_L;
 
+    constr_eq_t b_eq;
+    jacobian_eq_t A_eq;
+    constr_ineq_t b_ineq;
+    jacobian_ineq_t A_ineq;
+    constr_box_t lbx, ubx;
+
     qp_t _qp;
     qp_solver_t _qp_solver;
 
@@ -237,14 +243,6 @@ private:
         hessian_t& B = _qp.P;
 
         prob.cost_linearized(_x, grad_f, _cost);
-
-        // TODO: avoid stack allocation (stack overflow)
-        constr_eq_t b_eq;
-        jacobian_eq_t A_eq;
-        constr_ineq_t b_ineq;
-        jacobian_ineq_t A_ineq;
-        constr_box_t lbx, ubx;
-
         prob.constraint_linearized(_x, A_eq, b_eq, A_ineq, b_ineq, lbx, ubx);
 
         Eigen::Ref<constr_eq_t> lambda_eq = _lambda.template segment<NUM_EQ>(EQ_IDX);

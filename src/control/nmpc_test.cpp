@@ -14,7 +14,7 @@ void callback(void *solver_p)
 }
 
 using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
-using Approximation = Chebyshev<3>; // POLY_ORDER = 3
+using Approximation = Chebyshev<3, GAUSS_LOBATTO, double>; // POLY_ORDER = 3
 
 using controller_t = polympc::nmpc<Problem, Approximation, int>;
 using var_t = controller_t::var_t;

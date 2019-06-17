@@ -1,7 +1,6 @@
 #ifndef PROBLEM_HPP
 #define PROBLEM_HPP
 
-#include <iostream>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 
@@ -45,7 +44,6 @@ public:
 template<typename Dynamics, typename Lagrange, typename Mayer, typename InequalityConstraints, typename EqualityConstraints>
 OCProblem<Dynamics, Lagrange, Mayer, InequalityConstraints, EqualityConstraints>::OCProblem()
 {
-    std::cout << "Problem size: " << NX_D << "\n";
 }
 
 

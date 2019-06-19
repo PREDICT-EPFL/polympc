@@ -10,17 +10,16 @@ MobileRobot::MobileRobot(const MobileRobotProperties &props)
     state = SX::vertcat({x, y, theta});
 
     SX v   = SX::sym("v");
-    SX omega = SX::sym("omega");
-    control = SX::vertcat({v, omega});
+    SX phi = SX::sym("phi");
+    control = SX::vertcat({v, phi});
 
     /** Dynamic equations */
-    Dynamics = SX::vertcat({v * cos(theta), v * sin(theta), omega});
+    double L = 1.0;
+    Dynamics = SX::vertcat({v * cos(theta) * cos(phi), v * sin(theta) * cos(phi), v * sin(phi) / L});
     NumDynamics = Function("Dynamics", {state, control}, {Dynamics});
 
     /** define output mapping */
-    SX H = SX::zeros(2,3);
-    H(0,0) = 1; H(1,1) = 1;
-    OutputMap = Function("Map",{state}, {SX::mtimes(H, state)});
+    OutputMap = Function("Map",{state}, {state});
 }
 
 MobileRobot::MobileRobot()
@@ -31,15 +30,14 @@ MobileRobot::MobileRobot()
     state = SX::vertcat({x, y, theta});
 
     SX v   = SX::sym("v");
-    SX omega = SX::sym("omega");
-    control = SX::vertcat({v, omega});
+    SX phi = SX::sym("phi");
+    control = SX::vertcat({v, phi});
 
     /** Dynamic equations */
-    Dynamics = SX::vertcat({v * cos(theta), v * sin(theta), omega});
+    double L = 1.0;
+    Dynamics = SX::vertcat({v * cos(theta) * cos(phi), v * sin(theta) * cos(phi), v * sin(phi) / L});
     NumDynamics = Function("Dynamics", {state, control}, {Dynamics});
 
     /** define output mapping */
-    SX H = SX::zeros(2,3);
-    H(0,0) = 1; H(1,1) = 1;
-    OutputMap = Function("Map",{state}, {SX::mtimes(H, state)});
+    OutputMap = Function("Map",{state}, {state});
 }

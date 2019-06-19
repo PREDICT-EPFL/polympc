@@ -12,7 +12,7 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -O3")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror")
 set(CMAKE_VERBOSE_MAKEFILE “ON”)
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
 #detect 32bit system
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

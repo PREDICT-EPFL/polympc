@@ -147,11 +147,11 @@ nmpc<System, NX, NU, NumSegments, PolyOrder>::nmpc(const casadi::DM &_reference,
 
     assert(ny == Reference.size1());
 
-    Q = casadi::SX::eye(NX);
-    P = casadi::SX::eye(NX);
+    Q = casadi::SX::eye(ny);
+    P = casadi::SX::eye(ny);
     R = casadi::SX::eye(NU);
 
-    Scale_X = casadi::DM::eye(NX);
+    Scale_X = casadi::DM::eye(ny);
     invSX = Scale_X;
 
     Scale_U = casadi::DM::eye(NU);
@@ -160,8 +160,8 @@ nmpc<System, NX, NU, NumSegments, PolyOrder>::nmpc(const casadi::DM &_reference,
     if(mpc_options.find("mpc.Q") != mpc_options.end())
     {
         Q = mpc_options.find("mpc.Q")->second;
-        assert(NX == Q.size1());
-        assert(NX == Q.size2());
+        assert(ny == Q.size1());
+        assert(ny == Q.size2());
     }
 
     if(mpc_options.find("mpc.R") != mpc_options.end())
@@ -174,8 +174,8 @@ nmpc<System, NX, NU, NumSegments, PolyOrder>::nmpc(const casadi::DM &_reference,
     if(mpc_options.find("mpc.P") != mpc_options.end())
     {
         P = mpc_options.find("mpc.P")->second;
-        assert(NX == P.size1());
-        assert(NX == P.size2());
+        assert(ny == P.size1());
+        assert(ny == P.size2());
     }
 
 

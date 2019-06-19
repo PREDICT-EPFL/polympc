@@ -28,7 +28,7 @@ template <typename System, typename Path, int NX, int NU, int NumSegments = 2, i
 class nmpf
 {
 public:
-    nmpf(const double &tf = 1.0, const casadi::Dict &solver_options = casadi::Dict());
+    nmpf(const double &tf = 1.0, const casadi::DMDict &mpc_options = casadi::DMDict(), const casadi::Dict &solver_options = casadi::Dict());
     ~nmpf(){}
 
     /** contsraints setters */
@@ -142,7 +142,7 @@ private:
 };
 
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
-nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const casadi::Dict &solver_options)
+nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const casadi::DMDict &mpc_options, const casadi::Dict &solver_options)
 {
     /** set up default */
     casadi::Function dynamics = system.getDynamics();
@@ -162,6 +162,27 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
 
     Scale_X = casadi::DM::eye(nx + 2);  invSX = casadi::DM::eye(nx + 2);
     Scale_U = casadi::DM::eye(nu + 1);  invSU = casadi::DM::eye(nu + 1);
+
+    /** problem scaling */
+    scale = false;
+    if(mpc_options.find("mpc.scaling") != mpc_options.end())
+        scale = static_cast<bool>(mpc_options.find("mpc.scaling")->second.nonzeros()[0]);
+
+    if(mpc_options.find("mpc.scale_x") != mpc_options.end() && scale)
+    {
+        Scale_X = mpc_options.find("mpc.scale_x")->second;
+        assert((nx+2) == Scale_X.size1());
+        assert((nx+2) == Scale_X.size2());
+        invSX = casadi::DM::solve(Scale_X, casadi::DM::eye(Scale_X.size1()));
+    }
+
+    if(mpc_options.find("mpc.scale_u") != mpc_options.end() && scale)
+    {
+        Scale_U = mpc_options.find("mpc.scale_u")->second;
+        assert((nu+1) == Scale_U.size1());
+        assert((nu+1) == Scale_U.size2());
+        invSU = casadi::DM::solve(Scale_U, casadi::DM::eye(Scale_U.size1()));
+    }
 
     /** assume unconstrained problem */
     LBX = -casadi::DM::inf(nx + 2);
@@ -215,9 +236,6 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     /** evaluate dynamics */
     casadi::SX sym_dynamics = dynamics(casadi::SXVector({x,u}))[0];
     casadi::SX aug_dynamics = casadi::SX::vertcat({sym_dynamics, p_dynamics});
-
-    /** @bug : remove this */
-    scale = false;
 
     /** evaluate augmented dynamics */
     casadi::Function aug_dynamo = casadi::Function("AUG_DYNAMO", {aug_state, aug_control}, {aug_dynamics});

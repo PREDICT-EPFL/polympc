@@ -2,6 +2,7 @@
 #define BFGS_HPP
 
 #include <Eigen/Dense>
+#include <limits>
 
 /** Damped BFGS update
  * Implements "Procedure 18.2 Damped BFGS updating for SQP" form Numerical Optimization by Nocedal.
@@ -13,11 +14,6 @@
 template <typename Mat, typename Vec>
 void BFGS_update(Mat& B, const Vec& s, const Vec& y)
 {
-    static_assert(Mat::RowsAtCompileTime == Mat::ColsAtCompileTime &&
-                  Mat::RowsAtCompileTime == Vec::RowsAtCompileTime &&
-                  Vec::ColsAtCompileTime == 1,
-                  "Matrix dimensions");
-
     using Scalar = typename Mat::Scalar;
     Scalar sy, sr, sBs;
     Vec Bs, r;
@@ -36,6 +32,10 @@ void BFGS_update(Mat& B, const Vec& s, const Vec& y)
         // unmodified BFGS
         r = y;
         sr = sy;
+    }
+
+    if (sr < std::numeric_limits<Scalar>::epsilon()) {
+        return;
     }
 
     B.noalias() += -Bs * Bs.transpose() / sBs + r * r.transpose() / sr;

@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     State x = {-1, -1, 1.5};
     State dx;
     Control u;
-    Parameters p(1.0);
+    Parameters p(0.5);
 
     if (argc == 4) {
         double x0, y0, t0;
@@ -114,8 +114,8 @@ int main(int argc, char **argv)
     xu << 10, 10, 1e20;
     xl << -xu;
     controller_t::Control uu, ul;
-    uu << 10, 1;
-    ul << -10, -1;
+    uu << 1, 1;
+    ul << 0, -1;
 
     robot_controller.set_constraints(xl, xu, ul, uu);
 
@@ -129,28 +129,28 @@ int main(int argc, char **argv)
     traj_log.reserve(100+1);
     traj_log.push_back(x);
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 30; i++) {
 
         var_t sol;
         if (i == 0) {
             sol = robot_controller.solve(x, p);
         } else {
-            sol = robot_controller.solve(x, p);
-            // sol = robot_controller.solve_warm_start(x, p);
+            sol = robot_controller.solve_warm_start(x, p);
         }
 
         u = sol.segment<2>(VARX_SIZE+VARU_SIZE-NU);
 
         // crude integrator
         const double dt = 0.001;
-        for (int j = 0; j < 1000; j++) {
+        for (int j = 0; j < 200; j++) {
             robot_controller.ps_ode.m_f(x, u, p, dx);
             x = x + dt * dx;
         }
 
         // print_sol(sol);
         // print_duals(robot_controller.solver.dual_solution());
-        std::cout << "iter " << robot_controller.solver.info().iter << "    ";
+        std::cout << "iter " << robot_controller.solver.info().iter << "  ";
+        std::cout << "qp " << robot_controller.solver.info().qp_solver_iter << "  ";
         std::cout << "x " << x.transpose() << "    ";
         std::cout << "u " << u.transpose() << std::endl;
 

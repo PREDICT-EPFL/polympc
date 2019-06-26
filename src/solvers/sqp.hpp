@@ -132,6 +132,18 @@ public:
         _solve(prob);
     }
 
+    SQP()
+    {
+        _qp_solver.settings().warm_start = true;
+        _qp_solver.settings().check_termination = 10;
+        _qp_solver.settings().eps_abs = 1e-4;
+        _qp_solver.settings().eps_rel = 1e-4;
+        _qp_solver.settings().max_iter = 100;
+        _qp_solver.settings().adaptive_rho = true;
+        _qp_solver.settings().adaptive_rho_interval = 50;
+        _qp_solver.settings().alpha = 1.6;
+    }
+
     inline const var_t& primal_solution() const { return _x; }
     inline var_t& primal_solution() { return _x; }
 
@@ -176,7 +188,7 @@ private:
                 _settings.iteration_callback(this);
             }
 
-            if (termination_criteria()) {
+            if (termination_criteria(_x, prob)) {
                 _info.status.value = sqp_status_t::SOLVED;
                 break;
             }
@@ -201,10 +213,11 @@ private:
     }
 #endif
 
-    bool termination_criteria() const
+    bool termination_criteria(const var_t &x, Problem &prob) const
     {
         if (_primal_step_norm <= _settings.eps_prim &&
-            _dual_step_norm <= _settings.eps_dual) {
+            _dual_step_norm <= _settings.eps_dual &&
+            max_constraint_violation(x, prob) <= _settings.eps_prim) {
             return true;
         }
         return false;
@@ -289,9 +302,6 @@ private:
 
         // solve the QP
         if (_info.iter == 1) {
-            _qp_solver.settings().warm_start = true;
-            _qp_solver.settings().check_termination = 1;
-            _qp_solver.settings().max_iter = 1000;
             _qp_solver.setup(_qp);
         } else {
             _qp_solver.update_qp(_qp);
@@ -359,6 +369,33 @@ private:
         cl1 += (x - ubx).cwiseMax(0.0).sum();
 
         return cl1;
+    }
+
+    /** L_inf norm of constraint violation */
+    Scalar max_constraint_violation(const var_t &x, Problem &prob) const
+    {
+        Scalar c = 0;
+        constr_eq_t c_eq;
+        constr_ineq_t c_ineq;
+        constr_box_t lbx, ubx;
+
+        prob.constraint(x, c_eq, c_ineq, lbx, ubx);
+
+        // c_eq = 0
+        if (NUM_EQ > 0) {
+            c = fmax(c, c_eq.template lpNorm<Eigen::Infinity>());
+        }
+
+        // c_ineq <= 0
+        if (NUM_INEQ > 0) {
+            c = fmax(c, c_ineq.maxCoeff());;
+        }
+
+        // l <= x <= u
+        c = fmax(c, (lbx - x).maxCoeff());
+        c = fmax(c, (x - ubx).maxCoeff());
+
+        return c;
     }
 };
 

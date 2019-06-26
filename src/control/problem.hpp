@@ -7,25 +7,16 @@
 /** class to store Optimal Control problems */
 namespace polympc {
 
-struct EmptyFunctor
-{
-    EmptyFunctor(){}
-    ~EmptyFunctor(){}
-};
-
-
-template<typename _Dynamics, typename _Lagrange, typename _Mayer, typename _InequalityConstraints = EmptyFunctor, typename _EqualityConstraints = EmptyFunctor>
+template<typename _Dynamics, typename _Lagrange, typename _Mayer>
 class OCProblem
 {
 public:
-    OCProblem();
+    OCProblem(){};
     ~OCProblem(){}
 
     using Dynamics = _Dynamics;
     using Lagrange = _Lagrange;
     using Mayer    = _Mayer;
-    using InequalityConstraints = _InequalityConstraints;
-    using EqualityConstraints = _EqualityConstraints;
 
     enum
     {
@@ -33,19 +24,7 @@ public:
         NU_D = Dynamics::Control::RowsAtCompileTime,
         NP_D = Dynamics::Parameters::RowsAtCompileTime,
     };
-
-    Dynamics m_f;
-    Lagrange m_lagrange;
-    Mayer    m_mayer;
-    EqualityConstraints m_eq_h;
-    InequalityConstraints m_ineq_g;
 };
-
-template<typename Dynamics, typename Lagrange, typename Mayer, typename InequalityConstraints, typename EqualityConstraints>
-OCProblem<Dynamics, Lagrange, Mayer, InequalityConstraints, EqualityConstraints>::OCProblem()
-{
-}
-
 
 }
 

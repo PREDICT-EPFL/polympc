@@ -5,6 +5,7 @@
 #include "control/nmpc.hpp"
 #include "control/simple_robot_model.hpp"
 #include "polynomials/ebyshev.hpp"
+#include "solvers/sqp.hpp"
 
 template <typename Solver>
 void callback(void *solver_p)
@@ -16,7 +17,7 @@ void callback(void *solver_p)
 using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
 using Approximation = Chebyshev<3, GAUSS_LOBATTO, double>; // POLY_ORDER = 3
 
-using controller_t = polympc::nmpc<Problem, Approximation, int>;
+using controller_t = polympc::nmpc<Problem, Approximation, sqp::SQP>;
 using var_t = controller_t::var_t;
 using dual_t = controller_t::dual_t;
 using State = controller_t::State;
@@ -47,9 +48,9 @@ void print_info(void)
     printf("controller_t size %lu\n", sizeof(controller_t));
     printf("controller_t::cost_colloc_t size %lu\n", sizeof(controller_t::cost_colloc_t));
     printf("controller_t::ode_colloc_t size %lu\n", sizeof(controller_t::ode_colloc_t));
-    printf("controller_t::sqp_t size %lu\n", sizeof(controller_t::sqp_t));
-    printf("controller_t::sqp_t::qp_t size %lu\n", sizeof(controller_t::sqp_t::qp_t));
-    printf("controller_t::sqp_t::qp_solver_t size %lu\n", sizeof(controller_t::sqp_t::qp_solver_t));
+    printf("controller_t::sqp_t size %lu\n", sizeof(controller_t::SolverImpl));
+    printf("controller_t::sqp_t::qp_t size %lu\n", sizeof(controller_t::SolverImpl::qp_t));
+    printf("controller_t::sqp_t::qp_solver_t size %lu\n", sizeof(controller_t::SolverImpl::qp_solver_t));
 }
 
 void print_duals(const dual_t& y)
@@ -94,7 +95,7 @@ inline bool is_nan(const Eigen::MatrixBase<Derived>& x)
 int main(int argc, char **argv)
 {
     controller_t robot_controller;
-    // robot_controller.solver.settings().iteration_callback = callback<controller_t::sqp_t>;
+    // robot_controller.m_solver.settings().iteration_callback = callback<controller_t::sqp_t>;
 
     State x = {-1, -1, 1.5};
     State dx;
@@ -117,7 +118,10 @@ int main(int argc, char **argv)
     uu << 1, 1;
     ul << 0, -1;
 
-    robot_controller.set_constraints(xl, xu, ul, uu);
+    robot_controller.setStateBounds(xl, xu);
+    robot_controller.setControlBounds(ul, uu);
+    robot_controller.setParameters(p);
+    robot_controller.disableWarmStart();
 
     print_info();
     std::cout << "x0 " << x.transpose() << std::endl;
@@ -130,30 +134,27 @@ int main(int argc, char **argv)
     traj_log.push_back(x);
 
     for (int i = 0; i < 30; i++) {
-
-        var_t sol;
-        if (i == 0) {
-            sol = robot_controller.solve(x, p);
-        } else {
-            sol = robot_controller.solve_warm_start(x, p);
+        if (i == 1) {
+            robot_controller.enableWarmStart();
         }
 
-        u = sol.segment<2>(VARX_SIZE+VARU_SIZE-NU);
+        robot_controller.computeControl(x);
+        robot_controller.getOptimalControl(u);
 
         // crude integrator
         const double dt = 0.001;
         for (int j = 0; j < 200; j++) {
-            robot_controller.ps_ode.m_f(x, u, p, dx);
+            robot_controller.m_ps_ode.m_f(x, u, p, dx);
             x = x + dt * dx;
         }
 
-        // print_sol(sol);
-        // print_duals(robot_controller.solver.dual_solution());
-        std::cout << "iter " << robot_controller.solver.info().iter << "  ";
-        std::cout << "qp " << robot_controller.solver.info().qp_solver_iter << "  ";
+        std::cout << "iter " << robot_controller.m_solver.info().iter << "  ";
+        std::cout << "qp " << robot_controller.m_solver.info().qp_solver_iter << "  ";
         std::cout << "x " << x.transpose() << "    ";
         std::cout << "u " << u.transpose() << std::endl;
 
+        var_t sol;
+        robot_controller.getSolution(sol);
         if (is_nan<var_t>(sol)) {
             std::cout << "ERROR: NAN" << std::endl;
             break;

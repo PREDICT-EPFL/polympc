@@ -60,6 +60,8 @@ public:
     State _constr_xl, _constr_xu;
     Control _constr_ul, _constr_uu;
 
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /*
      * var_t var = [xn, ..., x0, un, ..., u0, p]
      *
@@ -141,7 +143,7 @@ public:
         y0.setZero();
 
         solver.settings().max_iter = 100;
-        solver.settings().line_search_max_iter = 10;
+        solver.settings().line_search_max_iter = 3;
 
         solver.solve(*this, var0, y0);
 

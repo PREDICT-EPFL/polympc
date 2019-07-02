@@ -3,3 +3,11 @@ theme: readthedocs
 nav:
   - Home: index.md
   - Build documentation: build_doc.md
+  - Example: example.md
+# required for Markdown math support
+markdown_extensions:
+  - mdx_math:
+      enable_dollar_delimiter: True
+extra_javascript:
+  - https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML
+  - docs/mathjaxhelper.js

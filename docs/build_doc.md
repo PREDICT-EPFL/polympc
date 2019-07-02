@@ -5,7 +5,7 @@ This project uses [MkDocs](https://www.mkdocs.org) for building the documentatio
 ## Installation
 
 ```bash
-pip install mkdocs
+pip install mkdocs python-markdown-math
 ```
 
 ## Build and serve locally

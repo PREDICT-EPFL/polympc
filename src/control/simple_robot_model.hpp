@@ -2,7 +2,6 @@
 #define SIMPLE_ROBOT_MODEL_HPP
 
 #include "Eigen/Dense"
-#include "Eigen/Sparse"
 
 template <typename _Scalar = double>
 struct MobileRobot
@@ -15,17 +14,10 @@ struct MobileRobot
     using Control    = Eigen::Matrix<Scalar, 2, 1>;
     using Parameters = Eigen::Matrix<Scalar, 1, 1>;
 
-    void operator() (const State &state, const Control &control, const Parameters &param, State &value) const
-    {
-        value[0] = control[0] * cos(state[2]) * cos(control[1]);
-        value[1] = control[0] * sin(state[2]) * cos(control[1]);
-        value[2] = control[0] * sin(control[1]) / param[0];
-    }
-
     /** the one for automatic differentiation */
-    template<typename DerivedA, typename DerivedB, typename DerivedC>
+    template<typename DerivedA, typename DerivedB, typename DerivedC, typename DerivedD>
     void operator() (const Eigen::MatrixBase<DerivedA> &state, const Eigen::MatrixBase<DerivedB> &control,
-                     const Eigen::MatrixBase<DerivedC> &param, Eigen::MatrixBase<DerivedA> &value) const
+                     const Eigen::MatrixBase<DerivedC> &param, Eigen::MatrixBase<DerivedD> &value) const
     {
         value[0] = control[0] * cos(state[2]) * cos(control[1]);
         value[1] = control[0] * sin(state[2]) * cos(control[1]);
@@ -45,8 +37,11 @@ struct Lagrange
     Eigen::Matrix<Scalar, Control::RowsAtCompileTime, Control::RowsAtCompileTime> R;
 
     Lagrange(){
-        Q << 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.01;
-        R << 1, 0, 0, 0.001;
+        Q << 0.5, 0, 0,
+             0, 0.5, 0,
+             0, 0, 0.01;
+        R << 1, 0,
+             0, 0.001;
     }
     ~Lagrange(){}
 
@@ -56,10 +51,7 @@ struct Lagrange
     void operator() (const Eigen::MatrixBase<DerivedA> &state, const Eigen::MatrixBase<DerivedB> &control,
                      const Eigen::MatrixBase<DerivedC> &param, CostT &value) const
     {
-        //value = state.dot(Q * state) + control.dot(R * control);
-        /** @note: does not work with second derivatives without explicit cast ???*/
-        using ScalarT = typename Eigen::MatrixBase<DerivedA>::Scalar;
-        value = state.dot(Q.template cast<ScalarT>() * state) + control.dot(R. template cast<ScalarT>() * control);
+        value = state.dot(Q * state) + control.dot(R * control);
     }
 
 };
@@ -68,7 +60,9 @@ template<typename _Scalar = double>
 struct Mayer
 {
     Mayer(){
-        Q << 20, 0, 0, 0, 20, 0, 0, 0, 10;
+        Q << 20, 0, 0,
+             0, 20, 0,
+             0, 0, 10;
     }
     ~Mayer(){}
 

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Example - PolyMPC</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Example";
+    var mkdocs_page_input_path = "example.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js" defer></script>
+  <script src="../js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href=".." class="icon icon-home"> PolyMPC</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="..">Home</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../build_doc/">Build documentation</a>
+	    </li>
+          
+            <li class="toctree-l1 current">
+		
+    <a class="current" href="./">Example</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#mobile-robot-example">Mobile Robot example</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#model-implementation">Model Implementation</a></li>
+        
+            <li><a class="toctree-l3" href="#controller-example">Controller example</a></li>
+        
+        </ul>
+    
+
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="..">PolyMPC</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="..">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Example</li>
+    <li class="wy-breadcrumbs-aside">
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h1 id="mobile-robot-example">Mobile Robot example</h1>
+<p>We consider a mobile robot parking problem in a 2D world.
+Given an initial position <script type="math/tex">(x,y,\theta)</script> the robot should park at position <script type="math/tex">(0,0,0)</script>,
+which is illustrated in the figure below.</p>
+<p><img alt="Screenshot" src="../img/mobile_robot.png" /></p>
+<p>The robot has control inputs for the forward velocity <script type="math/tex">v</script> and the steering angle <script type="math/tex">\phi</script>
+and the wheeldistance <script type="math/tex">d</script> as parameter.</p>
+<p>We define the following tricycle kinematic model for this mobile robot:
+<script type="math/tex; mode=display">
+\begin{bmatrix}
+\dot{x} \\
+\dot{y} \\
+\dot{\theta}
+\end{bmatrix}=
+\begin{bmatrix}
+v \cos(\theta) \cos(\phi) \\
+v \sin(\theta) \cos(\phi) \\
+v \sin(\phi) / d
+\end{bmatrix}
+</script>
+</p>
+<h2 id="model-implementation">Model Implementation</h2>
+<p>The model can be implemented in the <code>MobileRobot</code> class that defines
+the <code>State</code>, <code>Control</code> and <code>Parameters</code> types and the system dynamics function.
+The dynamics function needs to be implemented in a templated fashion,
+such that it works with Eigen's <code>AutoDiffScalar</code> type for calculating derivatives.</p>
+<p>We also need to define the <em>Lagrange</em> and <em>Mayer</em> terms of the cost function.
+The <em>Lagrange</em> term defines a cost on the state and control vectors along the prediction horizon
+and the <em>Mayer</em> term defines the final cost on the state at the end of the trajectory.
+Both terms are quadratic functions, where the matrix coefficients need to be carefully tuned to obtain satisfactory results.</p>
+<p>The example implementation is shown in the <code>simple_robot_model.hpp</code> listing:</p>
+<pre><code class="Cpp">#ifndef SIMPLE_ROBOT_MODEL_HPP
+#define SIMPLE_ROBOT_MODEL_HPP
+
+#include &quot;Eigen/Dense&quot;
+
+template &lt;typename _Scalar = double&gt;
+struct MobileRobot
+{
+    MobileRobot(){}
+    ~MobileRobot(){}
+
+    using Scalar     = _Scalar;
+    using State      = Eigen::Matrix&lt;Scalar, 3, 1&gt;;
+    using Control    = Eigen::Matrix&lt;Scalar, 2, 1&gt;;
+    using Parameters = Eigen::Matrix&lt;Scalar, 1, 1&gt;;
+
+    /** the one for automatic differentiation */
+    template&lt;typename DerivedA, typename DerivedB, typename DerivedC, typename DerivedD&gt;
+    void operator() (const Eigen::MatrixBase&lt;DerivedA&gt; &amp;state, const Eigen::MatrixBase&lt;DerivedB&gt; &amp;control,
+                     const Eigen::MatrixBase&lt;DerivedC&gt; &amp;param, Eigen::MatrixBase&lt;DerivedD&gt; &amp;value) const
+    {
+        value[0] = control[0] * cos(state[2]) * cos(control[1]);
+        value[1] = control[0] * sin(state[2]) * cos(control[1]);
+        value[2] = control[0] * sin(control[1]) / param[0];
+    }
+};
+
+template&lt;typename _Scalar = double&gt;
+struct Lagrange
+{
+    using Scalar = _Scalar;
+    using State = Eigen::Matrix&lt;Scalar, 3, 1&gt;;
+    using Control  = Eigen::Matrix&lt;Scalar, 2, 1&gt;;
+    using Parameters = Eigen::Matrix&lt;Scalar, 1, 1&gt;;
+
+    Eigen::Matrix&lt;Scalar, State::RowsAtCompileTime, State::RowsAtCompileTime&gt; Q;
+    Eigen::Matrix&lt;Scalar, Control::RowsAtCompileTime, Control::RowsAtCompileTime&gt; R;
+
+    Lagrange(){
+        Q &lt;&lt; 0.5, 0, 0,
+             0, 0.5, 0,
+             0, 0, 0.01;
+        R &lt;&lt; 1, 0,
+             0, 0.001;
+    }
+    ~Lagrange(){}
+
+
+    /** the one for automatic differentiation */
+    template&lt;typename DerivedA, typename DerivedB, typename DerivedC, typename CostT&gt;
+    void operator() (const Eigen::MatrixBase&lt;DerivedA&gt; &amp;state, const Eigen::MatrixBase&lt;DerivedB&gt; &amp;control,
+                     const Eigen::MatrixBase&lt;DerivedC&gt; &amp;param, CostT &amp;value) const
+    {
+        value = state.dot(Q * state) + control.dot(R * control);
+    }
+
+};
+
+template&lt;typename _Scalar = double&gt;
+struct Mayer
+{
+    Mayer(){
+        Q &lt;&lt; 20, 0, 0,
+             0, 20, 0,
+             0, 0, 10;
+    }
+    ~Mayer(){}
+
+    using Scalar = _Scalar;
+    using State = Eigen::Matrix&lt;Scalar, 3, 1&gt;;
+    using Control  = Eigen::Matrix&lt;Scalar, 2, 1&gt;;
+    using Parameters = Eigen::Matrix&lt;Scalar, 1, 1&gt;;
+
+    Eigen::Matrix&lt;Scalar, State::RowsAtCompileTime, State::RowsAtCompileTime&gt; Q;
+
+    template&lt;typename StateT, typename CostT&gt;
+    void operator() (const Eigen::MatrixBase&lt;StateT&gt; &amp;state, CostT &amp;value) const
+    {
+        using ScalarT = typename Eigen::MatrixBase&lt;StateT&gt;::Scalar;
+        value = state.dot(Q.template cast&lt;ScalarT&gt;() * state);
+    }
+};
+
+#endif // SIMPLE_ROBOT_MODEL_HPP
+</code></pre>
+
+<h2 id="controller-example">Controller example</h2>
+<p>With the model dynamics and cost function defined,
+we choose some approximation scheme (here Chebyshev polynomials of order 3)
+and construct the NMPC controller.
+One needs to choose an initial state, parameters and bounds on state and control vectors.</p>
+<p>An code example shown in the <code>main.cpp</code> listing.</p>
+<pre><code class="Cpp">#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &quot;control/nmpc.hpp&quot;
+#include &quot;control/simple_robot_model.hpp&quot;
+#include &quot;polynomials/ebyshev.hpp&quot;
+#include &quot;solvers/sqp.hpp&quot;
+
+using Problem = polympc::OCProblem&lt;MobileRobot&lt;double&gt;, Lagrange&lt;double&gt;, Mayer&lt;double&gt;&gt;;
+using Approximation = Chebyshev&lt;3, GAUSS_LOBATTO, double&gt;;
+using Controller = polympc::nmpc&lt;Problem, Approximation, sqp::SQP&gt;;
+
+using State = Controller::State;
+using Control = Controller::Control;
+using Parameters = Controller::Parameters;
+
+int main(int argc, char **argv)
+{
+    Controller robot_controller;
+
+    State x = {-1, -0.5, -0.5};
+    Control u;
+    Parameters p(0.5);
+
+    robot_controller.setStateBounds(
+        {-10, -10, -std::numeric_limits&lt;double&gt;::infinity()},
+        {10, 10, std::numeric_limits&lt;double&gt;::infinity()}
+    );
+    robot_controller.setControlBounds(
+        {0, -1},
+        {1, 1}
+    );
+    robot_controller.setParameters(p);
+    robot_controller.disableWarmStart();
+
+    std::cout &lt;&lt; &quot;x0 &quot; &lt;&lt; x.transpose() &lt;&lt; std::endl;
+
+    for (int i = 0; i &lt; 30; i++) {
+
+        robot_controller.computeControl(x);
+        robot_controller.getOptimalControl(u);
+        robot_controller.enableWarmStart();
+
+        // crude integrator
+        const double dt = 0.001;
+        for (int j = 0; j &lt; 200; j++) {
+            State dx;
+            robot_controller.m_ps_ode.m_f(x, u, p, dx);
+            x = x + dt * dx;
+        }
+
+        std::cout &lt;&lt; &quot;x &quot; &lt;&lt; x.transpose() &lt;&lt; &quot;    &quot; &lt;&lt;
+                     &quot;u &quot; &lt;&lt; u.transpose() &lt;&lt; std::endl;
+
+    }
+}
+</code></pre>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../build_doc/" class="btn btn-neutral" title="Build documentation"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+      
+        <span><a href="../build_doc/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+    </span>
+</div>
+    <script>var base_url = '..';</script>
+    <script src="../js/theme.js" defer></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+      <script src="../docs/mathjaxhelper.js" defer></script>
+      <script src="../search/main.js" defer></script>
+
+</body>
+</html>

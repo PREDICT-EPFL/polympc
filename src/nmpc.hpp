@@ -8,12 +8,12 @@
 
 namespace polympc {
 
+/**
 std::set<std::string> available_options = {"spectral.number_segments", "spectral.poly_order", "spectral.tf"};
 
 template<typename ParamType>
 ParamType get_param(const std::string &key, const casadi::Dict dict, const ParamType &default_val)
 {
-    /** find if the key is a valid option */
     if((available_options.find(key) != available_options.end()) && (dict.find(key) != dict.end()))
         return dict.find(key)->second;
     else if((available_options.find(key) == available_options.end()) && (dict.find(key) != dict.end()))
@@ -24,6 +24,8 @@ ParamType get_param(const std::string &key, const casadi::Dict dict, const Param
     else
         return default_val;
 }
+
+*/
 
 template <typename System, int NX, int NU, int NumSegments = 2, int PolyOrder = 5>
 class nmpc

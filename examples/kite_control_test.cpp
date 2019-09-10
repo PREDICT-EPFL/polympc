@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 
     /** set state and control constraints */
     DM lbu = DM(std::vector<double>{-5, -10});
-    DM ubu = DM(std::vector<double>{-5, 10});
+    DM ubu = DM(std::vector<double>{5, 10});
     controller.setLBU(lbu);
     controller.setUBU(ubu);
 
@@ -37,6 +37,8 @@ int main(int argc, char **argv)
     DM ubx = DM::vertcat({M_PI_2, M_PI_2, M_PI, 100, 100});
     controller.setLBX(lbx);
     controller.setUBX(ubx);
+
+    controller.setReferenceVelocity(0.05);
 
     DM state = DM::vertcat({M_PI_4, 0, 0, 0, 0});
     controller.computeControl(state);

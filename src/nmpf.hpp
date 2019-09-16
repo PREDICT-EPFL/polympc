@@ -64,8 +64,8 @@ public:
     void setControlScaling(const casadi::DM &Scaling){Scale_U = Scaling;
                                                       invSU = casadi::DM::solve(Scale_U, casadi::DM::eye(Scale_U.size1()));}
 
-    void setReferenceVelocity(const casadi::DM &vel_ref){NLP["p"] = Scale_X(nx + 1,nx + 1) * vel_ref;
-                                                         reference_velocity = Scale_X(nx + 1,nx + 1) * vel_ref;}
+    void setReferenceVelocity(const casadi::DM &vel_ref){ARG["p"] = Scale_X(nx + 1,nx + 1) * vel_ref;
+                                                         /**reference_velocity = Scale_X(nx + 1,nx + 1) * vel_ref;*/ }
 
     void setPath(const casadi::SX &_path);
     void createNLP(const casadi::Dict &solver_options);
@@ -87,6 +87,8 @@ public:
     double getVirtState();
     double getVelocityError();
 
+    casadi::SX reference_velocity;
+
 private:
     System system;
     Path   PathFunc;
@@ -96,7 +98,7 @@ private:
     casadi::SX       Contraints;
     casadi::Function ContraintsFunc;
 
-    casadi::SX reference_velocity;
+    //casadi::SX reference_velocity;
 
     /** state box constraints */
     casadi::DM LBX, UBX;
@@ -215,7 +217,6 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
 
     WARM_START  = false;
     _initialized = false;
-    scale  = false;
 
     /** create NLP */
     createNLP(solver_options);
@@ -261,6 +262,8 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::Function aug_dynamo = casadi::Function("AUG_DYNAMO", {aug_state, aug_control}, {aug_dynamics});
     DynamicsFunc = aug_dynamo;
 
+    reference_velocity = casadi::SX::sym("reference_velocity");
+
     /** set default properties of approximation */
     const int num_segments = NumSegments;
     const int poly_order   = PolyOrder;
@@ -282,13 +285,14 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
         casadi::Function FunSODE = casadi::Function("scaled_ode", {aug_state, aug_control}, {SODE});
 
         diff_constr = spectral.CollocateDynamics(FunSODE, 0, tf);
+
+        std::cout << "USE SCALING : \n " << Scale_X << "\n";
     }
     else
     {
         diff_constr = spectral.CollocateDynamics(DynamicsFunc, 0, tf);
     }
 
-    diff_constr = diff_constr;
     //diff_constr = diff_constr(casadi::Slice(0, diff_constr.size1() - dimx));
 
     /** define an integral cost */
@@ -317,7 +321,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
 
     /** trace functions */
     PathError = casadi::Function("PathError", {aug_state}, {residual});
-    VelError  = casadi::Function("VelError", {aug_state}, {reference_velocity - v(1)});
+    VelError  = casadi::Function("VelError", {aug_state, reference_velocity}, {reference_velocity - v(1)});
 
     casadi::SX mayer           =  casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) );
     casadi::Function MayerTerm = casadi::Function("Mayer",{aug_state}, {mayer});
@@ -447,11 +451,6 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
         ARG["lbx"](casadi::Slice(idx_in, idx_out), 0) = X0;
         ARG["ubx"](casadi::Slice(idx_in, idx_out), 0) = X0;
 
-        //std::cout << ARG["x0"] << "\n";
-        //std::cout << ARG["lbx"] << "\n";
-        //std::cout << ARG["ubx"] << "\n";
-        //std::cout << NLP["p"] << " = " << reference_velocity << "\n";
-
         /** relax virtual state constraint */
         idx_theta = idx_out - 2;
         ARG["lbx"](idx_theta) = X0(nx) - flexibility;
@@ -519,7 +518,7 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVelocityError()
     {
         casadi::DM state = OptimalTrajectory(casadi::Slice(0, OptimalTrajectory.size1()), OptimalTrajectory.size2() - 1);
         state = casadi::DM::mtimes(Scale_X, state);
-        casadi::DMVector tmp = VelError(casadi::DMVector{state});
+        casadi::DMVector tmp = VelError(casadi::DMVector{state, ARG["p"]});
         error = casadi::DM::norm_2( tmp[0] ).nonzeros()[0];
     }
     return error;
@@ -571,7 +570,7 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
         if(counter > 10)
             break;
     }
-    std::cout << theta_i << "\n";
+    //std::cout << theta_i << "\n";
     return theta_i;
 }
 

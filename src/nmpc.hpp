@@ -2,19 +2,18 @@
 #define NMPC_HPP
 
 #include <memory>
-//#include "polymath.h"
-#include "pseudospectral/chebyshev.hpp"
+#include "chebyshev.hpp"
 
 #define POLYMPC_USE_CONSTRAINTS
 
 namespace polympc {
 
+/**
 std::set<std::string> available_options = {"spectral.number_segments", "spectral.poly_order", "spectral.tf"};
 
 template<typename ParamType>
 ParamType get_param(const std::string &key, const casadi::Dict dict, const ParamType &default_val)
 {
-    /** find if the key is a valid option */
     if((available_options.find(key) != available_options.end()) && (dict.find(key) != dict.end()))
         return dict.find(key)->second;
     else if((available_options.find(key) == available_options.end()) && (dict.find(key) != dict.end()))
@@ -25,6 +24,8 @@ ParamType get_param(const std::string &key, const casadi::Dict dict, const Param
     else
         return default_val;
 }
+
+*/
 
 template <typename System, int NX, int NU, int NumSegments = 2, int PolyOrder = 5>
 class nmpc
@@ -102,7 +103,7 @@ private:
     casadi::DM Scale_U, invSU;
 
     /** cost function weight matrices */
-    casadi::SX Q, R, W;
+    casadi::SX Q, R, P;
 
     casadi::DM NLP_X, NLP_LAM_G, NLP_LAM_X;
     casadi::Function NLP_Solver;
@@ -148,15 +149,44 @@ nmpc<System, NX, NU, NumSegments, PolyOrder>::nmpc(const casadi::DM &_reference,
 
     assert(ny == Reference.size1());
 
-    Q  = casadi::SX::diag(casadi::SX({10,150,50}));
-    R  = casadi::SX::diag(casadi::SX({0.1,1,0.1}));
+    Q = casadi::SX::eye(ny);
+    P = casadi::SX::eye(ny);
+    R = casadi::SX::eye(NU);
+
+    Scale_X = casadi::DM::eye(ny);
+    invSX = Scale_X;
+
+    Scale_U = casadi::DM::eye(NU);
+    invSU = Scale_U;
+
+    if(mpc_options.find("mpc.Q") != mpc_options.end())
+    {
+        Q = mpc_options.find("mpc.Q")->second;
+        assert(ny == Q.size1());
+        assert(ny == Q.size2());
+    }
+
+    if(mpc_options.find("mpc.R") != mpc_options.end())
+    {
+        R = mpc_options.find("mpc.R")->second;
+        assert(NU == R.size1());
+        assert(NU == R.size2());
+    }
+
+    if(mpc_options.find("mpc.P") != mpc_options.end())
+    {
+        P = mpc_options.find("mpc.P")->second;
+        assert(ny == P.size1());
+        assert(ny == P.size2());
+    }
+
 
     /** problem scaling */
     scale = false;
     if(mpc_options.find("mpc.scaling") != mpc_options.end())
         scale = static_cast<bool>(mpc_options.find("mpc.scaling")->second.nonzeros()[0]);
 
-    if(mpc_options.find("mpc.scale_x") != mpc_options.end())
+    if(mpc_options.find("mpc.scale_x") != mpc_options.end() && scale)
     {
         Scale_X = mpc_options.find("mpc.scale_x")->second;
         assert(NX == Scale_X.size1());
@@ -164,7 +194,7 @@ nmpc<System, NX, NU, NumSegments, PolyOrder>::nmpc(const casadi::DM &_reference,
         invSX = casadi::DM::solve(Scale_X, casadi::DM::eye(Scale_X.size1()));
     }
 
-    if(mpc_options.find("mpc.scale_u") != mpc_options.end())
+    if(mpc_options.find("mpc.scale_u") != mpc_options.end() && scale)
     {
         Scale_U = mpc_options.find("mpc.scale_u")->second;
         assert(NU == Scale_U.size1());
@@ -262,7 +292,7 @@ void nmpc<System, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi::Dict 
     /** trace functions */
     PathError = casadi::Function("PathError", {x}, {residual});
 
-    casadi::SX mayer           =  casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) );
+    casadi::SX mayer           =  casadi::SX::sum1( casadi::SX::mtimes(P, pow(residual, 2)) );
     casadi::Function MayerTerm = casadi::Function("Mayer",{x}, {mayer});
     casadi::SX performance_idx = spectral.CollocateCost(MayerTerm, LagrangeTerm, 0.0, tf);
 
@@ -321,7 +351,7 @@ void nmpc<System, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi::Dict 
     casadi::DM feasible_control = casadi::DM::zeros(UBU.size());
 
     ARG["x0"] = casadi::DM::vertcat(casadi::DMVector{casadi::DM::repmat(feasible_state, poly_order * num_segments + 1, 1),
-                                     casadi::DM::repmat(feasible_control, poly_order * num_segments + 1, 1), plane_x0});
+                                     casadi::DM::repmat(feasible_control, poly_order * num_segments + 1, 1)});
 }
 
 template<typename System, int NX, int NU, int NumSegments, int PolyOrder>

@@ -24,8 +24,8 @@ SimpleKinematicKite::SimpleKinematicKite(const SimpleKinematicKiteProperties &Ki
     /** try matrix definition with vertcat here instaed */
 
     SX R_GN = SX::zeros(3,3);
-    R_GN(0,0) = -sin(theta) * cos(phi);  R_GN(0,1) = -sin(theta);  R_GN(0,2) = -cos(theta) * cos(phi);
-    R_GN(1,0) = -sin(theta) * sin(phi);  R_GN(1,1) = cos(theta);   R_GN(1,2) = -cos(theta) * sin(phi);
+    R_GN(0,0) = -sin(theta) * cos(phi);  R_GN(0,1) = -sin(phi);  R_GN(0,2) = -cos(theta) * cos(phi);
+    R_GN(1,0) = -sin(theta) * sin(phi);  R_GN(1,1) = cos(phi);   R_GN(1,2) = -cos(theta) * sin(phi);
     R_GN(2,2) = cos(theta);              R_GN(2,1) = 0;            R_GN(2,2) = -sin(theta);
 
     SX Rb_NK = SX::zeros(2,2);

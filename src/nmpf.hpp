@@ -64,8 +64,8 @@ public:
     void setControlScaling(const casadi::DM &Scaling){Scale_U = Scaling;
                                                       invSU = casadi::DM::solve(Scale_U, casadi::DM::eye(Scale_U.size1()));}
 
-    void setReferenceVelocity(const casadi::DM &vel_ref){ARG["p"] = Scale_X(nx + 1,nx + 1) * vel_ref;
-                                                         /**reference_velocity = Scale_X(nx + 1,nx + 1) * vel_ref;*/ }
+    void setReferenceVelocity(const casadi::DM &vel_ref){ARG["p"](0) = Scale_X(nx + 1,nx + 1) * vel_ref;}
+    void setPathParameters(const casadi::DM &path_params){ARG["p"](casadi::Slice(1, num_path_parameters)) = path_params;}
 
     void setPath(const casadi::SX &_path);
     void createNLP(const casadi::Dict &solver_options);
@@ -87,8 +87,6 @@ public:
     double getVirtState();
     double getVelocityError();
 
-    casadi::SX reference_velocity;
-
 private:
     System system;
     Path   PathFunc;
@@ -98,7 +96,9 @@ private:
     casadi::SX       Contraints;
     casadi::Function ContraintsFunc;
 
-    //casadi::SX reference_velocity;
+    casadi::SX reference_velocity;
+    casadi::SX path_parameters;
+    casadi::DM default_path_parameters;
 
     /** state box constraints */
     casadi::DM LBX, UBX;
@@ -131,6 +131,7 @@ private:
     bool _initialized;
     bool scale;
     double reset_path_after;
+    int num_path_parameters;
 
     /** TRACE FUNCTIONS */
     casadi::Function DynamicsFunc;
@@ -217,6 +218,19 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
         reset_path_after  = tmp.nonzeros()[0];
     }
 
+    num_path_parameters = 0;
+    if(mpc_options.find("mpc.num_path_params") != mpc_options.end())
+    {
+        casadi::DM tmp = mpc_options.find("mpc.num_path_params")->second;
+        num_path_parameters  = tmp.nonzeros()[0] >= 0 ? tmp.nonzeros()[0] : 0;
+    }
+
+    if(mpc_options.find("mpc.default_path_params") != mpc_options.end())
+    {
+        default_path_parameters = mpc_options.find("mpc.default_path_params")->second;
+        assert(default_path_parameters.size1() == num_path_parameters);
+    }
+
     /** assume unconstrained problem */
     LBX = -casadi::DM::inf(nx + 2);
     UBX = casadi::DM::inf(nx + 2);
@@ -270,7 +284,10 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::Function aug_dynamo = casadi::Function("AUG_DYNAMO", {aug_state, aug_control}, {aug_dynamics});
     DynamicsFunc = aug_dynamo;
 
+    /** create problem parameters: velocity and path */
     reference_velocity = casadi::SX::sym("reference_velocity");
+    if(num_path_parameters > 0)
+        path_parameters = casadi::SX::sym("path_parameters", num_path_parameters);
 
     /** set default properties of approximation */
     const int num_segments = NumSegments;
@@ -293,8 +310,6 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
         casadi::Function FunSODE = casadi::Function("scaled_ode", {aug_state, aug_control}, {SODE});
 
         diff_constr = spectral.CollocateDynamics(FunSODE, 0, tf);
-
-        std::cout << "USE SCALING : \n " << Scale_X << "\n";
     }
     else
     {
@@ -307,8 +322,13 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::SX lagrange, residual;
     if(scale)
     {
-        /** @bug dimensions bug here */
-        casadi::SX sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v(0))})[0];
+        /** @bug dimensions bug here: _invSX */
+        casadi::SX sym_path;
+        if(num_path_parameters > 0)
+            sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v(0)), path_parameters})[0];
+        else
+            sym_path = PathFunc(casadi::SXVector{casadi::SX::mtimes(invSX(nx, nx), v(0))})[0];
+
         casadi::SX _invSX = invSX(casadi::Slice(0, NX), casadi::Slice(0, NX));
         residual  = sym_path - output({casadi::SX::mtimes(_invSX, x)})[0];
         lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
@@ -317,7 +337,12 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     }
     else
     {
-        casadi::SX sym_path = PathFunc(casadi::SXVector{v(0)})[0];
+        casadi::SX sym_path;
+        if(num_path_parameters > 0)
+            sym_path = PathFunc(casadi::SXVector{v(0), path_parameters})[0];
+        else
+            sym_path = PathFunc(casadi::SXVector{v(0)})[0];
+
         residual  = sym_path - output({x})[0];
         lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
                     casadi::SX::sum1( casadi::SX::mtimes(W, pow(reference_velocity - v(1), 2)) );
@@ -364,7 +389,10 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     NLP["x"] = opt_var;
     NLP["f"] = performance_idx;
     NLP["g"] = diff_constr;
-    NLP["p"] = reference_velocity;
+    if(num_path_parameters > 0)
+        NLP["p"] = casadi::SX::vertcat({reference_velocity, path_parameters});
+    else
+        NLP["p"] = reference_velocity;
 
     /** default solver options */
     OPTS["ipopt.linear_solver"]         = "ma97";
@@ -385,7 +413,10 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     ARG["ubx"] = ubx;
     ARG["lbg"] = lbg;
     ARG["ubg"] = ubg;
+
+    /** set default parameters */
     setReferenceVelocity(1.0); // ARG["p"] = 1.0
+    setPathParameters(default_path_parameters);
 
     casadi::DM feasible_state = casadi::DM::zeros(UBX.size());
     casadi::DM feasible_control = casadi::DM::zeros(UBU.size());
@@ -415,7 +446,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
     /** scale input */
     X0 = casadi::DM::mtimes(Scale_X, X0);
-    double critical_val = Scale_X(nx, nx).nonzeros()[0] * 2 * M_PI;
+    double critical_val = Scale_X(nx, nx).nonzeros()[0] * reset_path_after;
     double flexibility  = Scale_X(nx, nx).nonzeros()[0] * 0.78;     // ~ pi / 4
 
     int idx_theta;
@@ -526,7 +557,7 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVelocityError()
     {
         casadi::DM state = OptimalTrajectory(casadi::Slice(0, OptimalTrajectory.size1()), OptimalTrajectory.size2() - 1);
         state = casadi::DM::mtimes(Scale_X, state);
-        casadi::DMVector tmp = VelError(casadi::DMVector{state, ARG["p"]});
+        casadi::DMVector tmp = VelError(casadi::DMVector{state, ARG["p"](0)});
         error = casadi::DM::norm_2( tmp[0] ).nonzeros()[0];
     }
     return error;
@@ -547,7 +578,7 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVirtState()
 /** compute intial guess for virtual state */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
 casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointOnPath(const casadi::DM &position,
-                                                                                          const casadi::DM &init_guess)
+                                                                                      const casadi::DM &init_guess)
 {
     casadi::SX theta = casadi::SX::sym("theta");
     casadi::SX sym_residual = 0.5 * casadi::SX::norm_2(PathFunc(casadi::SXVector{theta})[0] - casadi::SX(position));

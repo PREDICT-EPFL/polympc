@@ -130,6 +130,7 @@ private:
     bool WARM_START;
     bool _initialized;
     bool scale;
+    double reset_path_after;
 
     /** TRACE FUNCTIONS */
     casadi::Function DynamicsFunc;
@@ -207,6 +208,13 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
         W = mpc_options.find("mpc.W")->second;
         assert(1 == W.size1());
         assert(1 == W.size2());
+    }
+
+    reset_path_after = 2 * M_PI;
+    if(mpc_options.find("mpc.reset_path_after") != mpc_options.end())
+    {
+        casadi::DM tmp = mpc_options.find("mpc.reset_path_after")->second;
+        reset_path_after  = tmp.nonzeros()[0];
     }
 
     /** assume unconstrained problem */
@@ -391,17 +399,17 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 {
     int N = NUM_COLLOCATION_POINTS;
 
-    /** rectify virtual state */
+    /** rectify / reset virtual state */
     casadi::DM X0 = _X0;
     bool rectify = false;
-    if(X0(nx).nonzeros()[0] > 2 * M_PI)
+    if(X0(nx).nonzeros()[0] > reset_path_after)
     {
-        X0(nx) -= 2 * M_PI;
+        X0(nx) -= reset_path_after;
         rectify = true;
     }
-    else if (X0(nx).nonzeros()[0] < -2 * M_PI)
+    else if (X0(nx).nonzeros()[0] < -reset_path_after)
     {
-        X0(nx) += 2 * M_PI;
+        X0(nx) += reset_path_after;
         rectify = true;
     }
 

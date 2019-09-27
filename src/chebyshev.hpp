@@ -345,7 +345,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateIdC
     if ( (data.size1() != NX) || (data.size2() != (NumSegments * PolyOrder + 1)) )
     {
         std::cout << "CollocateIdCost: Inconsistent data size! \n";
-        return casadi::SX({0});
+        return casadi::SX(0);
     }
 
     /** collocate Integral cost */

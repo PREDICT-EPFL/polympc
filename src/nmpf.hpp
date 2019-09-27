@@ -65,7 +65,7 @@ public:
                                                       invSU = casadi::DM::solve(Scale_U, casadi::DM::eye(Scale_U.size1()));}
 
     void setReferenceVelocity(const casadi::DM &vel_ref){ARG["p"](0) = Scale_X(nx + 1,nx + 1) * vel_ref;}
-    void setPathParameters(const casadi::DM &path_params){ARG["p"](casadi::Slice(1, num_path_parameters)) = path_params;}
+    void setPathParameters(const casadi::DM &path_params){ARG["p"](casadi::Slice(1, num_path_parameters + 1)) = path_params;}
 
     void setPath(const casadi::SX &_path);
     void createNLP(const casadi::Dict &solver_options);
@@ -86,6 +86,7 @@ public:
     double getPathError();
     double getVirtState();
     double getVelocityError();
+    double getCost();
 
 private:
     System system;
@@ -99,6 +100,7 @@ private:
     casadi::SX reference_velocity;
     casadi::SX path_parameters;
     casadi::DM default_path_parameters;
+    casadi::DM flexibility;
 
     /** state box constraints */
     casadi::DM LBX, UBX;
@@ -201,7 +203,7 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
     {
         R = mpc_options.find("mpc.R")->second;
         assert((nu + 1) == R.size1());
-        assert((ny + 1) == R.size2());
+        assert((nu + 1) == R.size2());
     }
 
     if(mpc_options.find("mpc.W") != mpc_options.end())
@@ -229,6 +231,14 @@ nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::nmpf(const double &tf, const
     {
         default_path_parameters = mpc_options.find("mpc.default_path_params")->second;
         assert(default_path_parameters.size1() == num_path_parameters);
+    }
+
+    flexibility = casadi::DM(0.78); //magic number
+    if(mpc_options.find("mpc.flexibility") != mpc_options.end())
+    {
+        flexibility = mpc_options.find("mpc.flexibility")->second;
+        assert( flexibility.nonzeros()[0] >= 0 );
+        assert( flexibility.size1() == 1 );
     }
 
     /** assume unconstrained problem */
@@ -367,7 +377,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
 
     /** debugging output */
     DynamicConstraints = casadi::Function("constraint_func", {opt_var}, {diff_constr});
-    PerformanceIndex   = casadi::Function("performance_idx", {opt_var}, {performance_idx});
+    PerformanceIndex   = casadi::Function("performance_idx", {opt_var, reference_velocity}, {performance_idx});
 
     casadi::SX lbg = casadi::SX::zeros(diff_constr.size());
     casadi::SX ubg = casadi::SX::zeros(diff_constr.size());
@@ -415,8 +425,8 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     ARG["ubg"] = ubg;
 
     /** set default parameters */
-    setReferenceVelocity(1.0); // ARG["p"] = 1.0
-    setPathParameters(default_path_parameters);
+    ARG["p"] = casadi::DM::zeros(num_path_parameters + 1);
+    setReferenceVelocity(1.0);
 
     casadi::DM feasible_state = casadi::DM::zeros(UBX.size());
     casadi::DM feasible_control = casadi::DM::zeros(UBU.size());
@@ -447,7 +457,6 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
     /** scale input */
     X0 = casadi::DM::mtimes(Scale_X, X0);
     double critical_val = Scale_X(nx, nx).nonzeros()[0] * reset_path_after;
-    double flexibility  = Scale_X(nx, nx).nonzeros()[0] * 0.78;     // ~ pi / 4
 
     int idx_theta;
 
@@ -460,11 +469,11 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
         /** relax virtual state constraint */
         idx_theta = idx_out - 2;
-        ARG["lbx"](idx_theta) = X0(nx) - flexibility;
-        ARG["ubx"](idx_theta) = X0(nx) + flexibility;
+        ARG["lbx"](idx_theta) = X0(nx) - Scale_X(nx, nx) * flexibility;
+        ARG["ubx"](idx_theta) = X0(nx) + Scale_X(nx, nx) * flexibility;
 
-        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - flexibility;
-        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + flexibility;
+        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - Scale_X(nx + 1, nx + 1) * flexibility;
+        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + Scale_X(nx + 1, nx + 1) * flexibility;
 
         /** rectify initial guess */
         if(rectify)
@@ -492,11 +501,11 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
         /** relax virtual state constraint */
         idx_theta = idx_out - 2;
-        ARG["lbx"](idx_theta) = X0(nx) - flexibility;
-        ARG["ubx"](idx_theta) = X0(nx) + flexibility;
+        ARG["lbx"](idx_theta) = X0(nx) - Scale_X(nx, nx) * flexibility;
+        ARG["ubx"](idx_theta) = X0(nx) + Scale_X(nx, nx) * flexibility;
 
-        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - flexibility;
-        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + flexibility;
+        ARG["lbx"](idx_theta + 1) = X0(nx + 1) - Scale_X(nx + 1, nx + 1) * flexibility;
+        ARG["ubx"](idx_theta + 1) = X0(nx + 1) + Scale_X(nx + 1, nx + 1) * flexibility;
     }
 
     //DMVector dbg_prf    = PerformanceIndex({ARG["x0"]});
@@ -574,6 +583,15 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVirtState()
     }
     return virt_state;
 }
+
+/** get cost */
+template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
+double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getCost()
+{
+    casadi::DM cost =  PerformanceIndex(casadi::DMVector{ARG["x0"], ARG["p"](0)})[0];
+    return cost.nonzeros()[0];
+}
+
 
 /** compute intial guess for virtual state */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>

@@ -146,7 +146,7 @@ PSODESolver<PolyOrder, NumSegments, NX, NU>::PSODESolver(casadi::Function ODE, c
     NLP["f"] = 1e-3 * casadi::SX::dot(G,G);
     NLP["g"] = G;
 
-    OPTS["ipopt.linear_solver"]  = "ma97"; // mumps
+    OPTS["ipopt.linear_solver"]  = "mumps"; // mumps
     OPTS["ipopt.print_level"]    = 5;
     OPTS["ipopt.tol"]            = 1e-4;
     OPTS["ipopt.acceptable_tol"] = 1e-4;

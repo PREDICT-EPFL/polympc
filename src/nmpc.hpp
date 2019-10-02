@@ -327,7 +327,7 @@ void nmpc<System, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi::Dict 
     NLP["g"] = diff_constr;
 
     /** default solver options */
-    OPTS["ipopt.linear_solver"]         = "ma97";
+    OPTS["ipopt.linear_solver"]         = "mumps";
     OPTS["ipopt.print_level"]           = 1;
     OPTS["ipopt.tol"]                   = 1e-4;
     OPTS["ipopt.acceptable_tol"]        = 1e-4;

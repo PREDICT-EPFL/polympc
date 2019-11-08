@@ -3,7 +3,7 @@
 #include "gtest/gtest.h"
 #define SOLVER_DEBUG
 #define SOLVER_ASSERT(x) EXPECT_TRUE(x)
-#include "sqp.hpp"
+#include "solvers/sqp.hpp"
 
 using namespace sqp;
 

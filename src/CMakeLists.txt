@@ -9,5 +9,3 @@ target_link_libraries(polymath ${CASADI_LIBRARIES} Eigen3::Eigen)
 add_library(odesolver integrator.cpp integrator.h)
 target_link_libraries(odesolver polymath ${CASADI_LIBRARIES} Eigen3::Eigen)
 
-#add_library(polynmpf nmpf.cpp nmpf.h)
-#target_link_libraries(polynmpf odesolver ${CASADI_LIBRARIES})

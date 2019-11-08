@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "qp_solver.hpp"
+#include "solvers/qp_solver.hpp"
 #include <Eigen/IterativeLinearSolvers>
 
 using namespace qp_solver;

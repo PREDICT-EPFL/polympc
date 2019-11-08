@@ -1,7 +1,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 #include "gtest/gtest.h"
-#include "bfgs.hpp"
+#include "solvers/bfgs.hpp"
 
 namespace bfgs_test {
 

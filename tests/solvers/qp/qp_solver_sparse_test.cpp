@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #define QP_SOLVER_PRINTING
 #define QP_SOLVER_USE_SPARSE
-#include "qp_solver.hpp"
+#include "solvers/qp_solver.hpp"
 
 using namespace qp_solver;
 

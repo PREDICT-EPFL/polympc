@@ -3,9 +3,9 @@
 # set -e # exit on error
 
 tests=(
-    "./build/src/solvers/qp_solver_test"
-    "./build/src/solvers/sqp_test"
-    "./build/src/control/nmpc_test"
+    "./build/tests/solvers/qp/qp_solver_test"
+    "./build/tests/solvers/sqp/sqp_test"
+    "./build/tests/control/nmpc_test"
 )
 
 FAIL=1

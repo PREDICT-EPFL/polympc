@@ -22,3 +22,6 @@ target_link_libraries(kite_sode_test polymath Eigen3::Eigen)
 
 add_executable(kite_control_test kite_control_test.cpp)
 target_link_libraries(kite_control_test kite Eigen3::Eigen)
+
+add_executable(generic_ocp_test generic_ocp_test.cpp)
+target_link_libraries(generic_ocp_test polymath Eigen3::Eigen)

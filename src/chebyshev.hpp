@@ -28,7 +28,10 @@ public:
     BaseClass CollocateDynamics(casadi::Function &dynamics, const double &t0, const double &tf);
     BaseClass CollocateCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
                             const double &t0, const double &tf);
+    BaseClass CollocateParametricCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
+                                      const double &t0, const double &tf);
     BaseClass CollocateIdCost(casadi::Function &IdCost, casadi::DM data, const double &t0, const double &tf);
+    BaseClass CollocateFunction(casadi::Function &_Function);
 
     typedef std::function<BaseClass(BaseClass, BaseClass, BaseClass)> functor;
     /** right hand side function of the ODE */
@@ -36,6 +39,23 @@ public:
     double _t0, _tf;
     functor CollocateDynamics2(const functor &dynamics, const double &t0, const double &tf);
     BaseClass collocate_dynamics(const BaseClass &X, const BaseClass &U, const BaseClass &P);
+
+    enum
+    {
+        _NX = NX,
+        _NU = NU,
+        _NP = NP,
+
+        _POLY_ORDER = PolyOrder,
+        _NUM_SEGMENTS = NumSegments,
+        _NUM_COLLOC_PTS_X = NumSegments * PolyOrder + 1,
+        _NUM_COLLOC_PTS_U = NumSegments * PolyOrder + 1,
+
+        _X_START_IDX = 0,
+        _X_END_IDX = _NUM_COLLOC_PTS_X * NX,
+        _U_START_IDX = _NUM_COLLOC_PTS_X * NX,
+        _U_END_IDX = _U_START_IDX + _NUM_COLLOC_PTS_U * NU
+    };
 
 private:
 
@@ -269,7 +289,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateDyn
     return G_XU;
 }
 
-/** @brief collocate differential constraints */
+/** @brief collocate performance index */
 template<class BaseClass,
          int PolyOrder,
          int NumSegments,
@@ -303,22 +323,55 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateCos
             int m = 0;
             for (int i = k * NX * PolyOrder; i <= (k + 1) * NX * PolyOrder; i += NX)
             {
-                /** extrapolate the first control points : u[-1] */
-                //if(j > _U.size1() - NU )
-                if(false)
-                {
-                    BaseClass U0 = {0};
-                    BaseClass U = _U(casadi::Slice(_U.size1() - NU * (PolyOrder), _U.size1()));
-                    for(int n = 0; n < PolyOrder * NU; n += NU)
-                        U0 += pow(-1, n) * U(casadi::Slice(n, n + NU));
+                value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU))});
+                local_int += _QuadWeights(m) * value[0];
+                j += NU;
+                ++m;
+            }
+            //std::cout << "Local Integral : [ " << k << " ] : " << local_int << "\n";
+            Lagrange += t_scale * local_int;
+        }
+    }
 
-                    value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), U0});
-                }
-                else
-                {
-                    value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU))});
-                }
+    return Mayer + Lagrange;
+}
 
+/** @brief collocate parametric performance index */
+template<class BaseClass,
+         int PolyOrder,
+         int NumSegments,
+         int NX,
+         int NU,
+         int NP>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateParametricCost(casadi::Function &MayerTerm,
+                                                                                            casadi::Function &LagrangeTerm,
+                                                                                            const double &t0, const double &tf)
+{
+    casadi::SXVector value;
+    BaseClass Mayer    = {0};
+    BaseClass Lagrange = {0};
+
+    /** collocate Mayer term */
+    if(!MayerTerm.is_null())
+    {
+        value = MayerTerm(casadi::SXVector{_X(casadi::Slice(0, NX)),
+                                           _P});
+        Mayer = value[0];
+    }
+
+    /** collocate Lagrange term */
+    if(!LagrangeTerm.is_null())
+    {
+        /** for each segment */
+        double t_scale = (tf - t0) / (2 * NumSegments);
+        for (int k = 0; k < NumSegments; ++k)
+        {
+            BaseClass local_int = {0};
+            int j = k * NU * PolyOrder;
+            int m = 0;
+            for (int i = k * NX * PolyOrder; i <= (k + 1) * NX * PolyOrder; i += NX)
+            {
+                value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU)), _P});
                 local_int += _QuadWeights(m) * value[0];
                 j += NU;
                 ++m;
@@ -430,6 +483,35 @@ BaseClass lox(std::function<BaseClass(BaseClass, BaseClass, BaseClass)> my_func,
               const BaseClass &U, const BaseClass &P)
 {
     return my_func(X, U, P);
+}
+
+
+/** Collocate an arbitrary function */
+template<class BaseClass,
+        int PolyOrder,
+        int NumSegments,
+        int NX,
+        int NU,
+        int NP>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFunction(casadi::Function &_Function)
+{
+    /** evaluate function at the collocation points */
+    const int n_f_out = _Function.nnz_out();
+    casadi::SXVector tmp;
+    const int n_colloc = (NumSegments * PolyOrder + 1);
+    BaseClass f_colloc = BaseClass::zeros(n_colloc * n_f_out);
+    int i_x, i_u, i_f;
+    for(int i = 0; i < n_colloc; i++)
+    {
+        i_x = i * NX;
+        i_u = i * NU;
+        i_f = i * n_f_out;
+        tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
+                                         _U(casadi::Slice(i_u, i_u + NU)),
+                                         _P});
+        f_colloc(casadi::Slice(i_f, i_f + n_f_out)) = tmp[0];
+    }
+    return f_colloc;
 }
 
 #endif // CHEBYSHEV_HPP

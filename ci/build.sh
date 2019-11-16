@@ -4,5 +4,5 @@ set -e
 
 mkdir -p build
 cd build
-cmake ..
+cmake -DBUILD_TESTS=ON -DBUILD_RELEASE=ON ..
 make

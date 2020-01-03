@@ -7,9 +7,11 @@ static constexpr int NP = 3;
 static constexpr int POLY_ORDER = 4;
 static constexpr int NUM_SEGMENTS = 3;
 
-using Approximation = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
+using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
+using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
 
-class MyOCP : public GenericOCP<MyOCP, Approximation>
+//class MyOCP : public GenericOCP<MyOCP, Approximation>
+class MyOCP : public GenericOCP<MyOCP, Approximation2>
 {
 public:
     /** constructor inheritance */

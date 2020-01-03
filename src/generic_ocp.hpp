@@ -2,6 +2,7 @@
 #define GENERIC_OCP_HPP
 
 #include "chebyshev.hpp"
+#include "chebyshev_ms.hpp"
 
 template<typename OCP, typename Approximation>
 class GenericOCP

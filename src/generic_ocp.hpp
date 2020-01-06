@@ -165,12 +165,19 @@ void GenericOCP<OCP, Approximation>::setup()
     //std::cout << "Cost: " << cost << "\n";
 
     /** collocate generic inequality constraints */
+    casadi::SX ineq_constraints;
+    casadi::SX lbg_ic;
+    casadi::SX ubg_ic;
     casadi::SX ic = inequality_constraints(x,u,p);
-    casadi::Function ic_func = casadi::Function("ic_func",{x,u,p},{ic});
-    casadi::SX ineq_constraints = spectral.CollocateFunction(ic_func);
-    casadi::SX lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
-    casadi::SX ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
-    //std::cout << "Inequality constraints: " << ineq_constraints << "\n";
+
+    if (!ic->empty())
+    {
+        casadi::Function ic_func = casadi::Function("ic_func",{x,u,p},{ic});
+        ineq_constraints = spectral.CollocateFunction(ic_func);
+        lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
+        ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
+    }
+    std::cout << "Inequality constraints: " << ineq_constraints << "\n";
 
     /** initialise NLP interface*/
     casadi::SX varx = spectral.VarX();

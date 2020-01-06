@@ -394,10 +394,21 @@ template<class BaseClass,
          int NP>
 BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFunction(casadi::Function &_Function)
 {
+    /** check if the function depends on X */
+    casadi::SX x_test = casadi::SX::sym("x_test", NX);
+    casadi::SX u_test = casadi::SX::sym("u_test", NU);
+    casadi::SX p_test = casadi::SX::sym("p_test", NP);
+    casadi::SX res_test = _Function(casadi::SXVector{x_test, u_test, p_test})[0];
+    casadi::SX grad_test = casadi::SX::jacobian(res_test, x_test);
+    bool depends_on_state = true;
+
+    if(grad_test->empty())
+        depends_on_state = false;
+
     /** evaluate function at the collocation points */
     int DIMX = _X.size1();
     int NC = _Function.nnz_out();
-    int DIMC = (NumSegments * PolyOrder + 1) * NC;
+    int DIMC = depends_on_state ? (NumSegments * PolyOrder + 1) * NC : NumSegments * NC;
     BaseClass F_XU = BaseClass::zeros(DIMC);
     casadi::SXVector tmp;
     int j = 0;
@@ -405,9 +416,9 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateF
 
     for(int j = 0; j < NumSegments; j++)
     {
-        for (int i = 0; i < (PolyOrder + 1); i++)
+        if(!depends_on_state)
         {
-            int idx_start_x = j * PolyOrder * NX + (i * NX);
+            int idx_start_x = 0;
             int idx_end_x   = idx_start_x + NX;
 
             int idx_start_u = j * NU;
@@ -425,15 +436,42 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateF
                                                  _P});
             }
 
-            if( ((i % PolyOrder) != 0) || (i == 0))
-            {
-                F_XU(casadi::Slice(k, k + NC)) = tmp[0];
-                k += NC;
-            }
+            F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+            k += NC;
+        }
+        else
+        {
 
-            // hack add last point
-            if((j == (NumSegments - 1)) && (i == PolyOrder))
-                F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+            for (int i = 0; i < (PolyOrder + 1); i++)
+            {
+                int idx_start_x = j * PolyOrder * NX + (i * NX);
+                int idx_end_x   = idx_start_x + NX;
+
+                int idx_start_u = j * NU;
+                int idx_end_u = idx_start_u + NU;
+
+                if(NP == 0)
+                {
+                    tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                     _U(casadi::Slice(idx_start_u, idx_end_u)) });
+                }
+                else
+                {
+                    tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                     _U(casadi::Slice(idx_start_u, idx_end_u)),
+                                                     _P});
+                }
+
+                if( ((i % PolyOrder) != 0) || (i == 0))
+                {
+                    F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+                    k += NC;
+                }
+
+                // hack add last point
+                if((j == (NumSegments - 1)) && (i == PolyOrder))
+                    F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+            }
         }
     }
 

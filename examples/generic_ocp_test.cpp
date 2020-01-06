@@ -42,6 +42,7 @@ public:
     casadi::SX inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
     {
         return pow(u,2) - casadi::SX::vertcat({10, 10});
+        //return casadi::SX(); //!!! deal with it!!!
     }
 };
 

@@ -14,6 +14,9 @@ target_link_libraries(robot_control_test mobile_robot Eigen3::Eigen)
 add_executable(kite_model_test kite_model_test.cpp)
 target_link_libraries(kite_model_test kite odesolver Eigen3::Eigen)
 
+add_executable(car_model_test car_model_test.cpp)
+target_link_libraries(car_model_test odesolver Eigen3::Eigen)
+
 #add_executable(chebyshev_test chebyshev_test.cpp)
 #target_link_libraries(chebyshev_test polymath Eigen3::Eigen)
 

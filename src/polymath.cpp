@@ -105,6 +105,65 @@ SX mat_dynamics(const SX &arg_x, const SX &arg_u, Function &func)
     return SX::vertcat(xdot);
 }
 
+casadi::Function lagrange_poly(const uint &n_degree)
+{
+    casadi::SX t = casadi::SX::sym("t");
+    casadi::SX nodes = casadi::SX::sym("nodes", n_degree + 1);
+    casadi::SX phi_sym = casadi::SX::ones(n_degree + 1, 1); //polynomial coefficients
+
+    for(uint k = 0; k <= n_degree; ++k)
+    {
+        for(uint j = 0; j <= n_degree; ++j)
+        {
+            if(j != k)
+                phi_sym(k) *= (t - nodes(j)) / (nodes(k) - nodes(j));
+        }
+    }
+
+    casadi::Function phi_fun = Function("phi_fun", SXVector{t, nodes}, {phi_sym});
+    return phi_fun;
+}
+
+casadi::Function lagrange_interpolant(const casadi::DM &X, const casadi::DM &Y)
+{
+    casadi::SX t = casadi::SX::sym("t");
+    Eigen::VectorXd Xe(X.size1()); Xe = Eigen::VectorXd::Map(X.nonzeros().data(), X.size1());
+    Eigen::VectorXd Ye(Y.size1()); Ye = Eigen::VectorXd::Map(Y.nonzeros().data(), Y.size1());
+
+    Eigen::VectorXd interpolant = lagrange_interpolant(Xe, Ye);
+
+    /** cast back to CasADi Polynomial and evaluate at "t" */
+    std::vector<double> coeffs(interpolant.size());
+    Eigen::Map<Eigen::VectorXd>(&coeffs[0], interpolant.size()) = interpolant;
+    casadi::Polynomial poly(coeffs);
+
+    return casadi::Function("interpolant",{t},{poly(t)});
+}
+
+Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y)
+{
+    Eigen::VectorXd polynomial(X.rows());
+
+    Eigen::MatrixXd P(X.rows(), polynomial.rows());
+    for(uint i = 0; i < P.rows(); ++i)
+    {
+        Eigen::VectorXd roots(X.rows() - 1);
+        uint count = 0;
+        for(uint j = 0; j < X.rows(); ++j)
+        {    if(i != j)
+            {
+                roots(count) = X(j);
+                count++;
+            }
+        }
+        Eigen::roots_to_monicPolynomial(roots, polynomial);
+        P.row(i) = polynomial / Eigen::poly_eval(polynomial, X(i));
+    }
+    //polynomial = Y.transpose() * P.rowwise().reverse();
+    polynomial = Y.transpose() * P;
+    return polynomial;
+}
+
 /** Linear system implementation */
 bool LinearSystem::is_controllable()
 {

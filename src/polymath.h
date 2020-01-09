@@ -103,6 +103,23 @@ namespace polymath
         return cart_coord;
     }
 
+    /** @brief : compute Lagrange polynomial of degree "n_degree"
+     * Lagrange polynomials
+     * returns: Function({point, nodes})
+     * */
+    casadi::Function lagrange_poly(const uint &n_degree);
+
+    /** @brief: compute lagrangian interpolator
+     * returns: Function({point}) : y_point = polyval(P, point)
+     * P - coeeficients of the interpolation polynomial
+     * */
+    casadi::Function lagrange_interpolant(const casadi::DM &X, const casadi::DM &Y);
+    /** @brief: compute lagrangian interpolant
+     * returns: polynomial coefficients : [C0,..., Cn-1, Cn]
+     * P - coefficients of the interpolation polynomial
+     * */
+    Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y);
+
     /** Linear Systems Control and Analysis routines */
     struct LinearSystem
     {

@@ -399,11 +399,7 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateF
     casadi::SX u_test = casadi::SX::sym("u_test", NU);
     casadi::SX p_test = casadi::SX::sym("p_test", NP);
     casadi::SX res_test = _Function(casadi::SXVector{x_test, u_test, p_test})[0];
-    casadi::SX grad_test = casadi::SX::jacobian(res_test, x_test);
-    bool depends_on_state = true;
-
-    if(grad_test->empty())
-        depends_on_state = false;
+    bool depends_on_state = casadi::SX::depends_on(res_test, x_test);
 
     /** evaluate function at the collocation points */
     int DIMX = _X.size1();

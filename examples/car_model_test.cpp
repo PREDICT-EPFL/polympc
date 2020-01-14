@@ -70,17 +70,32 @@ int main(void)
     ps_sol = ps_solver.solve_trajectory(init_state, control, FULL);
     std::cout << "PS:" << ps_sol.at("x") << "\n";
 
-    casadi::DM points = casadi::DM::vertcat({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000});
-    casadi::DM v      = casadi::DM::vertcat({19.9198, 20.1185, 19.8883, 20.3789, 20.2985, 0.1000});
-    casadi::DM phi    = casadi::DM::vertcat({0.1139, -0.0368, 0.0565, -0.1054, 0.3564, 0.0981});
+    casadi::DM points = 2 * casadi::DM::vertcat({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000});
+    casadi::DM v      = casadi::DM::vertcat({50.0000, 48.0521, 22.8910, 25.2032, 29.3983, 0.10});
+    casadi::DM phi    = casadi::DM::vertcat({-0.5236, -0.5236, 0.5236, 0.3547, -0.5047, 0.0981});
     casadi::Function f_v   = polymath::lagrange_interpolant(points, v);
     casadi::Function f_phi = polymath::lagrange_interpolant(points, phi);
 
-    std::cout << f_v(casadi::DM{0.1})[0] << " " << f_phi(casadi::DM({0.1}))[0] << "\n";
+    /** integrate independently with the CVODES integrator */
+    Dict opts;
+    opts["tf"]         = 0.01;
+    opts["tol"]        = 1e-5;
+    opts["method"] = IntType::CVODES;
+    ODESolver cvodes_solver(ode, opts);
 
-    //Eigen::VectorXd points(4);
-    //points << 1.0, 0.5, -0.5, -1.0;
-    //Eigen::VectorXd poly = polymath::lagrange_interpolant(points, points);
+    double t = 0, dt = 0.01;
+    casadi::DM x_t = init_state;
+    casadi::DM xt_log = casadi::DM::vertcat({x_t});
+    while(t < 1.0)
+    {
+        std::cout << "Simulating: " << t << "\n";
+        casadi::DM u_t = casadi::DM::vertcat({f_v(casadi::DM(t))[0], f_phi(casadi::DM(t))[0]});
+        x_t = cvodes_solver.solve(x_t, u_t, dt);
+        xt_log = casadi::DM::vertcat({xt_log, x_t});
+        t += dt;
+    }
+
+    std::cout << xt_log << "\n";
 }
 
 

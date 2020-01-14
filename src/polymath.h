@@ -120,6 +120,10 @@ namespace polymath
      * */
     Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y);
 
+    /** Chebyshev collocation points for the interval [-1, 1]*/
+    casadi::SX cgl_nodes( const int &n_points);
+
+
     /** Linear Systems Control and Analysis routines */
     struct LinearSystem
     {

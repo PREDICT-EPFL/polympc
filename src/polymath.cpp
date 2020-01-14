@@ -140,6 +140,17 @@ casadi::Function lagrange_interpolant(const casadi::DM &X, const casadi::DM &Y)
     return casadi::Function("interpolant",{t},{poly(t)});
 }
 
+casadi::SX cgl_nodes(const int &n_points)
+{
+    auto grid_int = casadi::range(0, n_points);
+    /** cast grid to Casadi type */
+    casadi::DMVector DMgrid(grid_int.begin(), grid_int.end());
+    casadi::DM grid = casadi::DM::vertcat(DMgrid);
+    casadi::SX X = cos(grid * (M_PI / (n_points - 1)));
+
+    return X;
+}
+
 Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y)
 {
     Eigen::VectorXd polynomial(X.rows());

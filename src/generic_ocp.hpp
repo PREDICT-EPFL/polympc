@@ -72,7 +72,6 @@ public:
         {
             std::pair<int, int> indices = parameter_map[name];
             ARG["p"](casadi::Slice(indices.first, indices.second)) = value;
-            std::cout << "Parameters: " << ARG["p"] << "\n";
         }
         else
         {
@@ -177,7 +176,7 @@ void GenericOCP<OCP, Approximation>::setup()
         lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
         ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
     }
-    std::cout << "Inequality constraints: " << ineq_constraints << "\n";
+    //std::cout << "Inequality constraints: " << ineq_constraints << "\n";
 
     /** initialise NLP interface*/
     casadi::SX varx = spectral.VarX();

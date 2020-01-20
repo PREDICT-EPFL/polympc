@@ -223,6 +223,26 @@ void LagrangeInterpolator::update_basis(const Eigen::VectorXd &nodes)
     m_poly_basis = polymath::lagrange_poly_basis(nodes);
 }
 
+void LagrangeInterpolator::init(const Eigen::VectorXd &nodes, const Eigen::VectorXd &values)
+{
+    assert(nodes.rows() == values.rows());
+    assert((nodes.cols() == 1) && (values.cols() == 1));
+
+    m_poly_basis = polymath::lagrange_poly_basis(nodes);
+    m_interpolant =  values.transpose() * m_poly_basis;
+}
+
+void LagrangeInterpolator::init(const casadi::DM &nodes, const casadi::DM &values)
+{
+    assert(nodes.rows() == values.rows());
+    assert((nodes.columns() == 1) && (values.columns() == 1));
+    Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.nonzeros().data(), nodes.size1());
+    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.nonzeros().data(), values.size1());
+
+    m_poly_basis = polymath::lagrange_poly_basis(X);
+    m_interpolant = Y.transpose() * m_poly_basis;
+}
+
 double LagrangeInterpolator::eval(const double &arg)
 {
     return Eigen::poly_eval(m_interpolant, arg);

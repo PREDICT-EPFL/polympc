@@ -135,6 +135,7 @@ namespace polymath
     public:
         LagrangeInterpolator(const Eigen::VectorXd &nodes, const Eigen::VectorXd &values);
         LagrangeInterpolator(const casadi::DM &nodes, const casadi::DM &values);
+        LagrangeInterpolator() = default;
         ~LagrangeInterpolator() = default;
 
         double eval(const double &arg);
@@ -142,6 +143,8 @@ namespace polymath
         double eval(const double &arg, const casadi::DM &values);
 
         void update_basis(const Eigen::VectorXd &nodes);
+        void init(const Eigen::VectorXd &nodes, const Eigen::VectorXd &values);
+        void init(const casadi::DM &nodes, const casadi::DM &values);
 
     private:
         Eigen::MatrixXd m_poly_basis;

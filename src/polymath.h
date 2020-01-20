@@ -120,8 +120,33 @@ namespace polymath
      * */
     Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y);
 
-    /** Chebyshev collocation points for the interval [-1, 1]*/
+    /** @brief: compute the matrix of basis polynomial coefficients
+     * nodes: basis nodes
+     * return: NxN matrix of lagrange polynomials
+     */
+    Eigen::MatrixXd lagrange_poly_basis(const Eigen::VectorXd &nodes);
+
+    /** Chebyshev-Gauss_Lobatto collocation nodes for the interval [-1, 1]*/
     casadi::SX cgl_nodes( const int &n_points);
+
+    /** class to keep the lagrange interpolation data */
+    class  LagrangeInterpolator
+    {
+    public:
+        LagrangeInterpolator(const Eigen::VectorXd &nodes, const Eigen::VectorXd &values);
+        LagrangeInterpolator(const casadi::DM &nodes, const casadi::DM &values);
+        ~LagrangeInterpolator() = default;
+
+        double eval(const double &arg);
+        double eval(const double &arg, const Eigen::VectorXd &values);
+        double eval(const double &arg, const casadi::DM &values);
+
+        void update_basis(const Eigen::VectorXd &nodes);
+
+    private:
+        Eigen::MatrixXd m_poly_basis;
+        Eigen::VectorXd m_interpolant;
+    };
 
 
     /** Linear Systems Control and Analysis routines */

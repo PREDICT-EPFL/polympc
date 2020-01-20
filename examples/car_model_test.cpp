@@ -73,8 +73,11 @@ int main(void)
     casadi::DM points = 2 * casadi::DM::vertcat({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000});
     casadi::DM v      = casadi::DM::vertcat({50.0000, 48.0521, 22.8910, 25.2032, 29.3983, 0.10});
     casadi::DM phi    = casadi::DM::vertcat({-0.5236, -0.5236, 0.5236, 0.3547, -0.5047, 0.0981});
-    casadi::Function f_v   = polymath::lagrange_interpolant(points, v);
-    casadi::Function f_phi = polymath::lagrange_interpolant(points, phi);
+    //casadi::Function f_v   = polymath::lagrange_interpolant(points, v);
+    //casadi::Function f_phi = polymath::lagrange_interpolant(points, phi);
+
+    polymath::LagrangeInterpolator f_v(points, v);
+    polymath::LagrangeInterpolator f_phi(points, phi);
 
     /** integrate independently with the CVODES integrator */
     Dict opts;
@@ -89,13 +92,15 @@ int main(void)
     while(t < 1.0)
     {
         std::cout << "Simulating: " << t << "\n";
-        casadi::DM u_t = casadi::DM::vertcat({f_v(casadi::DM(t))[0], f_phi(casadi::DM(t))[0]});
+        casadi::DM u_t = casadi::DM::vertcat({f_v.eval(t), f_phi.eval(t)});
         x_t = cvodes_solver.solve(x_t, u_t, dt);
         xt_log = casadi::DM::vertcat({xt_log, x_t});
         t += dt;
     }
 
     std::cout << xt_log << "\n";
+
+    return 0;
 }
 
 

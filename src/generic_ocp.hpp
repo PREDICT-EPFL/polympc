@@ -101,8 +101,9 @@ public:
     void solve(const casadi::DM &lbx0, const casadi::DM &ubx0,
                const casadi::DM &X0 = casadi::DM(), const casadi::DM &LAM_X0 = casadi::DM(), const casadi::DM &LAM_G0 = casadi::DM());
 
-    casadi::DM solution_primal;
-    casadi::DM solution_dual;
+    //casadi::DM solution_primal;
+    //casadi::DM solution_dual;
+    casadi::DM NLP_X, NLP_LAM_G, NLP_LAM_X;
 
     static constexpr int NX = Approximation::_NX;
     static constexpr int NU = Approximation::_NU;
@@ -126,7 +127,6 @@ private:
     casadi::Function NLP_Solver;
     casadi::Dict OPTS, USER_OPTS;
     casadi::DMDict ARG;
-    casadi::DM NLP_X, NLP_LAM_G, NLP_LAM_X;
     std::map<std::string, std::pair<int, int>> parameter_map;
 };
 

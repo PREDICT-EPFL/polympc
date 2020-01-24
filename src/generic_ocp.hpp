@@ -104,6 +104,7 @@ public:
     //casadi::DM solution_primal;
     //casadi::DM solution_dual;
     casadi::DM NLP_X, NLP_LAM_G, NLP_LAM_X;
+    casadi::Dict solve_status;
 
     static constexpr int NX = Approximation::_NX;
     static constexpr int NU = Approximation::_NU;
@@ -235,6 +236,7 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
     NLP_X     = res.at("x");
     NLP_LAM_X = res.at("lam_x");
     NLP_LAM_G = res.at("lam_g");
+    solve_status = NLP_Solver.stats();
 }
 
 

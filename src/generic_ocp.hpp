@@ -211,6 +211,8 @@ void GenericOCP<OCP, Approximation>::setup()
     ARG["ubx"] =  casadi::DM::inf(opt_var.size1());
     ARG["p"]   = casadi::DM::zeros(varp.size1());
 
+    /** default initial guess */
+    ARG["x0"] = casadi::DM ::zeros(opt_var.size1(), 1);
 }
 
 template<typename OCP, typename Approximation>
@@ -223,6 +225,11 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
     /** apply warmstarting if possible */
     if(!X0.is_empty())
         ARG["x0"] = X0;
+    else
+    {
+        casadi::DM mid_point = 0.5 * ( lbx0 + ubx0 );
+        ARG["x0"](casadi::Slice(0, X_END)) = casadi::DM::repmat(mid_point, NUM_SEGMENTS * POLY_ORDER + 1, 1);
+    }
 
     if(!LAM_X0.is_empty())
         ARG["lam_x0"] = LAM_X0;

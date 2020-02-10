@@ -9,9 +9,15 @@ class GenericOCP
 {
 public:
     GenericOCP(){ setup(); }
-    GenericOCP(const casadi::Dict &user_options)
+    GenericOCP(const casadi::Dict &nlp_options)
     {
-        USER_OPTS = user_options;
+        USER_OPTS = nlp_options;
+        setup();
+    }
+    GenericOCP(const casadi::Dict &nlp_options, const casadi::Dict &mpc_options)
+    {
+        USER_OPTS = nlp_options;
+        MPC_OPTS  = mpc_options;
         setup();
     }
     virtual ~GenericOCP() = default;
@@ -124,9 +130,11 @@ public:
     static constexpr int U_END   = Approximation::_U_END_IDX;
 
 private:
+    bool scaling{false};
+    casadi::SX SX, SU, invSX, invSU;
     casadi::SXDict NLP;
     casadi::Function NLP_Solver;
-    casadi::Dict OPTS, USER_OPTS;
+    casadi::Dict OPTS, USER_OPTS, MPC_OPTS;
     casadi::DMDict ARG;
     std::map<std::string, std::pair<int, int>> parameter_map;
 };
@@ -137,6 +145,14 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX x = casadi::SX::sym("x", NX);
     casadi::SX u = casadi::SX::sym("u", NU);
     casadi::SX p = casadi::SX::sym("p", NP);
+
+    /** set scaling of the problem */
+    if(MPC_OPTS.find("mpc.scaling") != MPC_OPTS.end())
+        scaling = MPC_OPTS["mpc.scaling"];
+
+    if(scaling)
+        std::cout << "I AM USING SCALING \n";
+
 
     /** collocate dynamic equations*/
     casadi::SX diff_constr;

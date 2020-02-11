@@ -73,7 +73,7 @@ public:
     {
         casadi::DM opt_x = NLP_X(casadi::Slice(0, X_END));
         casadi::DM reshaped = casadi::DM::reshape(opt_x, NX, POLY_ORDER * NUM_SEGMENTS + 1);
-        return _mtimes(casadi::DM(ScX), reshaped);
+        return _mtimes(casadi::DM(invSX), reshaped);
     }
 
     /** get optimal control trajectory */
@@ -81,7 +81,7 @@ public:
     {
         casadi::DM opt_u = NLP_X(casadi::Slice(X_END, U_END));
         casadi::DM reshaped = casadi::DM::reshape(opt_u, NU, POLY_ORDER * NUM_SEGMENTS + 1);
-        return _mtimes(casadi::DM(ScU), reshaped);
+        return _mtimes(casadi::DM(invSU), reshaped);
     }
 
     void set_parameters(const casadi::DM &param_vector)

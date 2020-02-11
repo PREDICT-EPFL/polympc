@@ -126,9 +126,8 @@ public:
     void solve(const casadi::DM &lbx0, const casadi::DM &ubx0,
                const casadi::DM &X0 = casadi::DM(), const casadi::DM &LAM_X0 = casadi::DM(), const casadi::DM &LAM_G0 = casadi::DM());
 
-    //casadi::DM solution_primal;
-    //casadi::DM solution_dual;
     casadi::DM NLP_X, NLP_LAM_G, NLP_LAM_X;
+    std::vector<double> SCALER_X, SCALER_U;
     casadi::Dict solve_status;
 
     static constexpr int NX = Approximation::_NX;
@@ -166,11 +165,13 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX p = casadi::SX::sym("p", NP);
 
     /** set scaling of the problem */
-    /** default values */
+    /** default scalers values */
     ScX   = casadi::SX::eye(NX);
     invSX = casadi::SX::eye(NX);
     ScU   = casadi::SX::eye(NU);
     invSU = casadi::SX::eye(NU);
+    SCALER_X = std::vector<double>(NX, 1.0);
+    SCALER_U = std::vector<double>(NU, 1.0);
 
     if(MPC_OPTS.find("mpc.scaling") != MPC_OPTS.end())
         scaling = MPC_OPTS["mpc.scaling"];
@@ -181,6 +182,7 @@ void GenericOCP<OCP, Approximation>::setup()
         assert(NX == scale_x.size());
         ScX   = casadi::SX::diag({scale_x});
         invSX = casadi::DM::solve(ScX, casadi::DM::eye(NX));
+        SCALER_X = scale_x;
     }
 
     if(scaling && (MPC_OPTS.find("mpc.scale_u") != MPC_OPTS.end()))
@@ -189,6 +191,7 @@ void GenericOCP<OCP, Approximation>::setup()
         assert(NU == scale_u.size());
         ScU   = casadi::SX::diag({scale_u});
         invSU = casadi::DM::solve(ScU, casadi::DM::eye(NU));
+        SCALER_U = scale_u;
     }
 
     /** collocate dynamic equations*/

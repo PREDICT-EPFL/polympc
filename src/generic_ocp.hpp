@@ -4,15 +4,8 @@
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
 
-casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2)
-{
-    return casadi::SX::mtimes(m1,m2);
-}
-
-casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2)
-{
-    return casadi::DM::mtimes(m1,m2);
-}
+casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2){ return casadi::SX::mtimes(m1,m2); }
+casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2){ return casadi::DM::mtimes(m1,m2); }
 
 template<typename OCP, typename Approximation>
 class GenericOCP
@@ -73,6 +66,22 @@ public:
         assert((lower_bound.size1() == NU) && (upper_bound.size1() == NU));
         ARG["lbx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), lower_bound), Approximation::_NUM_COLLOC_PTS_U);
         ARG["ubx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), upper_bound), Approximation::_NUM_COLLOC_PTS_U);
+    }
+
+    /** get optimal state trajectory */
+    casadi::DM get_optimal_trajectory()
+    {
+        casadi::DM opt_x = NLP_X(casadi::Slice(0, X_END));
+        casadi::DM reshaped = casadi::DM::reshape(opt_x, NX, POLY_ORDER * NUM_SEGMENTS + 1);
+        return _mtimes(casadi::DM(ScX), reshaped);
+    }
+
+    /** get optimal control trajectory */
+    casadi::DM get_optimal_control()
+    {
+        casadi::DM opt_u = NLP_X(casadi::Slice(X_END, U_END));
+        casadi::DM reshaped = casadi::DM::reshape(opt_u, NU, POLY_ORDER * NUM_SEGMENTS + 1);
+        return _mtimes(casadi::DM(ScU), reshaped);
     }
 
     void set_parameters(const casadi::DM &param_vector)

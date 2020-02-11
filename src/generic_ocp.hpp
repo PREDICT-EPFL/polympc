@@ -4,8 +4,8 @@
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
 
-casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2){ return casadi::SX::mtimes(m1,m2); }
-casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2){ return casadi::DM::mtimes(m1,m2); }
+static casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2){ return casadi::SX::mtimes(m1,m2); }
+static casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2){ return casadi::DM::mtimes(m1,m2); }
 
 template<typename OCP, typename Approximation>
 class GenericOCP

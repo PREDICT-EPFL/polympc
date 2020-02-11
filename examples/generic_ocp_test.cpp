@@ -53,7 +53,12 @@ int main(void)
     casadi::Dict user_options;
     user_options["ipopt.print_level"] = 5;
 
-    MyOCP lox(user_options);
+    casadi::Dict mpc_options;
+    mpc_options["mpc.scaling"] = true;
+    mpc_options["mpc.scale_x"] = std::vector<double>{1,2};
+    mpc_options["mpc.scale_u"] = std::vector<double>{3,4};
+
+    MyOCP lox(user_options, mpc_options);
     casadi::DM lbx = casadi::DM::vertcat({-10,-10});
     casadi::DM ubx = casadi::DM::vertcat({10, 10});
 

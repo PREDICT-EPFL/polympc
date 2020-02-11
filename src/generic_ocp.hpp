@@ -4,6 +4,16 @@
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
 
+casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2)
+{
+    return casadi::SX::mtimes(m1,m2);
+}
+
+casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2)
+{
+    return casadi::DM::mtimes(m1,m2);
+}
+
 template<typename OCP, typename Approximation>
 class GenericOCP
 {
@@ -54,15 +64,15 @@ public:
     void set_state_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
     {
         assert((lower_bound.size1() == NX) && (upper_bound.size1() == NX));
-        ARG["lbx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(lower_bound, Approximation::_NUM_COLLOC_PTS_X);
-        ARG["ubx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(upper_bound, Approximation::_NUM_COLLOC_PTS_X);
+        ARG["lbx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScX), lower_bound), Approximation::_NUM_COLLOC_PTS_X);
+        ARG["ubx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScX), upper_bound), Approximation::_NUM_COLLOC_PTS_X);
     }
     /** constrol box constraints */
     void set_control_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
     {
         assert((lower_bound.size1() == NU) && (upper_bound.size1() == NU));
-        ARG["lbx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(lower_bound, Approximation::_NUM_COLLOC_PTS_U);
-        ARG["ubx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(upper_bound, Approximation::_NUM_COLLOC_PTS_U);
+        ARG["lbx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), lower_bound), Approximation::_NUM_COLLOC_PTS_U);
+        ARG["ubx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), upper_bound), Approximation::_NUM_COLLOC_PTS_U);
     }
 
     void set_parameters(const casadi::DM &param_vector)
@@ -131,7 +141,7 @@ public:
 
 private:
     bool scaling{false};
-    casadi::SX SX, SU, invSX, invSU;
+    casadi::SX ScX, ScU, invSX, invSU;
     casadi::SXDict NLP;
     casadi::Function NLP_Solver;
     casadi::Dict OPTS, USER_OPTS, MPC_OPTS;
@@ -147,16 +157,35 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX p = casadi::SX::sym("p", NP);
 
     /** set scaling of the problem */
+    /** default values */
+    ScX   = casadi::SX::eye(NX);
+    invSX = casadi::SX::eye(NX);
+    ScU   = casadi::SX::eye(NU);
+    invSU = casadi::SX::eye(NU);
+
     if(MPC_OPTS.find("mpc.scaling") != MPC_OPTS.end())
         scaling = MPC_OPTS["mpc.scaling"];
 
-    if(scaling)
-        std::cout << "I AM USING SCALING \n";
+    if(scaling && (MPC_OPTS.find("mpc.scale_x") != MPC_OPTS.end()))
+    {
+        std::vector<double> scale_x = MPC_OPTS["mpc.scale_x"];
+        assert(NX == scale_x.size());
+        ScX   = casadi::SX::diag({scale_x});
+        invSX = casadi::DM::solve(ScX, casadi::DM::eye(NX));
+    }
 
+    if(scaling && (MPC_OPTS.find("mpc.scale_u") != MPC_OPTS.end()))
+    {
+        std::vector<double> scale_u = MPC_OPTS["mpc.scale_u"];
+        assert(NU == scale_u.size());
+        ScU   = casadi::SX::diag({scale_u});
+        invSU = casadi::DM::solve(ScU, casadi::DM::eye(NU));
+    }
 
     /** collocate dynamic equations*/
     casadi::SX diff_constr;
-    casadi::SX dynamics = system_dynamics(x,u,p);
+    casadi::SX dynamics = system_dynamics(_mtimes(invSX, x), _mtimes(invSU, u), p);
+    dynamics = _mtimes(ScX, dynamics);
     casadi::Function dyn_func;
     /** @badcode : have to deal with the old Chebyshev interface */
     if(NP == 0)
@@ -167,24 +196,22 @@ void GenericOCP<OCP, Approximation>::setup()
     diff_constr = spectral.CollocateDynamics(dyn_func, t_start, t_final);
     casadi::SX lbg_diff = casadi::SX::zeros(diff_constr.size1(), 1);
     casadi::SX ubg_diff = lbg_diff;
-    //std::cout << "Differential constraints: " << diff_constr << "\n";
 
     /** collocate performance index */
     casadi::SX cost;
-    casadi::SX mayer_cost = mayer_term(x,p);
+    casadi::SX mayer_cost = mayer_term(_mtimes(invSX, x), p);
     casadi::Function mayer_cost_func = casadi::Function("mayer_cost",{x,p},{mayer_cost});
 
-    casadi::SX lagrange_cost = lagrange_term(x,u,p);
+    casadi::SX lagrange_cost = lagrange_term(_mtimes(invSX, x), _mtimes(invSU, u), p);
     casadi::Function lagrange_cost_func = casadi::Function("lagrange_cost",{x,u,p},{lagrange_cost});
 
     cost = spectral.CollocateParametricCost(mayer_cost_func, lagrange_cost_func, t_start, t_final);
-    //std::cout << "Cost: " << cost << "\n";
 
     /** collocate generic inequality constraints */
     casadi::SX ineq_constraints;
     casadi::SX lbg_ic;
     casadi::SX ubg_ic;
-    casadi::SX ic = inequality_constraints(x,u,p);
+    casadi::SX ic = inequality_constraints(_mtimes(invSX, x), _mtimes(invSU, u), p);
 
     if (!ic->empty())
     {
@@ -193,7 +220,6 @@ void GenericOCP<OCP, Approximation>::setup()
         lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
         ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
     }
-    //std::cout << "Inequality constraints: " << ineq_constraints << "\n";
 
     /** initialise NLP interface*/
     casadi::SX varx = spectral.VarX();
@@ -235,8 +261,8 @@ template<typename OCP, typename Approximation>
 void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi::DM &ubx0,
                                            const casadi::DM &X0, const casadi::DM &LAM_X0, const casadi::DM &LAM_G0)
 {
-    ARG["lbx"](casadi::Slice(X_END - NX, X_END), 0) = lbx0;
-    ARG["ubx"](casadi::Slice(X_END - NX, X_END), 0) = ubx0;
+    ARG["lbx"](casadi::Slice(X_END - NX, X_END), 0) = _mtimes(casadi::DM(ScX), lbx0);
+    ARG["ubx"](casadi::Slice(X_END - NX, X_END), 0) = _mtimes(casadi::DM(ScX), ubx0);
 
     /** apply warmstarting if possible */
     if(!X0.is_empty())

@@ -38,7 +38,8 @@ MatrixType<Scalar> Tensor_to_Matrix(const Eigen::Tensor<Scalar,rank> &tensor,con
 
 int main()
 {
-    using Legendre = Legendre<5, GAUSS_LOBATTO>;
+    const int basis_size = 2;
+    using Legendre = Legendre<basis_size, GAUSS_LOBATTO>;
     Legendre leg;
     Integrand f;
     Unif distrib;
@@ -61,7 +62,8 @@ int main()
 
     /** get a chip and cast to a matrix */
     Eigen::Tensor<double, 2> kchip = Galerkin.chip(0, 2);
-    Eigen::MatrixXd mat = Tensor_to_Matrix(kchip, 6, 6);
+
+    Eigen::MatrixXd mat = Tensor_to_Matrix(kchip, basis_size + 1, basis_size + 1);
     Eigen::VectorXd A_i;
     //std::cout << "mat: \n" << mat << "\n";
 
@@ -73,7 +75,7 @@ int main()
     for(int i = 0; i < Galerkin.dimension(2); ++i)
     {
         kchip = Galerkin.chip(i, 2);
-        mat = Tensor_to_Matrix(kchip, 6, 6);
+        mat = Tensor_to_Matrix(kchip, basis_size + 1, basis_size + 1);
         A_i = mat.transpose() * proj.coeff;
 
         galerkin_file << "i : " << i << "\n" <<  mat << "\n";
@@ -97,22 +99,23 @@ int main()
     casadi::SX ROW2 = casadi::SX::horzcat({-A, Zero});
     casadi::SX BIGA = casadi::SX::vertcat({ROW1, ROW2});
 
-    casadi::SX x   = casadi::SX::sym("x", 12);
+    casadi::SX x   = casadi::SX::sym("x", 2 * (basis_size + 1));
     casadi::SX u   = casadi::SX::sym("u",1); // dummy control input
     casadi::Function rhs = casadi::Function("sode",{x, u}, { casadi::SX::mtimes(BIGA, x)});
-    casadi::DM x0  = casadi::DM({5,0,0,0,0,0, 0,0,0,0,0,0});
+    casadi::DM x0  = casadi::DM::zeros(2 * (basis_size + 1));
+    x0(0) = 5.0;
     casadi::DM ctl = 0.0;
 
     double tf = 4.0;
     casadi::DMDict props;
-    PSODESolver<10,1,12,1>ps_solver(rhs, tf, props);
+    constexpr int dimx = 2 * (basis_size + 1);
+    PSODESolver<10, 1, dimx, 1>ps_solver(rhs, tf, props);
 
     bool FULL = true;
     casadi::DM ps_sol = ps_solver.solve(x0, ctl, FULL);
 
     /** save trajectory */
     std::ofstream solution_file("solution.txt", std::ios::out);
-    int dimx = 12;
 
     if(!solution_file.fail())
     {
@@ -129,11 +132,11 @@ int main()
     solution_file.close();
 
     /** solve x_dot = a * sin(x), where a ~ Unif(1,3) */
-    casadi::SX a = casadi::SX::sym("a", 6);
+    casadi::SX a = casadi::SX::sym("a", (basis_size + 1));
     casadi::SX var = casadi::SX::sym("var");
     casadi::Function ode = casadi::Function("lox", {var}, {sin(4 * var)});
-    Legendre::q_weights_t weights = leg.QWeights();
-    Legendre::nodes_t nodes = leg.CPoints();
+    Legendre::q_weights_t weights  = leg.QWeights();
+    Legendre::nodes_t     nodes    = leg.CPoints();
     Legendre::q_weights_t nfactors = leg.NFactors();
     int N = nodes.SizeAtCompileTime;
 
@@ -159,22 +162,23 @@ int main()
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{a, u},{sode});
-    x0  = casadi::DM({1,0,0,0,0,0});
+    x0  = casadi::DM::zeros(a.size1());
+    x0(0) = 1.0;
     ctl = 0.0;
 
     tf = 1.0;
-    PSODESolver<10,1,6,1>ps_solver2(sode_fun, tf, props);
+    constexpr int dimu = (basis_size + 1);
+    PSODESolver<10, 1, dimu, 1>ps_solver2(sode_fun, tf, props);
     ps_sol = ps_solver2.solve(x0, ctl, FULL);
 
     /** save trajectory */
     std::ofstream solution_sode("solution_sode.txt", std::ios::out);
-    dimx = 6;
 
     if(!solution_sode.fail())
     {
-        for (int i = 0; i < ps_sol.size1(); i = i + dimx)
+        for (int i = 0; i < ps_sol.size1(); i = i + dimu)
         {
-            std::vector<double> tmp = ps_sol(casadi::Slice(i, i + dimx),0).nonzeros();
+            std::vector<double> tmp = ps_sol(casadi::Slice(i, i + dimu),0).nonzeros();
             for (uint j = 0; j < tmp.size(); j++)
             {
                 solution_sode << tmp[j] << " ";

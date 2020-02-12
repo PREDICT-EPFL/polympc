@@ -72,7 +72,7 @@ public:
     casadi::DM get_optimal_trajectory()
     {
         casadi::DM opt_x = NLP_X(casadi::Slice(0, X_END));
-        casadi::DM reshaped = casadi::DM::reshape(opt_x, NX, POLY_ORDER * NUM_SEGMENTS + 1);
+        casadi::DM reshaped = casadi::DM::reshape(opt_x, NX, Approximation::_NUM_COLLOC_PTS_X);
         return _mtimes(casadi::DM(invSX), reshaped);
     }
 
@@ -80,7 +80,7 @@ public:
     casadi::DM get_optimal_control()
     {
         casadi::DM opt_u = NLP_X(casadi::Slice(X_END, U_END));
-        casadi::DM reshaped = casadi::DM::reshape(opt_u, NU, POLY_ORDER * NUM_SEGMENTS + 1);
+        casadi::DM reshaped = casadi::DM::reshape(opt_u, NU, Approximation::_NUM_COLLOC_PTS_U);
         return _mtimes(casadi::DM(invSU), reshaped);
     }
 

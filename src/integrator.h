@@ -308,10 +308,9 @@ casadi::DMDict PSODESolver<PolyOrder, NumSegments, NX, NU>::solve_trajectory(con
         if(scale)
         {
             casadi::DM invP = casadi::DM::inv(P);
-            casadi::DM solution = casadi::DM::reshape(NLP_X, NX, (NumSegments * PolyOrder + 1));
+            casadi::DM solution = casadi::DM::reshape(xt, NX, (NumSegments * PolyOrder + 1));
             solution = casadi::DM::mtimes(invP, solution);
             xt = casadi::DM::vec(solution);
-            res.at("x") = xt;
         }
     }
     else
@@ -321,9 +320,9 @@ casadi::DMDict PSODESolver<PolyOrder, NumSegments, NX, NU>::solve_trajectory(con
         {
             casadi::DM invP = casadi::DM::inv(P);
             xt = casadi::DM::mtimes(invP, xt);
-            res.at("x") = xt;
         }
     }
+    res.at("x") = xt;
 
     std::cout << NLP_Solver.stats() << "\n";
     return res;

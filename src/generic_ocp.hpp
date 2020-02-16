@@ -281,7 +281,7 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
         ARG["x0"] = X0;
     else
     {
-        casadi::DM mid_point = 0.5 * ( lbx0 + ubx0 );
+        casadi::DM mid_point = _mtimes(casadi::DM(ScX), 0.5 * ( lbx0 + ubx0 ));
         ARG["x0"](casadi::Slice(0, X_END)) = casadi::DM::repmat(mid_point, NUM_SEGMENTS * POLY_ORDER + 1, 1);
     }
 

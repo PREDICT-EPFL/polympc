@@ -52,6 +52,26 @@ protected:
         return static_cast<OCP*>(this)->inequality_constraints_impl(x,u,p);
     }
 
+    /** regularization of an expression derivative*/
+    /**  || expr_dot ||_{WeightMat} */
+    casadi::SX norm_diff(const casadi::SX &expr, const casadi::DM &WeightMat);
+
+    /** regularization of an expression second derivative*/
+    /**  || expr_dot_dot ||_{WeightMat} */
+    casadi::SX norm_ddiff(const casadi::SX &expr, const casadi::DM &WeightMat);
+
+    /** expression spectral derivative */
+    /** [g(x,u)]' <= c */
+    casadi::SX diff(const casadi::SX &expr, const casadi::DM &c);
+
+    /** expression spectral second derivative */
+    /** [g(x,u)]'' <= c */
+    casadi::SX ddiff(const casadi::SX &expr, const casadi::DM &c);
+
+    casadi::SXVector m_norm_diff, m_norm_ddiff;
+    casadi::SXVector m_diff, m_ddiff;
+    casadi::DMVector m_diff_bound, m_ddiff_bound;
+
 public:
     /** state box constraints */
     void set_state_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
@@ -158,6 +178,44 @@ private:
 };
 
 template<typename OCP, typename Approximation>
+casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, const casadi::DM &WeightMat)
+{
+    assert(expr.size1() == WeightMat.size1());
+    m_norm_diff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
+
+    return casadi::SX(0);
+}
+
+template<typename OCP, typename Approximation>
+casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, const casadi::DM &WeightMat)
+{
+    assert(expr.size1() == WeightMat.size1());
+    m_norm_ddiff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
+
+    return casadi::SX(0);
+}
+
+template<typename OCP, typename Approximation>
+casadi::SX GenericOCP<OCP, Approximation>::diff(const casadi::SX &expr, const casadi::DM &c)
+{
+    assert(expr.size1() == c.size1() && "g(x,u) and c should have the same dimensions");
+    m_diff.push_back(expr);
+    m_diff_bound.push_back(c);
+    return casadi::SX();
+}
+
+template<typename OCP, typename Approximation>
+casadi::SX GenericOCP<OCP, Approximation>::ddiff(const casadi::SX &expr, const casadi::DM &c)
+{
+    assert(expr.size1() == c.size1() && "g(x,u) and c should have the same dimensions");
+    m_ddiff.push_back(expr);
+    m_ddiff_bound.push_back(c);
+    return casadi::SX();
+}
+
+/** ------------------------------------------- */
+
+template<typename OCP, typename Approximation>
 void GenericOCP<OCP, Approximation>::setup()
 {
     casadi::SX x = casadi::SX::sym("x", NX);
@@ -219,6 +277,31 @@ void GenericOCP<OCP, Approximation>::setup()
 
     cost = spectral.CollocateParametricCost(mayer_cost_func, lagrange_cost_func, t_start, t_final);
 
+    /** process differential operators */
+    if(!m_norm_diff.empty())
+    {
+        casadi::SXVector::const_iterator it;
+        for(it = m_norm_diff.begin(); it != m_norm_diff.end(); ++it)
+        {
+            casadi::Function expr_fun = casadi::Function("expr", {x, u, p}, {*it});
+            casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 1);
+            /** @bug: should integrate u_dot^2 here? */
+            cost += casadi::SX::dot(tmp,tmp);
+        }
+    }
+
+    if(!m_norm_ddiff.empty())
+    {
+        casadi::SXVector::const_iterator it;
+        for(it = m_norm_ddiff.begin(); it != m_norm_ddiff.end(); ++it)
+        {
+            casadi::Function expr_fun = casadi::Function("expr", {x, u, p}, {*it});
+            casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 2);
+            /** @bug: should integrate u_dotdot^2 here? */
+            cost += casadi::SX::dot(tmp,tmp);
+        }
+    }
+
     /** collocate generic inequality constraints */
     casadi::SX ineq_constraints;
     casadi::SX lbg_ic;
@@ -231,6 +314,42 @@ void GenericOCP<OCP, Approximation>::setup()
         ineq_constraints = spectral.CollocateFunction(ic_func);
         lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
         ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
+
+        /** process differential operators */
+        if(!m_diff.empty())
+        {
+            for (unsigned i = 0; i < m_diff.size(); ++i)
+            {
+                casadi::Function expr_fun = casadi::Function("expr", {x, u, p}, {m_diff[i]});
+                casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 1);
+
+                unsigned dim = tmp.size1() / m_diff[i].size1();
+                ineq_constraints = casadi::SX::vertcat({ineq_constraints, tmp});
+                casadi::SX upper_b =  casadi::SX::repmat(m_diff_bound[i], dim, 1);
+                casadi::SX lower_b = -casadi::SX::inf(tmp.size1());
+
+                lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
+                ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
+            }
+        }
+
+        if(!m_ddiff.empty())
+        {
+            for (unsigned i = 0; i < m_ddiff.size(); ++i)
+            {
+                casadi::Function expr_fun = casadi::Function("expr", {x, u, p}, {m_ddiff[i]});
+                casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 2);
+
+                unsigned dim = tmp.size1() / m_ddiff[i].size1();
+                ineq_constraints = casadi::SX::vertcat({ineq_constraints, tmp});
+                casadi::SX upper_b =  casadi::SX::repmat(m_ddiff_bound[i], dim, 1);
+                casadi::SX lower_b = -casadi::SX::inf(tmp.size1());
+
+                lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
+                ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
+            }
+        }
+
     }
 
     /** initialise NLP interface*/

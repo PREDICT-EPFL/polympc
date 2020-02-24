@@ -11,7 +11,7 @@ using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, N
 using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
 
 //class MyOCP : public GenericOCP<MyOCP, Approximation>
-class MyOCP : public GenericOCP<MyOCP, Approximation2>
+class MyOCP : public GenericOCP<MyOCP, Approximation>
 {
 public:
     /** constructor inheritance */
@@ -31,7 +31,8 @@ public:
 
     casadi::SX lagrange_term_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
     {
-        return casadi::SX::dot(x,x) + casadi::SX::dot(u,u);
+        casadi::DM Weight = casadi::DM::eye(NU);
+        return casadi::SX::dot(x,x) + casadi::SX::dot(u,u) + norm_diff(u, Weight) + norm_ddiff(u, Weight);
     }
 
     casadi::SX system_dynamics_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
@@ -41,8 +42,9 @@ public:
 
     casadi::SX inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
     {
-        return pow(u,2) - casadi::SX::vertcat({10, 10});
-        //return casadi::SX(); //!!! deal with it!!!
+        casadi::SX ineq1 = pow(u,2) - casadi::SX::vertcat({10, 10});
+        casadi::SX ineq2 = diff(x, 5 * casadi::DM::ones(NX));
+        return casadi::SX::vertcat({ineq1, ineq2});
     }
 };
 
@@ -76,6 +78,9 @@ int main(void)
 
     casadi::DM x0 = casadi::DM::vertcat({1.0,1.0});
     lox.solve(x0, x0);
+
+    casadi::DM solution = lox.get_optimal_control();
+    std::cout << "Optimal Control: \n" << solution << "\n";
 
     return 0;
 }

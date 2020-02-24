@@ -32,6 +32,7 @@ public:
                                       const double &t0, const double &tf);
     BaseClass CollocateIdCost(casadi::Function &IdCost, casadi::DM data, const double &t0, const double &tf);
     BaseClass CollocateFunction(casadi::Function &_Function);
+    BaseClass DifferentiateFunction(casadi::Function &_Function, const int order = 1);
 
     typedef std::function<BaseClass(BaseClass, BaseClass, BaseClass)> functor;
     /** right hand side function of the ODE */
@@ -65,8 +66,8 @@ private:
     BaseClass CollocPoints();
     /** generate Clenshaw-Curtis quadrature weights */
     BaseClass QuadWeights();
-    /** generate Composite Differentiation matrix */
-    BaseClass CompDiffMatrix();
+    /** generate Composite Differentiation matrix for vector of dimension DIM */
+    BaseClass CompDiffMatrix(const int &DIM = NX);
 
     /** Diff matrix */
     BaseClass _D;
@@ -220,7 +221,7 @@ template<class BaseClass,
          int NX,
          int NU,
          int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatrix()
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatrix(const int &DIM)
 {
     int comp_rows = NumSegments * PolyOrder + 1;
     int comp_cols = NumSegments * PolyOrder + 1;
@@ -228,7 +229,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatr
     BaseClass CompDiff = BaseClass::zeros(comp_rows, comp_cols);
     BaseClass D        = DiffMatrix();
     BaseClass D0       = D;
-    BaseClass E        = BaseClass::eye(NX);
+    BaseClass E        = BaseClass::eye(DIM);
 
     if(NumSegments < 2)
     {
@@ -249,6 +250,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatr
 
     return BaseClass::kron(CompDiff, E);
 }
+
 
 /** @brief collocate differential constraints */
 template<class BaseClass,
@@ -506,12 +508,42 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFun
         i_x = i * NX;
         i_u = i * NU;
         i_f = i * n_f_out;
-        tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
-                                         _U(casadi::Slice(i_u, i_u + NU)),
-                                         _P});
+        if(_NP == 0)
+        {
+            tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
+                                             _U(casadi::Slice(i_u, i_u + NU))});
+        }
+        else
+        {
+            tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
+                                             _U(casadi::Slice(i_u, i_u + NU)),
+                                             _P});
+        }
+
         f_colloc(casadi::Slice(i_f, i_f + n_f_out)) = tmp[0];
     }
     return f_colloc;
+}
+
+
+/** Differentiate an arbitrary function */
+template<class BaseClass,
+        int PolyOrder,
+        int NumSegments,
+        int NX,
+        int NU,
+        int NP>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DifferentiateFunction(casadi::Function &_Function, const int order)
+{
+    /** evaluate function at the collocation points */
+    int n_f_out = _Function.nnz_out();
+    BaseClass Derivative = CollocateFunction(_Function);
+    BaseClass Diff = CompDiffMatrix(n_f_out);
+
+    for(uint i = 0; i < order; ++i)
+        Derivative = BaseClass::mtimes(Diff, Derivative);
+
+    return Derivative;
 }
 
 #endif // CHEBYSHEV_HPP

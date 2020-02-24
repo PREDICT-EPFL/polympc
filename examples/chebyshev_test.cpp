@@ -12,9 +12,12 @@ time_point get_time()
 #endif
 }
 
+static constexpr int POLY_ORDER = 5;
+static constexpr int NUM_SEGMENTS = 2;
+
 int main()
 {
-    Chebyshev<casadi::SX, 3, 2, 3, 2, 0> cheb;
+    Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0> cheb;
     //std::cout << "Nodes: " << cheb.CPoints() << "\n";
     //std::cout << "Weights: " << cheb.QWeights() << "\n";
     //std::cout << "_D : \n" << cheb.D() << "\n";
@@ -100,4 +103,17 @@ int main()
     std::cout << "Cost function value: " << L_val << "\n";
     std::cout << "Cost function gradient: " << L_val_grad << "\n";
     std::cout << "Cost function hessian: \n" << L_val_hess << "\n";
+
+
+    /** differentiation test */
+    casadi::SX poly_x = pow(x,2) + 1;
+    casadi::Function poly = casadi::Function("poly", {state, control}, {poly_x});
+
+    casadi::SX deriv = cheb.DifferentiateFunction(poly);
+    casadi::Function deriv_f = casadi::Function("deriv", {varx}, {deriv});
+    casadi::DM lin_space = casadi::DM({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000, 0.5477, 0.6727, 0.8273, 0.9523, 1.0000});
+    casadi::DM points = casadi::DM::zeros(3, NUM_SEGMENTS * POLY_ORDER + 1);
+    points(0, casadi::Slice()) = pow(lin_space,2);
+    std::cout << "x: \n" << points << "\n";
+    std::cout << "Derivative: " << deriv_f(casadi::DMVector{casadi::DM::vec(points)})[0] << "\n";
 }

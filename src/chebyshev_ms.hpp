@@ -31,6 +31,7 @@ public:
     BaseClass CollocateParametricCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
                                       const double &t0, const double &tf);
     BaseClass CollocateFunction(casadi::Function &_Function);
+    BaseClass DifferentiateFunction(casadi::Function &_Function, const int order = 1);
 
     double _t0, _tf;
 
@@ -59,8 +60,8 @@ private:
     BaseClass CollocPoints();
     /** generate Clenshaw-Curtis quadrature weights */
     BaseClass QuadWeights();
-    /** generate Composite Differentiation matrix */
-    BaseClass CompDiffMatrix();
+    /** generate Composite Differentiation matrix for vector of dimension DIM (=NX) */
+    BaseClass CompDiffMatrix(const int &DIM = NX);
 
     /** Diff matrix */
     BaseClass _D;
@@ -214,7 +215,7 @@ template<class BaseClass,
          int NX,
          int NU,
          int NP>
-BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatrix()
+BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatrix(const int &DIM)
 {
     int comp_rows = NumSegments * PolyOrder + 1;
     int comp_cols = NumSegments * PolyOrder + 1;
@@ -222,7 +223,7 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMa
     BaseClass CompDiff = BaseClass::zeros(comp_rows, comp_cols);
     BaseClass D        = DiffMatrix();
     BaseClass D0       = D;
-    BaseClass E        = BaseClass::eye(NX);
+    BaseClass E        = BaseClass::eye(DIM);
 
     if(NumSegments < 2)
     {
@@ -472,6 +473,115 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateF
     }
 
     return F_XU;
+}
+
+
+/** Collocate an arbitrary function */
+template<class BaseClass,
+         int PolyOrder,
+         int NumSegments,
+         int NX,
+         int NU,
+         int NP>
+BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DifferentiateFunction(casadi::Function &_Function, const int order)
+{
+    /** check if the function depends on X */
+    casadi::SX x_test = casadi::SX::sym("x_test", NX);
+    casadi::SX u_test = casadi::SX::sym("u_test", NU);
+    casadi::SX p_test = casadi::SX::sym("p_test", NP);
+    casadi::SX res_test = _Function(casadi::SXVector{x_test, u_test, p_test})[0];
+    bool depends_on_state = casadi::SX::depends_on(res_test, x_test);
+
+    /** evaluate function at the collocation points */
+    int DIMX = _X.size1();
+    int NC = _Function.nnz_out();
+    int DIMC = depends_on_state ? (NumSegments * PolyOrder + 1) * NC : NumSegments * NC;
+    BaseClass F_XU = BaseClass::zeros(DIMC);
+    casadi::SXVector tmp;
+    int j = 0;
+    int k = 0;
+
+    for(int j = 0; j < NumSegments; j++)
+    {
+        if(!depends_on_state)
+        {
+            int idx_start_x = 0;
+            int idx_end_x   = idx_start_x + NX;
+
+            int idx_start_u = j * NU;
+            int idx_end_u = idx_start_u + NU;
+
+            if(NP == 0)
+            {
+                tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                 _U(casadi::Slice(idx_start_u, idx_end_u)) });
+            }
+            else
+            {
+                tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                 _U(casadi::Slice(idx_start_u, idx_end_u)),
+                                                 _P});
+            }
+
+            F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+            k += NC;
+        }
+        else
+        {
+
+            for (int i = 0; i < (PolyOrder + 1); i++)
+            {
+                int idx_start_x = j * PolyOrder * NX + (i * NX);
+                int idx_end_x   = idx_start_x + NX;
+
+                int idx_start_u = j * NU;
+                int idx_end_u = idx_start_u + NU;
+
+                if(NP == 0)
+                {
+                    tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                     _U(casadi::Slice(idx_start_u, idx_end_u)) });
+                }
+                else
+                {
+                    tmp = _Function(casadi::SXVector{_X(casadi::Slice(idx_start_x, idx_end_x)),
+                                                     _U(casadi::Slice(idx_start_u, idx_end_u)),
+                                                     _P});
+                }
+
+                if( ((i % PolyOrder) != 0) || (i == 0))
+                {
+                    F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+                    k += NC;
+                }
+
+                // hack add last point
+                if((j == (NumSegments - 1)) && (i == PolyOrder))
+                    F_XU(casadi::Slice(k, k + NC)) = tmp[0];
+            }
+        }
+    }
+
+    if(depends_on_state)
+    {
+        BaseClass Diff = CompDiffMatrix(NC);
+        BaseClass Derivative = F_XU;
+        for(unsigned i = 0; i < order; ++i)
+            Derivative = BaseClass::mtimes(Diff, Derivative);
+
+        return Derivative;
+    }
+    else
+    {
+        /** use ZOH assumption to estimate gradient */
+        /** @badcode : write a custom assert */
+        assert(order == 1 && "Derivative of this order does not exist for the piecewise constant control parametrisation");
+        BaseClass Derivative = BaseClass::zeros(_NUM_COLLOC_PTS_U * _NU, 1);
+        for(unsigned i = 0; i < (_NUM_COLLOC_PTS_U - 1) * _NU; i += NU)
+            Derivative(casadi::Slice(i, i + _NU)) = _U(casadi::Slice(i + _NU, (i + 1) * _NU)) - _U(casadi::Slice(i, i + _NU));
+
+        return Derivative;
+    }
 }
 
 #endif // CHEBYSHEV_MS_HPP

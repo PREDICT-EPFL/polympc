@@ -7,6 +7,11 @@ using namespace casadi;
 namespace polymath
 {
 
+/** quaternion arithmetics */
+SX T1quat(const casadi::SX &rotAng) { return SX::vertcat({cos(-rotAng / 2.0), sin(-rotAng / 2.0), 0, 0}); }
+SX T2quat(const casadi::SX &rotAng) { return SX::vertcat({cos(-rotAng / 2.0), 0, sin(-rotAng / 2.0), 0}); }
+SX T3quat(const casadi::SX &rotAng) { return SX::vertcat({cos(-rotAng / 2.0), 0, 0, sin(-rotAng / 2.0)}); }
+
 SX quat_multiply(const SX &q1, const SX &q2)
 {
     SX s1 = q1(0);
@@ -18,9 +23,7 @@ SX quat_multiply(const SX &q1, const SX &q2)
     SX s = (s1 * s2) - SX::dot(v1, v2);
     SX v = SX::cross(v1, v2) + (s1 * v2) + (s2 * v1);
 
-    SXVector tmp{s,v};
-
-    return SX::vertcat(tmp);
+    return SX::vertcat({s,v});
 }
 
 SX quat_inverse(const SX &q)
@@ -29,6 +32,14 @@ SX quat_inverse(const SX &q)
     return SX::vertcat(tmp);
 }
 
+SX quat_transform(const casadi::SX &q_ba, const casadi::SX &a_vect)
+{
+    SX tmp = quat_multiply( q_ba, quat_multiply(SX::vertcat({0, a_vect}), quat_inverse(q_ba)) );
+    return tmp(Slice(1,4), 0);
+}
+
+
+/** ------------------------------------ */
 SX heaviside(const SX &x, const double K)
 {
     return K / (1 + exp(-4 * x));

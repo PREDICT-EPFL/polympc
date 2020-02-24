@@ -12,8 +12,13 @@ enum IntType {RK4, CVODES, CHEBYCHEV};
 namespace polymath
 {
     /** quaternion arithmetic */
+    casadi::SX T1quat(const casadi::SX &rotAng);
+    casadi::SX T2quat(const casadi::SX &rotAng);
+    casadi::SX T3quat(const casadi::SX &rotAng);
+
     casadi::SX quat_multiply(const casadi::SX &q1, const casadi::SX &q2);
     casadi::SX quat_inverse(const casadi::SX &q);
+    casadi::SX quat_transform(const casadi::SX &q_ba, const casadi::SX &a_vect);
 
     /** collection of custom functions */
     casadi::SX heaviside(const casadi::SX &x, const double K);

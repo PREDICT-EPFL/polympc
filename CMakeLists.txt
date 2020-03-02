@@ -16,6 +16,7 @@ option(SQP_TESTS "Build SQP solver tests" OFF)
 option(POLY_TESTS "Build Polynomials tests" OFF)
 option(AUTODIFF_TESTS "Build AutoDiff tests" OFF)
 option(BUILD_RELEASE "Build release version w/o debugging symbols" OFF)
+option(BUILD_EXAMPLES "Build examples for CasADi and Eigen interfaces" OFF)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")

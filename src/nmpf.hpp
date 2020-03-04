@@ -602,7 +602,7 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
     casadi::SX theta = casadi::SX::sym("theta");
     casadi::SX residual;
     if(num_path_parameters > 0)
-        residual = PathFunc(casadi::SXVector{theta, NLP["p"](casadi::Slice(1, num_path_parameters + 1))})[0] - casadi::SX(position);
+        residual = PathFunc(casadi::SXVector{theta, ARG["p"](casadi::Slice(1, num_path_parameters + 1))})[0] - casadi::SX(position);
     else
         residual = PathFunc(casadi::SXVector{theta})[0] - casadi::SX(position);
 

@@ -341,9 +341,10 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
 
         casadi::SX _invSX = invSX(casadi::Slice(0, NX), casadi::Slice(0, NX));
         residual  = sym_path - output({casadi::SX::mtimes(_invSX, x)})[0];
+        casadi::SX inv_v = invSU(nx + 1, nx + 1);
         lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
-                    casadi::SX::sum1( casadi::SX::mtimes(W, pow(reference_velocity - v(1), 2)) );
-        lagrange = lagrange + casadi::SX::sum1( casadi::SX::mtimes(R, pow(aug_control, 2)) );
+                    casadi::SX::sum1( casadi::SX::mtimes(W, pow(inv_v * (reference_velocity - v(1)), 2)) );
+        lagrange = lagrange + casadi::SX::sum1( casadi::SX::mtimes(R, pow(casadi::SX::mtimes(invSU, aug_control), 2)) );
     }
     else
     {
@@ -599,10 +600,16 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
                                                                                       const casadi::DM &init_guess)
 {
     casadi::SX theta = casadi::SX::sym("theta");
-    casadi::SX sym_residual = 0.5 * casadi::SX::norm_2(PathFunc(casadi::SXVector{theta})[0] - casadi::SX(position));
-    casadi::SX sym_gradient = casadi::SX::gradient(sym_residual,theta);
+    casadi::SX residual;
+    if(num_path_parameters > 0)
+        residual = PathFunc(casadi::SXVector{theta, NLP["p"](casadi::Slice(1, num_path_parameters + 1))})[0] - casadi::SX(position);
+    else
+        residual = PathFunc(casadi::SXVector{theta})[0] - casadi::SX(position);
 
-    casadi::Function grad = casadi::Function("gradient", {theta}, {sym_gradient});
+    casadi::SX sq_distance = casadi::SX::dot(residual, residual);
+    casadi::SX gradient = casadi::SX::gradient(sq_distance, theta);
+
+    casadi::Function grad = casadi::Function("gradient", {theta}, {gradient});
 
     double tol = 1e-2;
     int counter = 0;
@@ -627,7 +634,7 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
         if(counter > 10)
             break;
     }
-    //std::cout << theta_i << "\n";
+    std::cout << "Closest point on the path: " << theta_i << "\n";
     return theta_i;
 }
 

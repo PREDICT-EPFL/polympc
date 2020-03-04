@@ -341,7 +341,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
 
         casadi::SX _invSX = invSX(casadi::Slice(0, NX), casadi::Slice(0, NX));
         residual  = sym_path - output({casadi::SX::mtimes(_invSX, x)})[0];
-        casadi::SX inv_v = invSU(nx + 1, nx + 1);
+        casadi::SX inv_v = invSX(nx + 1, nx + 1);
         lagrange  = casadi::SX::sum1( casadi::SX::mtimes(Q, pow(residual, 2)) ) +
                     casadi::SX::sum1( casadi::SX::mtimes(W, pow(inv_v * (reference_velocity - v(1)), 2)) );
         lagrange = lagrange + casadi::SX::sum1( casadi::SX::mtimes(R, pow(casadi::SX::mtimes(invSU, aug_control), 2)) );

@@ -371,7 +371,11 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     casadi::SX varu = spectral.VarU();
 
     casadi::SX opt_var = casadi::SX::vertcat(casadi::SXVector{varx, varu});
-    casadi::SX parameters = casadi::SX::vertcat({reference_velocity, path_parameters});
+    casadi::SX parameters;
+    if(num_path_parameters > 0)
+        parameters = casadi::SX::vertcat({reference_velocity, path_parameters});
+    else
+        parameters = reference_velocity;
 
     /** trace functions */
     DynamicConstraints = casadi::Function("constraint_func", {opt_var}, {diff_constr});
@@ -399,11 +403,9 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     NLP["x"] = opt_var;
     NLP["f"] = performance_idx;
     NLP["g"] = diff_constr;
-    if(num_path_parameters > 0)
-        NLP["p"] = parameters;
-    else
-        NLP["p"] = reference_velocity;
+    NLP["p"] = parameters;
 
+    
     /** default solver options */
     OPTS["ipopt.linear_solver"]         = "mumps";
     OPTS["ipopt.print_level"]           = 0;

@@ -48,6 +48,9 @@ namespace polymath
         return _range;
     }
 
+    /** flip matrix along "X" axis */
+    casadi::DM flip(const casadi::DM &matrix, const unsigned &axis);
+
     /** factorial computation 'n!' */
     uint factorial(const uint &n);
 

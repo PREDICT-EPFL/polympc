@@ -162,6 +162,19 @@ casadi::SX cgl_nodes(const int &n_points)
     return X;
 }
 
+casadi::DM flip(const casadi::DM &matrix, const unsigned &axis)
+{
+    switch (axis) {
+        case 1:
+            return DM::vertcat({matrix(Slice(-1, 0, -1), Slice()), matrix(0, Slice())});
+        case 2:
+            return DM::horzcat({matrix(Slice(), Slice(-1, 0, -1)), matrix(Slice(), 0)});
+        default:
+            return matrix;
+    }
+}
+
+
 Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::VectorXd &Y)
 {
     Eigen::VectorXd polynomial(X.rows());

@@ -76,17 +76,17 @@ public:
     void computeControl(const casadi::DM &_X0);
     casadi::DM findClosestPointOnPath(const casadi::DM &position, const casadi::DM &init_guess = casadi::DM(0));
 
-    casadi::DM getOptimalControl(){return OptimalControl;}
-    casadi::DM getOptimalTrajetory(){return OptimalTrajectory;}
-    casadi::Function getPathFunction(){return PathFunc;}
-    casadi::Function getAugDynamics(){return AugDynamics;}
-    casadi::Dict getStats(){return stats;}
-    bool initialized(){return _initialized;}
+    casadi::DM getOptimalControl()     const {return OptimalControl;}
+    casadi::DM getOptimalTrajetory()   const {return OptimalTrajectory;}
+    casadi::Function getPathFunction() const {return PathFunc;}
+    casadi::Function getAugDynamics()  const {return AugDynamics;}
+    casadi::Dict getStats() const {return stats;}
+    bool initialized() const {return _initialized;}
 
-    double getPathError();
-    double getVirtState();
-    double getVelocityError();
-    double getCost();
+    double getPathError() const;
+    double getVirtState() const;
+    double getVelocityError() const;
+    double getCost() const;
 
 private:
     System system;
@@ -405,7 +405,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::createNLP(const casadi:
     NLP["g"] = diff_constr;
     NLP["p"] = parameters;
 
-    
+
     /** default solver options */
     OPTS["ipopt.linear_solver"]         = "mumps";
     OPTS["ipopt.print_level"]           = 0;
@@ -540,14 +540,14 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
 
 /** get path error */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
-double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getPathError()
+double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getPathError() const
 {
     double error = 0;
     if(!OptimalTrajectory.is_empty())
     {
         casadi::DM state = OptimalTrajectory(casadi::Slice(0, OptimalTrajectory.size1()), OptimalTrajectory.size2() - 1);
         state = casadi::DM::mtimes(Scale_X, state);
-        casadi::DMVector tmp = PathError(casadi::DMVector{state, ARG["p"]});
+        casadi::DMVector tmp = PathError(casadi::DMVector{state, ARG.at("p")});
         error = casadi::DM::norm_2( tmp[0] ).nonzeros()[0];
     }
     return error;
@@ -555,14 +555,14 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getPathError()
 
 /** get velocity error */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
-double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVelocityError()
+double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVelocityError() const
 {
     double error = 0;
     if(!OptimalTrajectory.is_empty())
     {
         casadi::DM state = OptimalTrajectory(casadi::Slice(0, OptimalTrajectory.size1()), OptimalTrajectory.size2() - 1);
         state = casadi::DM::mtimes(Scale_X, state);
-        casadi::DMVector tmp = VelError(casadi::DMVector{state, ARG["p"]});
+        casadi::DMVector tmp = VelError(casadi::DMVector{state, ARG.at("p")});
         error = casadi::DM::norm_2( tmp[0] ).nonzeros()[0];
     }
     return error;
@@ -570,7 +570,7 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVelocityError()
 
 /** get virtual state */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
-double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVirtState()
+double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVirtState() const
 {
     double virt_state = 0;
     if(!OptimalTrajectory.is_empty())
@@ -582,9 +582,9 @@ double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getVirtState()
 
 /** get cost */
 template<typename System, typename Path, int NX, int NU, int NumSegments, int PolyOrder>
-double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getCost()
+double nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::getCost() const
 {
-    casadi::DM cost =  PerformanceIndex(casadi::DMVector{ARG["x0"], ARG["p"]})[0];
+    casadi::DM cost =  PerformanceIndex(casadi::DMVector{ARG.at("x0"), ARG.at("p")})[0];
     return cost.nonzeros()[0];
 }
 

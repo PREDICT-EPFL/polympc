@@ -89,7 +89,7 @@ public:
     }
 
     /** get optimal state trajectory */
-    casadi::DM get_optimal_trajectory()
+    casadi::DM get_optimal_trajectory() const
     {
         casadi::DM opt_x = NLP_X(casadi::Slice(0, X_END));
         casadi::DM reshaped = casadi::DM::reshape(opt_x, NX, Approximation::_NUM_COLLOC_PTS_X);
@@ -97,7 +97,7 @@ public:
     }
 
     /** get optimal control trajectory */
-    casadi::DM get_optimal_control()
+    casadi::DM get_optimal_control() const
     {
         casadi::DM opt_u = NLP_X(casadi::Slice(X_END, U_END));
         casadi::DM reshaped = casadi::DM::reshape(opt_u, NU, Approximation::_NUM_COLLOC_PTS_U);

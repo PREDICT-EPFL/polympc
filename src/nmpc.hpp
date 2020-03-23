@@ -72,11 +72,11 @@ public:
     void disableWarmStart(){WARM_START = false;}
     void computeControl(const casadi::DM &_X0);
 
-    casadi::DM getOptimalControl(){return OptimalControl;}
-    casadi::DM getOptimalTrajetory(){return OptimalTrajectory;}
+    casadi::DM getOptimalControl() const {return OptimalControl;}
+    casadi::DM getOptimalTrajetory() const {return OptimalTrajectory;}
 
-    casadi::Dict getStats(){return stats;}
-    bool initialized(){return _initialized;}
+    casadi::Dict getStats() const {return stats;}
+    bool initialized() const {return _initialized;}
 
     double getPathError();
 

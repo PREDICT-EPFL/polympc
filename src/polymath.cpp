@@ -162,9 +162,10 @@ casadi::SX cgl_nodes(const int &n_points)
     return X;
 }
 
-casadi::DM flip(const casadi::DM &matrix, const unsigned &axis)
+/**  (flip along dimension 1 means: the first row will be the last row, flip along dimension 2 means: the first column will be the last column) */
+casadi::DM flip(const casadi::DM &matrix, const unsigned &dim)
 {
-    switch (axis) {
+    switch (dim) {
         case 1:
             return DM::vertcat({matrix(Slice(-1, 0, -1), Slice()), matrix(0, Slice())});
         case 2:
@@ -235,8 +236,8 @@ LagrangeInterpolator::LagrangeInterpolator(const casadi::DM &nodes, const casadi
 {
     assert(nodes.rows() == values.rows());
     assert((nodes.columns() == 1) && (values.columns() == 1));
-    Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.nonzeros().data(), nodes.size1());
-    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.nonzeros().data(), values.size1());
+    Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.ptr(), nodes.size1());
+    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.ptr(), values.size1());
 
     m_poly_basis = polymath::lagrange_poly_basis(X);
     m_interpolant = Y.transpose() * m_poly_basis;
@@ -260,8 +261,8 @@ void LagrangeInterpolator::init(const casadi::DM &nodes, const casadi::DM &value
 {
     assert(nodes.rows() == values.rows());
     assert((nodes.columns() == 1) && (values.columns() == 1));
-    Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.nonzeros().data(), nodes.size1());
-    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.nonzeros().data(), values.size1());
+    Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.ptr(), nodes.size1());
+    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.ptr(), values.size1());
 
     m_poly_basis = polymath::lagrange_poly_basis(X);
     m_interpolant = Y.transpose() * m_poly_basis;
@@ -281,7 +282,7 @@ double LagrangeInterpolator::eval(const double &arg, const Eigen::VectorXd &valu
 
 double LagrangeInterpolator::eval(const double &arg, const casadi::DM &values)
 {
-    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.nonzeros().data(), values.size1());
+    Eigen::VectorXd Y(values.size1()); Y = Eigen::VectorXd::Map(values.ptr(), values.size1());
     m_interpolant = Y.transpose() * m_poly_basis;
     return Eigen::poly_eval(m_interpolant, arg);
 }

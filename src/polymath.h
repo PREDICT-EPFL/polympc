@@ -7,6 +7,8 @@
 #include "unsupported/Eigen/Polynomials"
 #include "unsupported/Eigen/MatrixFunctions"
 
+#include <type_traits>
+
 enum IntType {RK4, CVODES, CHEBYCHEV};
 
 namespace polymath
@@ -157,6 +159,119 @@ namespace polymath
     private:
         Eigen::MatrixXd m_poly_basis;
         Eigen::VectorXd m_interpolant;
+    };
+
+
+    template<typename  Derived>
+    void lagrange_poly_basis(const Eigen::MatrixBase<Derived> &nodes, Eigen::MatrixBase<Derived> &basis)
+    {
+        Eigen::VectorXd polynomial(nodes.rows());
+        basis = Eigen::MatrixBase<Derived>::Zero(nodes.rows(), nodes.rows());
+
+        for(uint i = 0; i < basis.rows(); ++i)
+        {
+            Eigen::VectorXd roots(nodes.rows() - 1);
+            uint count = 0;
+            for(uint j = 0; j < nodes.rows(); ++j)
+            {    if(i != j)
+                {
+                    roots(count) = nodes(j);
+                    count++;
+                }
+            }
+            Eigen::roots_to_monicPolynomial(roots, polynomial);
+            basis.row(i) = polynomial / Eigen::poly_eval(polynomial, nodes(i));
+        }
+    }
+
+
+    /** generic Lagrange interpolator that works with casadi and eigen matrices */
+    template<typename T>
+    class GenericLagrangeInterpolator
+    {
+    public:
+
+        enum
+        {
+            is_casadi = std::is_same<T, casadi::DM>::value,
+            is_eigen  = std::is_same<T, Eigen::MatrixXd>::value or std::is_same<T, Eigen::VectorXd>::value
+        };
+
+        GenericLagrangeInterpolator(const T &nodes, const T &values)
+        {
+            m_interpolant = init(nodes, values);
+        }
+        GenericLagrangeInterpolator()  = default;
+        ~GenericLagrangeInterpolator() = default;
+
+        /** evaluate interpolant at a point*/
+        /**
+        template<typename Scalar>
+        Scalar eval(const Scalar &arg)
+        {
+            if(std::is_same<T, Eigen::MatrixBase<T>>::value)
+            {
+                return Eigen::poly_eval(m_interpolant, arg);
+            }
+            else if(std::is_same<T, casadi::DM>::value)
+            {
+                casadi::Polynomial poly(m_interpolant.nonzeros());
+                return poly(arg);
+            }
+        }
+         */
+
+        /** Eigen implementation */
+        template <typename C = T, typename Scalar>
+        typename std::enable_if<is_eigen, Scalar>::type eval(const Scalar &arg, const C &values)
+        {
+            m_interpolant =  values.transpose() * m_poly_basis;
+            Eigen::VectorXd interpolant = values.transpose() * m_poly_basis;
+            return Eigen::poly_eval(interpolant, arg);
+        }
+
+        /** Casadi implemenation */
+
+        template <typename C = T, typename Scalar>
+        typename std::enable_if<is_casadi, Scalar>::type eval(const Scalar &arg, const C &values)
+        {
+            m_interpolant = T::mtimes(values.T(), m_poly_basis);
+            casadi::Polynomial poly(m_interpolant.nonzeros());
+            return poly(arg);
+        }
+
+        /** Eigen implementation */
+        template <typename C = T>
+        typename std::enable_if<is_eigen, C>::type init(const C &nodes, const C &values)
+        {
+            assert(nodes.rows() == values.rows());
+            assert((nodes.cols() == 1) && (values.cols() == 1));
+
+            polymath::lagrange_poly_basis(nodes, m_poly_basis);
+            C interpolant =  values.transpose() * m_poly_basis;
+            return interpolant;
+        }
+
+        /** CasADi implementation */
+        template <typename C = T>
+        typename std::enable_if<is_casadi, C>::type init(const C &nodes, const C &values)
+        {
+            assert(nodes.size1() == values.size1());
+            assert((nodes.size2() == 1) && (values.size2() == 1));
+            Eigen::VectorXd X(nodes.size1()); X = Eigen::VectorXd::Map(nodes.ptr(), nodes.size1());
+            Eigen::MatrixXd poly_base = polymath::lagrange_poly_basis(X);
+
+            m_poly_basis = T::zeros(nodes.size1(), nodes.size1());
+            std::memcpy(m_poly_basis.ptr(), poly_base.data(), sizeof(double) * poly_base.rows() * poly_base.cols());
+
+            C interpolant = T::mtimes(values.T(), m_poly_basis);
+            return interpolant;
+        }
+
+
+    private:
+        T m_poly_basis;
+        T m_interpolant;
     };
 
 

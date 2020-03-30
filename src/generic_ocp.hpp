@@ -46,10 +46,16 @@ protected:
     {
         return static_cast<OCP*>(this)->system_output_impl(x,u,p);
     }
-    /** generic inequality constraints */
+    /** generic path inequality constraints */
     casadi::SX inequality_constraints(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
     {
         return static_cast<OCP*>(this)->inequality_constraints_impl(x,u,p);
+    }
+
+    /** generic final time inequality constraints */
+    casadi::SX final_inequality_constraints(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    {
+        return static_cast<OCP*>(this)->final_inequality_constraints_impl(x,u,p);
     }
 
     /** regularization of an expression derivative*/
@@ -331,6 +337,9 @@ void GenericOCP<OCP, Approximation>::setup()
                 lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
                 ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
             }
+            /** clear data */
+            m_diff.clear();
+            m_diff_bound.clear();
         }
 
         if(!m_ddiff.empty())
@@ -348,8 +357,25 @@ void GenericOCP<OCP, Approximation>::setup()
                 lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
                 ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
             }
+            /** clear data */
+            m_ddiff.clear();
+            m_ddiff_bound.clear();
         }
+    }
 
+    /** collocate generic final time inequality constraints */
+    casadi::SX final_ineq_constraints;
+    casadi::SX final_lbg_ic;
+    casadi::SX final_ubg_ic;
+    casadi::SX final_ic = final_inequality_constraints(_mtimes(invSX, x), _mtimes(invSU, u), p);
+
+    if (!final_ic->empty())
+    {
+        casadi::Function ic_func = casadi::Function("final_ic_func",{x,u,p},{final_ic});
+        final_ineq_constraints = spectral.CollocateFunction(ic_func);
+        final_ineq_constraints = final_ineq_constraints(casadi::Slice(0, ic_func.n_out())); // take only the final state
+        final_lbg_ic = -casadi::SX::inf(final_ineq_constraints.size1());
+        final_ubg_ic =  casadi::SX::zeros(final_ineq_constraints.size1());
     }
 
     /** initialise NLP interface*/
@@ -358,9 +384,9 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX varp = spectral.VarP();
 
     casadi::SX opt_var = casadi::SX::vertcat({varx, varu});
-    casadi::SX constraints = casadi::SX::vertcat({diff_constr, ineq_constraints});
-    casadi::SX lbg = casadi::SX::vertcat({lbg_diff, lbg_ic});
-    casadi::SX ubg = casadi::SX::vertcat({ubg_diff, ubg_ic});
+    casadi::SX constraints = casadi::SX::vertcat({diff_constr, ineq_constraints, final_ineq_constraints});
+    casadi::SX lbg = casadi::SX::vertcat({lbg_diff, lbg_ic, final_lbg_ic});
+    casadi::SX ubg = casadi::SX::vertcat({ubg_diff, ubg_ic, final_ubg_ic});
 
     NLP["x"] = opt_var;
     NLP["f"] = cost;

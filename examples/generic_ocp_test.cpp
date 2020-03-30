@@ -46,6 +46,11 @@ public:
         casadi::SX ineq2 = diff(x, 5 * casadi::DM::ones(NX));
         return casadi::SX::vertcat({ineq1, ineq2});
     }
+
+    casadi::SX final_inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    {
+        return casadi::SX::vertcat({x(0),-x(0)});
+    }
 };
 
 
@@ -81,6 +86,9 @@ int main(void)
 
     casadi::DM solution = lox.get_optimal_control();
     std::cout << "Optimal Control: \n" << solution << "\n";
+
+    casadi::DM trajectory = lox.get_optimal_trajectory();
+    std::cout << "Optimal Trajectory \n" << trajectory << "\n";
 
     return 0;
 }

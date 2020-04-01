@@ -259,7 +259,6 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateD
     int DIMX = _X.size1();
     BaseClass F_XU = BaseClass::zeros(DIMX);
     casadi::SXVector tmp;
-    int j = 0;
     double t_scale = (tf - t0) / (2 * NumSegments);
 
     for(int j = 0; j < NumSegments; j++)
@@ -403,12 +402,10 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateF
     bool depends_on_state = casadi::SX::depends_on(res_test, x_test);
 
     /** evaluate function at the collocation points */
-    int DIMX = _X.size1();
     int NC = _Function.nnz_out();
     int DIMC = depends_on_state ? (NumSegments * PolyOrder + 1) * NC : NumSegments * NC;
     BaseClass F_XU = BaseClass::zeros(DIMC);
     casadi::SXVector tmp;
-    int j = 0;
     int k = 0;
 
     for(int j = 0; j < NumSegments; j++)
@@ -493,12 +490,10 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::Differenti
     bool depends_on_state = casadi::SX::depends_on(res_test, x_test);
 
     /** evaluate function at the collocation points */
-    int DIMX = _X.size1();
     int NC = _Function.nnz_out();
     int DIMC = depends_on_state ? (NumSegments * PolyOrder + 1) * NC : NumSegments * NC;
     BaseClass F_XU = BaseClass::zeros(DIMC);
     casadi::SXVector tmp;
-    int j = 0;
     int k = 0;
 
     for(int j = 0; j < NumSegments; j++)

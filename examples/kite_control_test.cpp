@@ -10,7 +10,6 @@ struct Path
         SX x = SX::sym("x");
         double h = M_PI / 6.0;
         double a = 0.2;
-        double L = 5;
         SX theta = h + a * sin(2 * x);
         SX phi   = 4 * a * cos(x);
         SX Path  = SX::vertcat({theta, phi});

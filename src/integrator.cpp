@@ -36,8 +36,8 @@ ODESolver::ODESolver(const Function &rhs, const Dict &params)
     dT = Parameters["tf"];
     /** Define integration scheme here */
     /** space dimensionality */
-    nx = RHS.nnz_out();
-    nu = RHS.nnz_in() - nx;
+    nx = static_cast<int>(RHS.nnz_out());
+    nu = static_cast<int>(RHS.nnz_in() - nx);
     std::pair<double, double> time_interval;
 
     SX x = SX::sym("x", nx);
@@ -149,7 +149,7 @@ DM ODESolver::pseudospectral_solve(const DM &X0, const DM &U)
     double alpha = (alpha_max + alpha_min) / 2;
 
     double err    = std::numeric_limits<double>::infinity();
-    uint counter  = 0;
+    int counter  = 0;
     /** count also backtracking iterations */
     uint k        = 0;
     bool accepted = false;
@@ -249,18 +249,15 @@ DM ODESolver::solve(const DM &x0, const DM &u, const double &dt)
     dT     = Parameters["tf"];
     switch (Method) {
     case RK4:
-        "Solving with RK4 ... \n";
         solution = rk4_solve(x0, u, dt);
         break;
     case CVODES:
-        "Solving with CVODES ... \n";
         /** @todo: consider time scaling */
         if (fabs(dT - dt) > 1e-5)
             std::cerr << "Inconsistent integration time: CVODES solver should be reinitialized \n";
         solution = cvodes_solve(x0, u);
         break;
     case CHEBYCHEV:
-        "Solving with CHEB ... \n";
         if (fabs(dT - dt) > 1e-5)
             std::cerr << "Inconsistent integration time: CHEBYCHEV solver should be reinitialized \n";
         solution = pseudospectral_solve(x0, u);

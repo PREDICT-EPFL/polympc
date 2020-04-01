@@ -284,7 +284,7 @@ namespace polymath
 
         LinearSystem(){}
         LinearSystem(const Eigen::MatrixXd &_F, const Eigen::MatrixXd &_G, const Eigen::MatrixXd &_H) :
-            F(_F), H(_H), G(_G) {}
+            F(_F), G(_G), H(_H) {}
         virtual ~LinearSystem(){}
 
         bool is_controllable();

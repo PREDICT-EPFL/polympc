@@ -359,11 +359,8 @@ void nmpc<System, NX, NU, NumSegments, PolyOrder>::computeControl(const casadi::
 {
     int N = NUM_COLLOCATION_POINTS;
 
-    /** rectify virtual state */
-    casadi::DM X0 = casadi::DM::mtimes(Scale_X, _X0);
-
     /** scale input */
-    int idx_theta;
+    casadi::DM X0 = casadi::DM::mtimes(Scale_X, _X0); 
     std::cout << "Compute control at: " << X0 << "\n";
 
     if(WARM_START)

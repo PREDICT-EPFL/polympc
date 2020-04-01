@@ -118,7 +118,6 @@ public:
 
     void set_parameters(const std::string &name, const casadi::DM &value)
     {
-        const bool UNKNOWN_PARAMETER_NAME = false;
         if(parameter_map.find(name) != parameter_map.end())
         {
             std::pair<int, int> indices = parameter_map[name];
@@ -126,6 +125,7 @@ public:
         }
         else
         {
+            constexpr bool UNKNOWN_PARAMETER_NAME = false;
             assert(UNKNOWN_PARAMETER_NAME);
         }
     }

@@ -235,7 +235,7 @@ int main(void)
     std::cout << "Eigen Gradient time: " << std::setprecision(9)
               << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
 
-    /** @note 10x slower than using simple AD
+    /** @note 10x slower than using simple AD */
 
 
     /** compute the Hessian */

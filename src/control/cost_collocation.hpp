@@ -145,7 +145,7 @@ void cost_collocation<LagrangeTerm, MayerTerm, Polynomial, NumSegments>::operato
                     var.template segment<NP>(VARX_SIZE + VARU_SIZE), Lagrange);
 
             cost_value += t_scale * m_weights[it % NUM_NODES] * Lagrange;
-            if( ((it % NUM_NODES) == 0) && (it != 0))
+            if( ((it % POLY_ORDER) == 0) && (it != 0) && (it < NumSegments * POLY_ORDER))
                 cost_value += t_scale * m_weights[it % NUM_NODES] * Lagrange; // add twice at the border points
 
             n += NU;

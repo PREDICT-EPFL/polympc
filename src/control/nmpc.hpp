@@ -136,7 +136,7 @@ void nmpc<Problem, Approximation, Solver>
     } else {
         var0.setZero();
         var0.template segment<VARX_SIZE>(0) = x0.template replicate<VARX_SIZE/NX, 1>();
-        var0.template segment<1>(VARX_SIZE+VARU_SIZE) = m_p0;
+        var0.template segment<NP>(VARX_SIZE + VARU_SIZE) = m_p0;
 
         dual0.setZero();
     }

@@ -426,7 +426,7 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
     int N = NUM_COLLOCATION_POINTS;
 
     /** rectify / reset virtual state */
-    casadi::DM X0 = casadi::DM::mtimes(Scale_X, X0);
+    casadi::DM X0 = casadi::DM::mtimes(Scale_X, _X0);
     int idx_theta;
 
     if(WARM_START)

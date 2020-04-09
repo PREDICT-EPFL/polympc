@@ -7,24 +7,6 @@
 
 namespace polympc {
 
-/**
-std::set<std::string> available_options = {"spectral.number_segments", "spectral.poly_order", "spectral.tf"};
-
-template<typename ParamType>
-ParamType get_param(const std::string &key, const casadi::Dict dict, const ParamType &default_val)
-{
-    if((available_options.find(key) != available_options.end()) && (dict.find(key) != dict.end()))
-        return dict.find(key)->second;
-    else if((available_options.find(key) == available_options.end()) && (dict.find(key) != dict.end()))
-    {
-        std::cout << "Unknown  parameter: " << key << "\n"; // << "Available parameters: " << available_options << "\n";
-        return default_val;
-    }
-    else
-        return default_val;
-}
-*/
-
 template <typename System, typename Path, int NX, int NU, int NumSegments = 2, int PolyOrder = 5>
 class nmpf
 {
@@ -91,7 +73,7 @@ public:
 private:
     System system;
     Path   PathFunc;
-    uint   nx, nu, ny, np;
+    int   nx, nu, ny, np;
     double Tf;
 
     casadi::SX       Contraints;
@@ -444,27 +426,24 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
     int N = NUM_COLLOCATION_POINTS;
 
     /** rectify / reset virtual state */
-    casadi::DM X0 = _X0;
-    bool rectify = false;
-    if(X0(nx).nonzeros()[0] > reset_path_after)
-    {
-        X0(nx) -= reset_path_after;
-        rectify = true;
-    }
-    else if (X0(nx).nonzeros()[0] < -reset_path_after)
-    {
-        X0(nx) += reset_path_after;
-        rectify = true;
-    }
-
-    /** scale input */
-    X0 = casadi::DM::mtimes(Scale_X, X0);
-    double critical_val = Scale_X(nx, nx).nonzeros()[0] * reset_path_after;
-
+    casadi::DM X0 = casadi::DM::mtimes(Scale_X, X0);
     int idx_theta;
 
     if(WARM_START)
     {
+        /** check if virtual parameter should be reset */
+        casadi::DM critical_val = Scale_X(nx, nx) * reset_path_after;
+        if(casadi::DM::any(X0(nx) > critical_val).scalar())
+        {
+            X0(nx) -= critical_val;
+            NLP_X(casadi::Slice(nx, ((N + 1) * (nx + 2)), nx + 2)) -= critical_val;
+        }
+        else if(casadi::DM::any(X0(nx) < -critical_val).scalar())
+        {
+            X0(nx) += critical_val;
+            NLP_X(casadi::Slice(nx, ((N + 1) * (nx + 2)), nx + 2)) += critical_val;
+        }
+
         int idx_in = N * (NX + 2);
         int idx_out = idx_in + (NX + 2);
         ARG["lbx"](casadi::Slice(idx_in, idx_out), 0) = X0;
@@ -478,18 +457,6 @@ void nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::computeControl(const ca
         ARG["lbx"](idx_theta + 1) = X0(nx + 1) - Scale_X(nx + 1, nx + 1) * flexibility;
         ARG["ubx"](idx_theta + 1) = X0(nx + 1) + Scale_X(nx + 1, nx + 1) * flexibility;
 
-        /** rectify initial guess */
-        if(rectify)
-        {
-            for(int i = 0; i < (N + 1) * nx; i += nx)
-            {
-                int idx = i + nx;
-                if(NLP_X(idx).nonzeros()[0] > critical_val)
-                    NLP_X(idx) -= critical_val;
-                else if (NLP_X(idx).nonzeros()[0] < -critical_val)
-                    NLP_X(idx) += critical_val;
-            }
-        }
         ARG["x0"]     = NLP_X;
         ARG["lam_g0"] = NLP_LAM_G;
         ARG["lam_x0"] = NLP_LAM_X;

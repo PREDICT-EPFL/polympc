@@ -6,10 +6,7 @@
 #include "Eigen/Eigenvalues"
 #include "unsupported/Eigen/Polynomials"
 #include "unsupported/Eigen/MatrixFunctions"
-
 #include <type_traits>
-
-enum IntType {RK4, CVODES, CHEBYCHEV};
 
 namespace polymath
 {

@@ -1,4 +1,5 @@
-#include "integrator.h"
+#include "integration/integrator.h"
+#include "integration/chebyshev_integrator.hpp"
 
 using namespace casadi;
 
@@ -9,15 +10,12 @@ public:
     ~KinematicBicycle() {}
 
     casadi::Function getDynamics() { return NumDynamics; }
-    casadi::Function getParamDynamics() { return ParamDynamics; }
 
 private:
     casadi::SX state;
     casadi::SX control;
     casadi::SX parameters;
     casadi::SX Dynamics;
-
-    casadi::Function ParamDynamics;
     casadi::Function NumDynamics;
 };
 
@@ -38,13 +36,12 @@ KinematicBicycle::KinematicBicycle() {
     DM parameters_num = DM::vertcat({L_num});
     /** Dynamic equations */
     Dynamics = SX::vertcat({v * cos(theta) * cos(phi), v * sin(theta) * cos(phi), v * sin(phi) / L});
-    ParamDynamics = Function("ParamDynamics", {state, control, parameters}, {Dynamics});
-    NumDynamics = Function("Dynamics", {state, control}, {ParamDynamics(SXVector({state, control, parameters_num}))[0]});
+    NumDynamics = Function("Dynamics", {state, control, parameters}, {Dynamics});
 }
 
 int main(void)
 {
-    /** kite object */
+    /** car object */
     KinematicBicycle car;
     Function ode = car.getDynamics();
 
@@ -55,9 +52,9 @@ int main(void)
     solver_options["ipopt.linear_solver"] = "mumps";
 
     const int NUM_SEGMENTS = 2;
-    const int POLY_ORDER = 5;
+    const int POLY_ORDER   = 5;
 
-    PSODESolver<POLY_ORDER,NUM_SEGMENTS,3,2>ps_solver(ode, tf, props, solver_options);
+    PSODESolver<POLY_ORDER, NUM_SEGMENTS, 3, 2, 1>ps_solver(ode, tf, props, solver_options);
 
     /** solve the problem */
     DMDict ps_sol;
@@ -65,9 +62,10 @@ int main(void)
     DM init_state = DM::vertcat({0.0, 10.0, 0.0});
     DM control = DM::vertcat({19.9198, 0.1139, 20.1185, -0.0368, 19.8883, 0.0565, 20.3789, -0.1054, 20.2985, 0.3564, 0.1000, 0.0981, 29.3983,
                               -0.5047,   25.2032,    0.3547,   22.8910,    0.5236,   48.0521,   -0.5236,   50.0000,   -0.5236});
+    DM L = 2.8;
 
     bool FULL = true;
-    ps_sol = ps_solver.solve_trajectory(init_state, control, FULL);
+    ps_sol = ps_solver.solve_trajectory(init_state, control, L, FULL);
     std::cout << "PS:" << ps_sol.at("x") << "\n";
 
     casadi::DM points = 2 * casadi::DM::vertcat({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000});
@@ -93,7 +91,7 @@ int main(void)
     {
         std::cout << "Simulating: " << t << "\n";
         casadi::DM u_t = casadi::DM::vertcat({f_v.eval(t), f_phi.eval(t)});
-        x_t = cvodes_solver.solve(x_t, u_t, dt);
+        x_t = cvodes_solver.solve(x_t, u_t, L, dt);
         xt_log = casadi::DM::vertcat({xt_log, x_t});
         t += dt;
     }

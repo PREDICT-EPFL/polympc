@@ -1,6 +1,6 @@
 #include "polynomials/legendre.hpp"
 #include "polynomials/projection.hpp"
-#include "integrator.h"
+#include "integration/chebyshev_integrator.hpp"
 
 struct Integrand
 {
@@ -109,7 +109,7 @@ int main()
     double tf = 4.0;
     casadi::DMDict props;
     constexpr int dimx = 2 * (basis_size + 1);
-    PSODESolver<10, 1, dimx, 1>ps_solver(rhs, tf, props);
+    PSODESolver<10, 1, dimx, 1, 0>ps_solver(rhs, tf, props);
 
     bool FULL = true;
     casadi::DM ps_sol = ps_solver.solve(x0, ctl, FULL);
@@ -168,7 +168,7 @@ int main()
 
     tf = 1.0;
     constexpr int dimu = (basis_size + 1);
-    PSODESolver<10, 1, dimu, 1>ps_solver2(sode_fun, tf, props);
+    PSODESolver<10, 1, dimu, 1, 0>ps_solver2(sode_fun, tf, props);
     ps_sol = ps_solver2.solve(x0, ctl, FULL);
 
     /** save trajectory */

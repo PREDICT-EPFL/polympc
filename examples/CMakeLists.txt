@@ -17,7 +17,7 @@ if(BUILD_EXAMPLES)
     target_link_libraries(kite_model_test kite integration Eigen3::Eigen)
 
     add_executable(car_model_test car_model_test.cpp)
-    target_link_libraries(car_model_test integration Eigen3::Eigen)
+    target_link_libraries(car_model_test integration polymath Eigen3::Eigen)
 
     add_executable(chebyshev_test chebyshev_test.cpp)
     target_link_libraries(chebyshev_test polymath Eigen3::Eigen)

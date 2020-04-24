@@ -48,6 +48,7 @@ add_subdirectory(src cmake)
 add_subdirectory(examples)
 add_subdirectory(src/control)
 add_subdirectory(src/solvers)
+add_subdirectory(src/integration)
 
 add_subdirectory(tests/control)
 add_subdirectory(tests/polynomials)

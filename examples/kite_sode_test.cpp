@@ -1,7 +1,7 @@
 //#include "legendre.hpp"
 #include "polynomials/legendre.hpp"
 #include "polynomials/projection.hpp"
-#include "integrator.h"
+#include "integration/chebyshev_integrator.hpp"
 
 /** uniform random variable */
 struct Unif
@@ -78,7 +78,7 @@ int main(void)
     double tf = 1.0;
     casadi::DMDict props;
     casadi::DM ps_sol;
-    PSODESolver<10,1,3*6,1>ps_solver(sode_fun, tf, props);
+    PSODESolver<10, 1, 3*6, 1, 0>ps_solver(sode_fun, tf, props);
     ps_sol = ps_solver.solve(x0, ctl, true);
 
     /** save trajectory */

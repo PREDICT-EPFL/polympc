@@ -1,14 +1,15 @@
 #include "generic_ocp.hpp"
 
-static constexpr int NX = 2;
-static constexpr int NU = 2;
-static constexpr int NP = 3;
+static constexpr int NX = 2; // number of system states
+static constexpr int NU = 2; // number of input signals
+static constexpr int NP = 0; // number of unknown parameters (can be optimised)
+static constexpr int ND = 3; // number of user specified parameters (changed excusively by the user)
 
 static constexpr int POLY_ORDER = 4;
 static constexpr int NUM_SEGMENTS = 3;
 
-using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
-using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
+using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;
+//using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
 
 //class MyOCP : public GenericOCP<MyOCP, Approximation>
 class MyOCP : public GenericOCP<MyOCP, Approximation>
@@ -24,35 +25,41 @@ public:
     static constexpr double t_start = 0.0;
     static constexpr double t_final = 1.0;
 
-    casadi::SX mayer_term_impl(const casadi::SX &x, const casadi::SX &p)
+    /**
+     * x - state
+     * u - control
+     * p - optimised parameters
+     * d - static parameters
+     */
+
+    casadi::SX mayer_term_impl(const casadi::SX &x, const casadi::SX &p, const casadi::SX &d)
     {
         return casadi::SX::dot(x,x);
     }
 
-    casadi::SX lagrange_term_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    casadi::SX lagrange_term_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         casadi::DM Weight = casadi::DM::eye(NU);
         return casadi::SX::dot(x,x) + casadi::SX::dot(u,u) + norm_diff(u, Weight) + norm_ddiff(u, Weight);
     }
 
-    casadi::SX system_dynamics_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    casadi::SX system_dynamics_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         return x + u;
     }
 
-    casadi::SX inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    casadi::SX inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         casadi::SX ineq1 = pow(u,2) - casadi::SX::vertcat({10, 10});
         casadi::SX ineq2 = diff(x, 5 * casadi::DM::ones(NX));
         return casadi::SX::vertcat({ineq1, ineq2});
     }
 
-    casadi::SX final_inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p)
+    casadi::SX final_inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         return casadi::SX::vertcat({x(0),-x(0)});
     }
 };
-
 
 
 int main(void)

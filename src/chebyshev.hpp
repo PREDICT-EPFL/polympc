@@ -8,7 +8,8 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
+         int NP,
+         int ND = 0>
 class Chebyshev
 {
 public:
@@ -24,6 +25,7 @@ public:
     BaseClass VarX(){return _X;}
     BaseClass VarU(){return _U;}
     BaseClass VarP(){return _P;}
+    BaseClass VarD(){return _DT;}
 
     BaseClass CollocateDynamics(casadi::Function &dynamics, const double &t0, const double &tf);
     BaseClass CollocateCost(casadi::Function &MayerTerm, casadi::Function &LagrangeTerm,
@@ -46,16 +48,19 @@ public:
         _NX = NX,
         _NU = NU,
         _NP = NP,
+        _ND = ND,
 
-        _POLY_ORDER = PolyOrder,
-        _NUM_SEGMENTS = NumSegments,
+        _POLY_ORDER       = PolyOrder,
+        _NUM_SEGMENTS     = NumSegments,
         _NUM_COLLOC_PTS_X = NumSegments * PolyOrder + 1,
         _NUM_COLLOC_PTS_U = NumSegments * PolyOrder + 1,
 
         _X_START_IDX = 0,
-        _X_END_IDX = _NUM_COLLOC_PTS_X * NX,
-        _U_START_IDX = _NUM_COLLOC_PTS_X * NX,
-        _U_END_IDX = _U_START_IDX + _NUM_COLLOC_PTS_U * NU
+        _X_END_IDX   = _NUM_COLLOC_PTS_X * NX,
+        _U_START_IDX = _X_END_IDX,
+        _U_END_IDX   = _U_START_IDX + _NUM_COLLOC_PTS_U * NU,
+        _P_START_IDX = _U_END_IDX,
+        _P_END_IDX   = _P_START_IDX + _NP
     };
 
 private:
@@ -85,8 +90,10 @@ private:
     BaseClass _X;
     /** control in terms of Chebyshev coefficients */
     BaseClass _U;
-    /** vector of parameters */
+    /** vector of optimised parameters */
     BaseClass _P;
+    /** vector of constant data: user specified parameters */
+    BaseClass _DT;
 };
 
 /** @brief constructor */
@@ -95,8 +102,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::Chebyshev()
+         int NP,
+         int ND>
+Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Chebyshev()
 {
     /** initialize pseudopsectral scheme */
     _Points      = CollocPoints();
@@ -105,9 +113,10 @@ Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::Chebyshev()
     _ComD        = CompDiffMatrix();
 
     /** create discretized states and controls */
-    _X = casadi::SX::sym("X", (NumSegments * PolyOrder + 1) * NX );
-    _U = casadi::SX::sym("U", (NumSegments * PolyOrder + 1) * NU );
-    _P = casadi::SX::sym("P", NP);
+    _X  = casadi::SX::sym("X", (NumSegments * PolyOrder + 1) * NX );
+    _U  = casadi::SX::sym("U", (NumSegments * PolyOrder + 1) * NU );
+    _P  = casadi::SX::sym("P", NP);
+    _DT = casadi::SX::sym("D", ND);
 }
 
 /** @brief range */
@@ -116,8 +125,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::range(const uint &first, const uint &last, const uint &step)
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::range(const uint &first, const uint &last, const uint &step)
 {
     int numel = std::floor((last - first) / step);
     BaseClass _range;
@@ -136,8 +146,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocPoints()
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocPoints()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     auto grid_int = polymath::range<double>(0, PolyOrder);
@@ -153,8 +164,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DiffMatrix()
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::DiffMatrix()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     auto grid_int = polymath::range<double>(0, PolyOrder);
@@ -178,8 +190,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::QuadWeights()
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::QuadWeights()
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     auto grid_int = polymath::range<double>(0, PolyOrder);
@@ -220,8 +233,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CompDiffMatrix(const int &DIM)
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CompDiffMatrix(const int &DIM)
 {
     int comp_rows = NumSegments * PolyOrder + 1;
     int comp_cols = NumSegments * PolyOrder + 1;
@@ -258,8 +272,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateDynamics(casadi::Function &dynamics,
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocateDynamics(casadi::Function &dynamics,
                                                                                       const double &t0, const double &tf)
 {
     /** evaluate RHS at the collocation points */
@@ -271,20 +286,21 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateDyn
 
     for (int i = 0; i <= DIMX - NX; i += NX)
     {
-        if(NP == 0)
+        if((NP == 0) and (ND == 0))
         {
             tmp = dynamics(casadi::SXVector{_X(casadi::Slice(i, i + NX)),
                                             _U(casadi::Slice(j, j + NU)) });
         }
         else
         {
+
             tmp = dynamics(casadi::SXVector{_X(casadi::Slice(i, i + NX)),
                                             _U(casadi::Slice(j, j + NU)),
-                                            _P});
+                                            _P, _DT});
         }
 
-            F_XU(casadi::Slice(i, i + NX)) = t_scale * tmp[0];
-            j += NU;
+        F_XU(casadi::Slice(i, i + NX)) = t_scale * tmp[0];
+        j += NU;
     }
 
     BaseClass G_XU = BaseClass::mtimes(_ComD, _X) - F_XU;
@@ -297,8 +313,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateCost(casadi::Function &MayerTerm,
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocateCost(casadi::Function &MayerTerm,
                                                                                   casadi::Function &LagrangeTerm,
                                                                                   const double &t0, const double &tf)
 {
@@ -344,8 +361,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateParametricCost(casadi::Function &MayerTerm,
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocateParametricCost(casadi::Function &MayerTerm,
                                                                                             casadi::Function &LagrangeTerm,
                                                                                             const double &t0, const double &tf)
 {
@@ -356,8 +374,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocatePar
     /** collocate Mayer term */
     if(!MayerTerm.is_null())
     {
-        value = MayerTerm(casadi::SXVector{_X(casadi::Slice(0, NX)),
-                                           _P});
+        value = MayerTerm(casadi::SXVector{_X(casadi::Slice(0, NX)), _P, _DT});
         Mayer = value[0];
     }
 
@@ -373,7 +390,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocatePar
             int m = 0;
             for (int i = k * NX * PolyOrder; i <= (k + 1) * NX * PolyOrder; i += NX)
             {
-                value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU)), _P});
+                value = LagrangeTerm(casadi::SXVector{_X(casadi::Slice(i, i + NX)), _U(casadi::Slice(j, j + NU)), _P, _DT});
                 local_int += _QuadWeights(m) * value[0];
                 j += NU;
                 ++m;
@@ -392,8 +409,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateIdCost(casadi::Function &IdCost,
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocateIdCost(casadi::Function &IdCost,
                                                                                     casadi::DM data,
                                                                                     const double &t0, const double &tf)
 {
@@ -437,8 +455,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-std::function<BaseClass(BaseClass, BaseClass, BaseClass)> Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>
+         int NP,
+         int ND>
+std::function<BaseClass(BaseClass, BaseClass, BaseClass)> Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>
                                                                                        ::CollocateDynamics2(const functor &dynamics,
                                                                                        const double &t0, const double &tf)
 {
@@ -455,8 +474,9 @@ template<class BaseClass,
          int NumSegments,
          int NX,
          int NU,
-         int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::collocate_dynamics(const BaseClass &X,
+         int NP,
+         int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::collocate_dynamics(const BaseClass &X,
                                                                                        const BaseClass &U, const BaseClass &P)
 {
     /** evaluate RHS at the collocation points */
@@ -494,8 +514,9 @@ template<class BaseClass,
         int NumSegments,
         int NX,
         int NU,
-        int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFunction(casadi::Function &_Function)
+        int NP,
+        int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CollocateFunction(casadi::Function &_Function)
 {
     /** evaluate function at the collocation points */
     const int n_f_out = _Function.nnz_out();
@@ -508,7 +529,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFun
         i_x = i * NX;
         i_u = i * NU;
         i_f = i * n_f_out;
-        if(_NP == 0)
+        if((_NP == 0) and (_ND == 0))
         {
             tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
                                              _U(casadi::Slice(i_u, i_u + NU))});
@@ -517,7 +538,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::CollocateFun
         {
             tmp = _Function(casadi::SXVector{_X(casadi::Slice(i_x, i_x + NX)),
                                              _U(casadi::Slice(i_u, i_u + NU)),
-                                             _P});
+                                             _P, _DT});
         }
 
         f_colloc(casadi::Slice(i_f, i_f + n_f_out)) = tmp[0];
@@ -532,8 +553,9 @@ template<class BaseClass,
         int NumSegments,
         int NX,
         int NU,
-        int NP>
-BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP>::DifferentiateFunction(casadi::Function &_Function, const int order)
+        int NP,
+        int ND>
+BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::DifferentiateFunction(casadi::Function &_Function, const int order)
 {
     /** evaluate function at the collocation points */
     int n_f_out = _Function.nnz_out();

@@ -4,6 +4,8 @@
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
 
+enum PENALTY { QUADRATIC, EXACT };
+
 static casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2){ return casadi::SX::mtimes(m1,m2); }
 static casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2){ return casadi::DM::mtimes(m1,m2); }
 
@@ -77,21 +79,21 @@ public:
     /** state box constraints */
     void set_state_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
     {
-        assert((lower_bound.size1() == NX) && (upper_bound.size1() == NX));
+        casadi_assert((lower_bound.size1() == NX) && (upper_bound.size1() == NX), "set_state_constraints: incorrect supplied bounds sizes");
         ARG["lbx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScX), lower_bound), Approximation::_NUM_COLLOC_PTS_X);
         ARG["ubx"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScX), upper_bound), Approximation::_NUM_COLLOC_PTS_X);
     }
     /** constrol box constraints */
     void set_control_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
     {
-        assert((lower_bound.size1() == NU) && (upper_bound.size1() == NU));
+        casadi_assert((lower_bound.size1() == NU) && (upper_bound.size1() == NU), "set_control_constraints: incorrect supplied bounds sizes");
         ARG["lbx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), lower_bound), Approximation::_NUM_COLLOC_PTS_U);
         ARG["ubx"](casadi::Slice(U_START, U_END)) = casadi::DM::repmat(_mtimes(casadi::DM(ScU), upper_bound), Approximation::_NUM_COLLOC_PTS_U);
     }
     /** parameters box constraints */
     void set_parameters_box_constraints(const casadi::DM &lower_bound, const casadi::DM &upper_bound)
     {
-        assert((lower_bound.size1() == NP) && (upper_bound.size1() == NP));
+        casadi_assert((lower_bound.size1() == NP) && (upper_bound.size1() == NP), "set_parameters_constraints: incorrect supplied bounds sizes");
         ARG["lbx"](casadi::Slice(P_START, P_END)) = _mtimes(casadi::DM(ScP), lower_bound);
         ARG["ubx"](casadi::Slice(P_START, P_END)) = _mtimes(casadi::DM(ScP), upper_bound);
     }
@@ -120,9 +122,15 @@ public:
         return _mtimes(casadi::DM(invSP), opt_p);
     }
 
+    /** get slacks if used */
+    casadi::DM get_slacks() const
+    {
+        return NLP_X(casadi::Slice(P_END, NLP_X.size1()));
+    }
+
     void set_parameters(const casadi::DM &param_vector)
     {
-        assert(param_vector.size1() == ARG["p"].size1());
+        casadi_assert(param_vector.size1() == ARG["p"].size1(), "set_parameters: given parameter vector has a wrong dimension");
         ARG["p"] = param_vector;
     }
 
@@ -134,10 +142,7 @@ public:
             ARG["p"](casadi::Slice(indices.first, indices.second)) = value;
         }
         else
-        {
-            constexpr bool UNKNOWN_PARAMETER_NAME = false;
-            assert(UNKNOWN_PARAMETER_NAME);
-        }
+            casadi_assert(false, "set_parameters: unknown parameter name: " + name);
     }
 
     void set_parameter_mapping(const std::map<std::string, std::pair<int, int>> &map)
@@ -187,6 +192,11 @@ public:
 private:
     bool scaling{false};
     casadi::SX ScX, ScU, ScP, invSX, invSU, invSP;
+
+    bool use_slacks{false};
+    int  slack_penalty_type{PENALTY::QUADRATIC};
+    casadi::SX slacks;
+
     casadi::SXDict NLP;
     casadi::Function NLP_Solver;
     casadi::Dict OPTS, USER_OPTS, MPC_OPTS;
@@ -201,7 +211,7 @@ private:
 template<typename OCP, typename Approximation>
 casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, const casadi::DM &WeightMat)
 {
-    assert(expr.size1() == WeightMat.size1());
+    casadi_assert(expr.size1() == WeightMat.size1(), "norm_diff: weight matrix has wrong dimension");
     m_norm_diff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
 
     return casadi::SX(0);
@@ -211,7 +221,7 @@ casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, con
 template<typename OCP, typename Approximation>
 casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, const casadi::DM &WeightMat)
 {
-    assert(expr.size1() == WeightMat.size1());
+    casadi_assert(expr.size1() == WeightMat.size1(), "norm_ddiff: weight matrix has wrong dimension");
     m_norm_ddiff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
 
     return casadi::SX(0);
@@ -221,7 +231,7 @@ casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, co
 template<typename OCP, typename Approximation>
 casadi::SX GenericOCP<OCP, Approximation>::diff(const casadi::SX &expr, const casadi::DM &c)
 {
-    assert(expr.size1() == c.size1() && "g(x,u,p,d) and c should have the same dimensions");
+    casadi_assert(expr.size1() == c.size1(), "g(x,u,p,d) and c should have the same dimensions");
     m_diff.push_back(expr);
     m_diff_bound.push_back(c);
     return casadi::SX();
@@ -230,7 +240,7 @@ casadi::SX GenericOCP<OCP, Approximation>::diff(const casadi::SX &expr, const ca
 template<typename OCP, typename Approximation>
 casadi::SX GenericOCP<OCP, Approximation>::ddiff(const casadi::SX &expr, const casadi::DM &c)
 {
-    assert(expr.size1() == c.size1() && "g(x,u,p,d) and c should have the same dimensions");
+    casadi_assert(expr.size1() == c.size1(), "g(x,u,p,d) and c should have the same dimensions");
     m_ddiff.push_back(expr);
     m_ddiff_bound.push_back(c);
     return casadi::SX();
@@ -259,13 +269,14 @@ void GenericOCP<OCP, Approximation>::setup()
     SCALER_U = std::vector<double>(NU, 1.0);
     SCALER_P = std::vector<double>(NU, 1.0);
 
+    /** scaling options */
     if(MPC_OPTS.find("mpc.scaling") != MPC_OPTS.end())
         scaling = MPC_OPTS["mpc.scaling"];
 
     if(scaling && (MPC_OPTS.find("mpc.scale_x") != MPC_OPTS.end()))
     {
         std::vector<double> scale_x = MPC_OPTS["mpc.scale_x"];
-        assert(NX == scale_x.size());
+        casadi_assert(NX == scale_x.size(), "setup: provided state scaling matrix has wrong dimension");
         ScX   = casadi::SX::diag({scale_x});
         invSX = casadi::DM::solve(ScX, casadi::DM::eye(NX));
         SCALER_X = scale_x;
@@ -274,7 +285,7 @@ void GenericOCP<OCP, Approximation>::setup()
     if(scaling && (MPC_OPTS.find("mpc.scale_u") != MPC_OPTS.end()))
     {
         std::vector<double> scale_u = MPC_OPTS["mpc.scale_u"];
-        assert(NU == scale_u.size());
+        casadi_assert(NU == scale_u.size(), "setup: provided control scaling matrix has wrong dimension");
         ScU   = casadi::SX::diag({scale_u});
         invSU = casadi::DM::solve(ScU, casadi::DM::eye(NU));
         SCALER_U = scale_u;
@@ -283,11 +294,18 @@ void GenericOCP<OCP, Approximation>::setup()
     if(scaling && (MPC_OPTS.find("mpc.scale_p") != MPC_OPTS.end()))
     {
         std::vector<double> scale_p = MPC_OPTS["mpc.scale_p"];
-        assert(NP == scale_p.size());
+        casadi_assert(NP == scale_p.size(), "setup: provided parameters scaling matrix has wrong dimension");
         ScP   = casadi::SX::diag({scale_p});
         invSP = casadi::DM::solve(ScP, casadi::DM::eye(NU));
         SCALER_P = scale_p;
     }
+
+    /** slack reformulation options */
+    if(MPC_OPTS.find("mpc.use_slacks") != MPC_OPTS.end())
+        use_slacks = MPC_OPTS["mpc.use_slacks"];
+
+    if(scaling && (MPC_OPTS.find("mpc.slack_penaly_type") != MPC_OPTS.end()))
+        slack_penalty_type = MPC_OPTS["mpc.slack_penalty_type"];
 
     /** collocate dynamic equations*/
     casadi::SX diff_constr;
@@ -352,8 +370,6 @@ void GenericOCP<OCP, Approximation>::setup()
     {
         casadi::Function ic_func = casadi::Function("ic_func",{x,u,p,d},{ic});
         ineq_constraints = spectral.CollocateFunction(ic_func);
-        lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
-        ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
 
         /** process differential operators */
         if(!m_diff.empty())
@@ -364,12 +380,8 @@ void GenericOCP<OCP, Approximation>::setup()
                 casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 1);
 
                 unsigned dim = tmp.size1() / m_diff[i].size1();
+                tmp = tmp - casadi::SX::repmat(m_diff_bound[i], dim, 1);
                 ineq_constraints = casadi::SX::vertcat({ineq_constraints, tmp});
-                casadi::SX upper_b =  casadi::SX::repmat(m_diff_bound[i], dim, 1);
-                casadi::SX lower_b = -casadi::SX::inf(tmp.size1());
-
-                lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
-                ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
             }
             /** clear data */
             m_diff.clear();
@@ -384,18 +396,31 @@ void GenericOCP<OCP, Approximation>::setup()
                 casadi::SX tmp = spectral.DifferentiateFunction(expr_fun, 2);
 
                 unsigned dim = tmp.size1() / m_ddiff[i].size1();
+                tmp = tmp - casadi::SX::repmat(m_ddiff_bound[i], dim, 1);
                 ineq_constraints = casadi::SX::vertcat({ineq_constraints, tmp});
-                casadi::SX upper_b =  casadi::SX::repmat(m_ddiff_bound[i], dim, 1);
-                casadi::SX lower_b = -casadi::SX::inf(tmp.size1());
-
-                lbg_ic = casadi::SX::vertcat({lbg_ic, lower_b});
-                ubg_ic = casadi::SX::vertcat({ubg_ic, upper_b});
             }
             /** clear data */
             m_ddiff.clear();
             m_ddiff_bound.clear();
         }
+
+        if(use_slacks)
+        {
+            casadi::SX slack_ic = casadi::SX::sym("slack_ic", ineq_constraints.size1());
+            ineq_constraints = ineq_constraints + slack_ic;
+
+            lbg_ic =  casadi::SX::zeros(ineq_constraints.size1());
+            ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
+
+            slacks = casadi::SX::vertcat({slacks, slack_ic});
+        }
+        else
+        {
+            lbg_ic = -casadi::SX::inf(ineq_constraints.size1());
+            ubg_ic =  casadi::SX::zeros(ineq_constraints.size1());
+        }
     }
+
 
     /** collocate generic final time inequality constraints */
     casadi::SX final_ineq_constraints;
@@ -408,8 +433,22 @@ void GenericOCP<OCP, Approximation>::setup()
         casadi::Function ic_func = casadi::Function("final_ic_func",{x,u,p,d},{final_ic});
         final_ineq_constraints = spectral.CollocateFunction(ic_func);
         final_ineq_constraints = final_ineq_constraints(casadi::Slice(0, ic_func.n_out())); // take only the final state
-        final_lbg_ic = -casadi::SX::inf(final_ineq_constraints.size1());
-        final_ubg_ic =  casadi::SX::zeros(final_ineq_constraints.size1());
+
+        if(use_slacks)
+        {
+            casadi::SX slack_fic = casadi::SX::sym("slack_fic", final_ineq_constraints.size1());
+            final_ineq_constraints = final_ineq_constraints + slack_fic;
+
+            final_lbg_ic = casadi::SX::zeros(final_ineq_constraints.size1());
+            final_ubg_ic = casadi::SX::zeros(final_ineq_constraints.size1());
+
+            slacks = casadi::SX::vertcat({slacks, slack_fic});
+        }
+        else
+        {
+            final_lbg_ic = -casadi::SX::inf(final_ineq_constraints.size1());
+            final_ubg_ic =  casadi::SX::zeros(final_ineq_constraints.size1());
+        }
     }
 
     /** initialise NLP interface*/
@@ -422,6 +461,20 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX constraints = casadi::SX::vertcat({diff_constr, ineq_constraints, final_ineq_constraints});
     casadi::SX lbg = casadi::SX::vertcat({lbg_diff, lbg_ic, final_lbg_ic});
     casadi::SX ubg = casadi::SX::vertcat({ubg_diff, ubg_ic, final_ubg_ic});
+
+    if(use_slacks and !(slacks->empty()))
+    {
+        /** append optvar and cost */
+        opt_var = casadi::SX::vertcat({opt_var, slacks});
+        if(slack_penalty_type == PENALTY::QUADRATIC)
+            cost += 10 * casadi::SX::dot(slacks, slacks);
+        else if (slack_penalty_type == PENALTY::EXACT)
+        {
+            cost += casadi::SX::dot(slacks, slacks) + 10 * casadi::SX::norm_1(slacks);
+        }
+        else
+            casadi_assert(false, "Unknown penalty function type, available: EXACT and QUADRATIC");
+    }
 
     NLP["x"] = opt_var;
     NLP["f"] = cost;
@@ -441,9 +494,24 @@ void GenericOCP<OCP, Approximation>::setup()
 
     ARG["lbg"] = lbg;
     ARG["ubg"] = ubg;
-    ARG["lbx"] = -casadi::DM::inf(opt_var.size1());
-    ARG["ubx"] =  casadi::DM::inf(opt_var.size1());
     ARG["p"]   = casadi::DM::zeros(vard.size1());
+
+    if(use_slacks and !slacks->empty())
+    {
+        casadi::DM lbs = casadi::SX::zeros(slacks.size1());
+        casadi::DM ubs = casadi::SX::inf(slacks.size1());
+
+        casadi::DM ubx =  casadi::DM::inf(varx.size1() + varu.size1() + varp.size1());
+        casadi::DM lbx = -ubx;
+
+        ARG["lbx"] = casadi::DM::vertcat({lbx, lbs});
+        ARG["ubx"] = casadi::DM::vertcat({ubx, ubs});
+    }
+    else
+    {
+        ARG["lbx"] = -casadi::DM::inf(opt_var.size1());
+        ARG["ubx"] =  casadi::DM::inf(opt_var.size1());
+    }
 
     /** default initial guess */
     ARG["x0"] = casadi::DM ::zeros(opt_var.size1(), 1);
@@ -462,7 +530,7 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
     else
     {
         casadi::DM mid_point = _mtimes(casadi::DM(ScX), 0.5 * ( lbx0 + ubx0 ));
-        ARG["x0"](casadi::Slice(0, X_END)) = casadi::DM::repmat(mid_point, NUM_SEGMENTS * POLY_ORDER + 1, 1);
+        ARG["x0"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(mid_point, NUM_SEGMENTS * POLY_ORDER + 1, 1);
     }
 
     if(!LAM_X0.is_empty())

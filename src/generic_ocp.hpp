@@ -175,8 +175,9 @@ public:
     static constexpr int NP = Approximation::_NP;
     static constexpr int ND = Approximation::_ND;
 
-    static constexpr int POLY_ORDER = Approximation::_POLY_ORDER;
-    static constexpr int NUM_SEGMENTS = Approximation::_NUM_SEGMENTS;
+    static constexpr int POLY_ORDER       = Approximation::_POLY_ORDER;
+    static constexpr int NUM_SEGMENTS     = Approximation::_NUM_SEGMENTS;
+    static constexpr int NUM_COLLOC_PTS_X = Approximation::_NUM_COLLOC_PTS_X;
 
     const double t_start = static_cast<OCP*>(this)->t_start;
     const double t_final = static_cast<OCP*>(this)->t_final;
@@ -530,7 +531,7 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
     else
     {
         casadi::DM mid_point = _mtimes(casadi::DM(ScX), 0.5 * ( lbx0 + ubx0 ));
-        ARG["x0"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(mid_point, NUM_SEGMENTS * POLY_ORDER + 1, 1);
+        ARG["x0"](casadi::Slice(X_START, X_END)) = casadi::DM::repmat(mid_point, NUM_COLLOC_PTS_X, 1);
     }
 
     if(!LAM_X0.is_empty())

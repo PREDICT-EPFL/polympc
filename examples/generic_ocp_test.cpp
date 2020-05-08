@@ -9,10 +9,10 @@ static constexpr int POLY_ORDER = 4;
 static constexpr int NUM_SEGMENTS = 3;
 
 using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;
-//using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP>;
+using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;
 
+class MyOCP : public GenericOCP<MyOCP, Approximation2>
 //class MyOCP : public GenericOCP<MyOCP, Approximation>
-class MyOCP : public GenericOCP<MyOCP, Approximation>
 {
 public:
     /** constructor inheritance */
@@ -40,7 +40,7 @@ public:
     casadi::SX lagrange_term_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         casadi::DM Weight = casadi::DM::eye(NU);
-        return casadi::SX::dot(x,x) + casadi::SX::dot(u,u) + norm_diff(u, Weight) + norm_ddiff(u, Weight);
+        return casadi::SX::dot(x,x) + casadi::SX::dot(u,u) + norm_diff(u, Weight); //+ norm_ddiff(u, Weight);
     }
 
     casadi::SX system_dynamics_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
@@ -96,6 +96,12 @@ int main(void)
 
     casadi::DM trajectory = lox.get_optimal_trajectory();
     std::cout << "Optimal Trajectory \n" << trajectory << "\n";
+
+    casadi::DM D = casadi::DM::rand(2,2);
+    casadi::DMVector block_vec(3, D);
+    casadi::DM block = casadi::DM::diagcat(block_vec);
+
+    std::cout << block << "\n";
 
     return 0;
 }

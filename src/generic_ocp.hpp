@@ -471,7 +471,7 @@ void GenericOCP<OCP, Approximation>::setup()
             cost += 10 * casadi::SX::dot(slacks, slacks);
         else if (slack_penalty_type == PENALTY::EXACT)
         {
-            cost += casadi::SX::dot(slacks, slacks) + 10 * casadi::SX::norm_1(slacks);
+            cost += casadi::SX::dot(slacks, slacks) + 10 * slacks;
         }
         else
             casadi_assert(false, "Unknown penalty function type, available: EXACT and QUADRATIC");

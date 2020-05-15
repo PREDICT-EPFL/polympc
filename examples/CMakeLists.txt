@@ -22,6 +22,9 @@ if(BUILD_EXAMPLES)
     add_executable(chebyshev_test chebyshev_test.cpp)
     target_link_libraries(chebyshev_test polymath Eigen3::Eigen)
 
+    add_executable(soft_chebyshev_test soft_chebyshev_test.cpp)
+    target_link_libraries(soft_chebyshev_test mobile_robot Eigen3::Eigen)
+
     add_executable(kite_sode_test kite_sode_test.cpp)
     target_link_libraries(kite_sode_test polymath Eigen3::Eigen)
 

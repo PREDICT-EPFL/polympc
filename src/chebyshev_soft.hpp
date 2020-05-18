@@ -280,7 +280,7 @@ BaseClass SoftChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Coll
     double t_scale = (tf - t0) / (2 * NumSegments);
 
     /** estimate derivatives */
-    BaseClass DX = _ComD * _X;
+    BaseClass DX = BaseClass::mtimes(_ComD, _X);
     BaseClass local_error;
     BaseClass integral_error = 0;
     BaseClass local_integral = 0;

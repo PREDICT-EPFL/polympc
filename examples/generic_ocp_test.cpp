@@ -8,10 +8,11 @@ static constexpr int ND = 3; // number of user specified parameters (changed exc
 static constexpr int POLY_ORDER = 4;
 static constexpr int NUM_SEGMENTS = 3;
 
-using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;
-using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;
+using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;     // standard collocation
+using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;   // ZOH controls in segments
+using Approximation3 = SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>; // relaxed collocation constraints
 
-class MyOCP : public GenericOCP<MyOCP, Approximation2>
+class MyOCP : public GenericOCP<MyOCP, Approximation3>
 //class MyOCP : public GenericOCP<MyOCP, Approximation>
 {
 public:
@@ -92,16 +93,10 @@ int main(void)
     lox.solve(x0, x0);
 
     casadi::DM solution = lox.get_optimal_control();
-    std::cout << "Optimal Control: \n" << solution << "\n";
+    std::cout << "Optimal Control: " << solution << "\n";
 
     casadi::DM trajectory = lox.get_optimal_trajectory();
-    std::cout << "Optimal Trajectory \n" << trajectory << "\n";
-
-    casadi::DM D = casadi::DM::rand(2,2);
-    casadi::DMVector block_vec(3, D);
-    casadi::DM block = casadi::DM::diagcat(block_vec);
-
-    std::cout << block << "\n";
+    std::cout << " \n Optimal Trajectory " << trajectory << "\n";
 
     return 0;
 }

@@ -3,6 +3,7 @@
 
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
+#include "chebyshev_soft.hpp"
 
 enum PENALTY { QUADRATIC, EXACT };
 
@@ -198,6 +199,8 @@ private:
     int  slack_penalty_type{PENALTY::QUADRATIC};
     casadi::SX slacks;
 
+    double soft_rho{1e6};
+
     casadi::SXDict NLP;
     casadi::Function NLP_Solver;
     casadi::Dict OPTS, USER_OPTS, MPC_OPTS;
@@ -308,6 +311,10 @@ void GenericOCP<OCP, Approximation>::setup()
     if(scaling && (MPC_OPTS.find("mpc.slack_penaly_type") != MPC_OPTS.end()))
         slack_penalty_type = MPC_OPTS["mpc.slack_penalty_type"];
 
+    /** soft formulation */
+    if(MPC_OPTS.find("mpc.soft_rho") != MPC_OPTS.end())
+            scaling = MPC_OPTS["mpc.soft_rho"];
+
     /** collocate dynamic equations*/
     casadi::SX diff_constr;
     casadi::SX dynamics = system_dynamics(_mtimes(invSX, x), _mtimes(invSU, u), p, d);
@@ -332,6 +339,15 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::Function lagrange_cost_func = casadi::Function("lagrange_cost",{x,u,p,d},{lagrange_cost});
 
     cost = spectral.CollocateParametricCost(mayer_cost_func, lagrange_cost_func, t_start, t_final);
+
+    /** handle the special case of relaxed collocation: soft collocation */
+    if(diff_constr.size1() == 1)
+    {
+        cost += soft_rho * diff_constr;
+        lbg_diff = casadi::SX();
+        ubg_diff = casadi::SX();
+        diff_constr = casadi::SX();
+    }
 
     /** process differential operators */
     if(!m_norm_diff.empty())

@@ -18,6 +18,8 @@ static constexpr int NUM_SEGMENTS = 2;
 
 int main()
 {
+    using SoftCheb = SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0>;
+
     SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0> cheb;
     MobileRobot robot;
     casadi::Function ode = robot.getDynamics();
@@ -67,6 +69,46 @@ int main()
 
     std::cout << "Casadi Cost time: " << std::setprecision(9)
               << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
+
+
+    /** check the integration routine */
+    casadi::SXDict NLP;
+    casadi::Function NLP_Solver;
+    casadi::Dict OPTS;
+    casadi::DMDict ARG;
+
+    NLP["x"] = opt_var;
+    NLP["f"] = G;
+
+    /** default solver options */
+    OPTS["ipopt.linear_solver"]         = "mumps";
+    OPTS["ipopt.print_level"]           = 5;
+    OPTS["ipopt.tol"]                   = 1e-4;
+    OPTS["ipopt.acceptable_tol"]        = 1e-4;
+
+    NLP_Solver = casadi::nlpsol("solver", "ipopt", NLP, OPTS);
+
+    casadi::DM lbg = -casadi::DM::inf(varx.size1());
+    casadi::DM ubg =  casadi::DM::inf(varx.size1());
+    casadi::DM control = casadi::DM::vertcat({1.0, 0.1});
+    casadi::DM lbg_u = casadi::DM::repmat(control, NUM_SEGMENTS * POLY_ORDER + 1, 1);
+    casadi::DM ubg_u = lbg_u;
+
+    lbg = casadi::DM::vertcat({lbg, lbg_u});
+    ubg = casadi::DM::vertcat({ubg, ubg_u});
+
+    /** set initial conditions */
+    casadi::DM init_cond = casadi::DM::vertcat({0.0, 0.0, 0.0});
+    lbg(casadi::Slice(SoftCheb::_X_END_IDX - 3, SoftCheb::_X_END_IDX)) = init_cond;
+    ubg(casadi::Slice(SoftCheb::_X_END_IDX - 3, SoftCheb::_X_END_IDX)) = init_cond;
+
+    ARG["lbx"] = lbg;
+    ARG["ubx"] = ubg;
+
+    casadi::DMDict res = NLP_Solver(ARG);
+    auto NLP_X = res.at("x");
+
+    std::cout << "solution: \n" << NLP_X << "\n";
 
     return 0;
 }

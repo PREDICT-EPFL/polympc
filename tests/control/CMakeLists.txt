@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.5)
 
 enable_testing()
 
-include_directories(include ${CASADI_INCLUDE_DIR})
-
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 

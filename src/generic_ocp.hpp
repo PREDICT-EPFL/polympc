@@ -6,6 +6,7 @@
 #include "chebyshev_soft.hpp"
 
 enum PENALTY { QUADRATIC, EXACT };
+enum OPERATOR_OUTPUT {NORM_DIFF_VALUE = 5};
 
 static casadi::SX _mtimes(const casadi::SX &m1, const casadi::SX &m2){ return casadi::SX::mtimes(m1,m2); }
 static casadi::DM _mtimes(const casadi::DM &m1, const casadi::DM &m2){ return casadi::DM::mtimes(m1,m2); }
@@ -218,7 +219,7 @@ casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, con
     casadi_assert(expr.size1() == WeightMat.size1(), "norm_diff: weight matrix has wrong dimension");
     m_norm_diff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
 
-    return casadi::SX(0);
+    return casadi::SX(NORM_DIFF_VALUE);
 }
 
 /** add second derivative regularisation to the cost : || g_ddot(x,u,p,d) || _ {W} */
@@ -228,7 +229,7 @@ casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, co
     casadi_assert(expr.size1() == WeightMat.size1(), "norm_ddiff: weight matrix has wrong dimension");
     m_norm_ddiff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
 
-    return casadi::SX(0);
+    return casadi::SX(NORM_DIFF_VALUE);
 }
 
 /** derivative of the expression to the path constraints */
@@ -350,7 +351,7 @@ void GenericOCP<OCP, Approximation>::setup()
     }
 
     /** process differential operators */
-    if(!m_norm_diff.empty())
+    if(!m_norm_diff.empty() and !cost.is_zero())
     {
         casadi::SXVector::const_iterator it;
         for(it = m_norm_diff.begin(); it != m_norm_diff.end(); ++it)
@@ -362,7 +363,7 @@ void GenericOCP<OCP, Approximation>::setup()
         }
     }
 
-    if(!m_norm_ddiff.empty())
+    if(!m_norm_ddiff.empty() and !cost.is_zero())
     {
         casadi::SXVector::const_iterator it;
         for(it = m_norm_ddiff.begin(); it != m_norm_ddiff.end(); ++it)

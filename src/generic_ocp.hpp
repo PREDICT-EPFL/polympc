@@ -129,6 +129,10 @@ public:
     {
         return NLP_X(casadi::Slice(P_END, NLP_X.size1()));
     }
+    casadi_int get_slacks_size() const
+    {
+        return slacks.size1();
+    }
 
     void set_parameters(const casadi::DM &param_vector)
     {

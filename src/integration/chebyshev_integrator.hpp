@@ -1,8 +1,8 @@
 #ifndef CHEBYSHEV_INTEGRATOR_HPP
 #define CHEBYSHEV_INTEGRATOR_HPP
 
-#include "chebyshev.hpp"
-
+//#include "chebyshev.hpp"
+#include "../chebyshev.hpp"
 
 template<typename ODE, int PolyOrder, int NumSegments, int NX, int NU, int NP>
 class eig_chebyshev_solver{

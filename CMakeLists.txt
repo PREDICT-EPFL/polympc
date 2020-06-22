@@ -42,7 +42,7 @@ endif()
 #endif()
 
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/examples ${CASADI_INCLUDE_DIR} )
+include_directories(src src/examples ${CASADI_INCLUDE_DIR} )
 
 add_subdirectory(src cmake)
 add_subdirectory(examples)

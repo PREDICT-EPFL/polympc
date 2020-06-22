@@ -58,11 +58,11 @@ protected:
 
     /** regularization of an expression derivative*/
     /**  || expr_dot ||_{WeightMat} */
-    casadi::SX norm_diff(const casadi::SX &expr, const casadi::DM &WeightMat);
+    casadi::SX norm_diff(const casadi::SX &expr, const casadi::SX &WeightMat);
 
     /** regularization of an expression second derivative*/
     /**  || expr_dot_dot ||_{WeightMat} */
-    casadi::SX norm_ddiff(const casadi::SX &expr, const casadi::DM &WeightMat);
+    casadi::SX norm_ddiff(const casadi::SX &expr, const casadi::SX &WeightMat);
 
     /** expression spectral derivative */
     /** [g(x,u)]' <= c */
@@ -213,7 +213,7 @@ private:
 
 /** add derivative regularisation to the cost : || g_dot(x,u,p,d) || _ {W} */
 template<typename OCP, typename Approximation>
-casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, const casadi::DM &WeightMat)
+casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, const casadi::SX &WeightMat)
 {
     casadi_assert(expr.size1() == WeightMat.size1(), "norm_diff: weight matrix has wrong dimension");
     m_norm_diff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));
@@ -223,7 +223,7 @@ casadi::SX GenericOCP<OCP, Approximation>::norm_diff(const casadi::SX &expr, con
 
 /** add second derivative regularisation to the cost : || g_ddot(x,u,p,d) || _ {W} */
 template<typename OCP, typename Approximation>
-casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, const casadi::DM &WeightMat)
+casadi::SX GenericOCP<OCP, Approximation>::norm_ddiff(const casadi::SX &expr, const casadi::SX &WeightMat)
 {
     casadi_assert(expr.size1() == WeightMat.size1(), "norm_ddiff: weight matrix has wrong dimension");
     m_norm_ddiff.push_back(casadi::SX::mtimes(sqrt(WeightMat), expr));

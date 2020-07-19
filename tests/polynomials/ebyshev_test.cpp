@@ -21,6 +21,8 @@ struct Integrand
 
 int main()
 {
+    using namespace polympc;
+
     using chebyshev = Chebyshev<8, GAUSS_LOBATTO>;
     chebyshev cheb;
 

@@ -14,6 +14,8 @@ void callback(void *solver_p)
     std::cout << s._x.transpose() << std::endl;
 }
 
+using namespace polympc;
+
 using Problem = polympc::OCProblem<MobileRobot<double>, Lagrange<double>, Mayer<double>>;
 using Approximation = Chebyshev<3, GAUSS_LOBATTO, double>; // POLY_ORDER = 3
 

@@ -1,88 +1,13 @@
 #ifndef LEGENDRE_HPP
 #define LEGENDRE_HPP
 
-#include "iostream"
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#include "unsupported/Eigen/Polynomials"
-#include "unsupported/Eigen/CXX11/Tensor"
-#include "unsupported/Eigen/CXX11/TensorSymmetry"
+#include "polynomial_math.hpp"
 
-enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+namespace polympc {
 
-/** utility functions */
-template<typename Derived, int size>
-Eigen::VectorBlock<Derived, size>
-segment(Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<Derived, size>(v.derived(), start);
-}
-template<typename Derived, int size>
-const Eigen::VectorBlock<const Derived, size>
-segment(const Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<const Derived, size>(v.derived(), start);
-}
+using namespace polymath;
 
-/** very partivular product of two polynomials that the maximum order */
-/** works with static matrices only */
-template<typename Derived, typename DerivedB>
-typename Derived::PlainObject poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
-{
-    typename Derived::PlainObject product;
-    const int p1_size = Derived::RowsAtCompileTime;
-    const int p2_size = Derived::RowsAtCompileTime;
-    static_assert(p1_size == p2_size, "poly_mul: polynomials should be of the same order!");
-
-    using Scalar = typename Derived::Scalar;
-    Scalar eps = std::numeric_limits<Scalar>::epsilon();
-
-    /** detect nonzeros */
-    int nnz_p1, nnz_p2;
-    for(int i = 0; i < p1_size; ++i)
-    {
-        if(std::fabs(p1[i]) >= eps)
-            nnz_p1 = i;
-        if(std::fabs(p2[i]) >= eps)
-            nnz_p2 = i;
-    }
-
-    for(int i = 0; i <= nnz_p2; ++i)
-    {
-        for(int j = 0; j <= nnz_p1; ++j)
-        {
-            /** truncate higher orders if neccessary */
-            if( (i+j) == p1_size )
-                break;
-            product[i+j] = p1[j] * p2[i];
-        }
-    }
-
-    return product;
-}
-
-
-/** differentiate polynomial */
-/** works for static matrices only */
-template<typename Derived>
-typename Derived::PlainObject poly_diff(const Eigen::MatrixBase<Derived> &p)
-{
-    typename Derived::Scalar max_order = Derived::RowsAtCompileTime;
-    using DerivedObj = typename Derived::PlainObject;
-    const DerivedObj ord = DerivedObj::LinSpaced(max_order, 0, max_order - 1);
-    DerivedObj derivative = DerivedObj::Zero();
-
-    for(int i = 0; i < max_order - 1; ++i)
-        derivative[i] = ord[i+1] * p[i+1];
-
-    return derivative;
-}
-
-
-/** ---------------------------------------------------------------------*/
-
-
-template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
+template<int PolyOrder, collocation_scheme Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Legendre
 {
 public:
@@ -159,7 +84,7 @@ private:
 };
 
 /** @brief constructor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 Legendre<PolyOrder, Qtype, Scalar>::Legendre()
 {
     EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
@@ -177,20 +102,11 @@ Legendre<PolyOrder, Qtype, Scalar>::Legendre()
     _NormFactors = NormFactors();
     //std::cout << "Normalization factors: " << _NormFactors.transpose() << "\n";
 
-    compute_galerkin_tensor();
-    //Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1>> lox = _Galerkin.chip(5, 2);
-    //Eigen::DynamicSGroup symmetry; // NOT EFFICIENT = _Galerkin.chip(1, 2);
-    //std::cout << lox << "\n \n";
-    //std::cout << "Galerkin: " << _Galerkin.dimension(0) << " x " << _Galerkin.dimension(1) << " x " << _Galerkin.dimension(2) << "\n";
-
-    //_D           = DiffMatrix();
-    //_ComD        = CompDiffMatrix();
-
-    std::cout << "Legendre: constuctor call \n";
+    //compute_galerkin_tensor();
 }
 
 /** @brief : compute nodal points for the Legendre collocation scheme */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::nodes_t
 Legendre<PolyOrder, Qtype, Scalar>::CollocPoints()
 {
@@ -220,7 +136,7 @@ Legendre<PolyOrder, Qtype, Scalar>::CollocPoints()
 }
 
 /** @brief : compute LGL quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
 Legendre<PolyOrder, Qtype, Scalar>::QuadWeights()
 {
@@ -236,7 +152,7 @@ Legendre<PolyOrder, Qtype, Scalar>::QuadWeights()
 }
 
 /** @brief : compute LGL normalization factors c = 1 / ck */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
 Legendre<PolyOrder, Qtype, Scalar>::NormFactors()
 {
@@ -250,7 +166,7 @@ Legendre<PolyOrder, Qtype, Scalar>::NormFactors()
 }
 
 /** @brief : Compute integrals using LGL-quadrature rule */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 template<class Integrand>
 Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
@@ -266,7 +182,7 @@ Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sca
 }
 
 /** @brief : Compute Legendre basis*/
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
 {
     /** the first basis polynomial is L0(x) = 1 */
@@ -295,7 +211,7 @@ void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
 }
 
 /** @brief : Compute Galerkin Tensor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
 {
     /** naive implementation */
@@ -316,6 +232,8 @@ void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
     }
 
 }
+
+} // polympc namespace
 
 
 #endif // LEGENDRE_HPP

@@ -15,6 +15,7 @@ struct Unif
 
 int main(void)
 {
+    using namespace polympc;
     using Legendre = Legendre<5>;
     Legendre leg;
     Unif distr;

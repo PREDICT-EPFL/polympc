@@ -1,29 +1,13 @@
 #ifndef EBYSHEV_HPP
 #define EBYSHEV_HPP
 
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
+#include "polynomial_math.hpp"
 
-enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+namespace polympc {
 
-template<typename Derived, int size>
-Eigen::VectorBlock<Derived, size>
-segment(Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<Derived, size>(v.derived(), start);
-}
-template<typename Derived, int size>
-const Eigen::VectorBlock<const Derived, size>
-segment(const Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<const Derived, size>(v.derived(), start);
-}
+using namespace polymath;
 
-
-/** --------------------------------------------------------------- */
-/** --------------------------------------------------------------- */
-
-template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
+template<int PolyOrder, collocation_scheme Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Chebyshev
 {
 public:
@@ -92,7 +76,7 @@ private:
 };
 
 /** @brief constructor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
 {
     EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
@@ -109,7 +93,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
 }
 
 /** @brief : compute nodal points for the Chebyshev collocation scheme */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::nodes_t
 Chebyshev<PolyOrder, Qtype, Scalar>::CollocPoints()
 {
@@ -119,7 +103,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::CollocPoints()
 }
 
 /** @brief : compute Clenshaw-Curtis quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
 Chebyshev<PolyOrder, Qtype, Scalar>::CCQuadWeights()
 {
@@ -160,7 +144,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::CCQuadWeights()
 }
 
 /** @brief : compute Chebyshev quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
 Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
 {
@@ -170,7 +154,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
 }
 
 /** @brief : compute Chebyshev normalisation factors: c = 1/ck */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
 Chebyshev<PolyOrder, Qtype, Scalar>::NormFactors()
 {
@@ -180,7 +164,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::NormFactors()
 }
 
 /** @brief : Compute integrals using CC-quadrature rule */
-template<int PolyOrder, q_type Qtype,typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype,typename Scalar>
 template<class Integrand>
 Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
@@ -197,7 +181,7 @@ Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sc
 
 
 /** @brief : compute Chebyshev differentiation matrix (Trefethen)*/
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::diff_mat_t
 Chebyshev<PolyOrder, Qtype, Scalar>::DiffMatrix()
 {
@@ -214,5 +198,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::DiffMatrix()
     return Dn - diag_D;
 }
 
+
+} // polympc namespace
 
 #endif // EBYSHEV_HPP

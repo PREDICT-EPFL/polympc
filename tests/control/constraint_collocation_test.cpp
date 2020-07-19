@@ -45,6 +45,8 @@ struct Function2
 
 int main(void)
 {
+    using namespace polympc;
+
     using chebyshev = Chebyshev<3>;
     using constraint_collocation = polympc::constraint_collocation<2, 1, 1, chebyshev, 2>;
 

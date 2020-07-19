@@ -70,6 +70,8 @@ struct Mayer
 
 int main(void)
 {
+    using namespace polympc;
+
     using chebyshev = Chebyshev<3>;
     using cost_collocation = polympc::cost_collocation<Lagrange<double>, Mayer<double>, chebyshev, 2>;
 

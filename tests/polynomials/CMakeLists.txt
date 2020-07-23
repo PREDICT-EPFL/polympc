@@ -10,4 +10,7 @@ if(BUILD_TESTS OR POLY_TESTS)
   add_executable(ebyshev_test ebyshev_test.cpp)
   target_link_libraries(ebyshev_test polymath Eigen3::Eigen)
 
+  add_executable(splines_test splines_test.cpp)
+  target_link_libraries(splines_test Eigen3::Eigen)
+
 endif()

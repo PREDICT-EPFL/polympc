@@ -34,7 +34,7 @@ segment(const Eigen::MatrixBase<Derived>& v, int start)
 template<typename Derived, typename DerivedB>
 typename Derived::PlainObject poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
 {
-    typename Derived::PlainObject product;
+    typename Derived::PlainObject product = Derived::PlainObject::Zero();
     const int p1_size = Derived::RowsAtCompileTime;
     const int p2_size = Derived::RowsAtCompileTime;
     static_assert(p1_size == p2_size, "poly_mul: polynomials should be of the same order!");

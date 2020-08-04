@@ -245,7 +245,7 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CompDi
     else
     {
         /** construct a simple diagonal matrix */
-        CompDiff = BaseClass::diagcat(casadi::SXVector(3, D));
+        CompDiff = BaseClass::diagcat(casadi::SXVector(NumSegments, D));
     }
 
     return BaseClass::kron(CompDiff, E);

@@ -318,7 +318,7 @@ void GenericOCP<OCP, Approximation>::setup()
 
     /** soft formulation */
     if(MPC_OPTS.find("mpc.soft_rho") != MPC_OPTS.end())
-            scaling = MPC_OPTS["mpc.soft_rho"];
+            soft_rho = MPC_OPTS["mpc.soft_rho"];
 
     /** collocate dynamic equations*/
     casadi::SX diff_constr;

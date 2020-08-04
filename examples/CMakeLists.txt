@@ -34,4 +34,7 @@ if(BUILD_EXAMPLES)
     add_executable(generic_ocp_test generic_ocp_test.cpp)
     target_link_libraries(generic_ocp_test polymath Eigen3::Eigen)
 
+    add_executable(lqr_test lqr_test.cpp)
+    target_link_libraries(lqr_test polymath Eigen3::Eigen)
+
 endif()

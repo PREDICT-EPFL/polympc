@@ -122,9 +122,10 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::operator()(const var_t 
 
         value. template segment<NX>(k) = f_res;
         n += NU;
-    }
+    }   
 
-    constr_value = m_DiffMat * var.template head<VARX_SIZE>() - t_scale * value;
+    constr_value.noalias() = -t_scale * value;
+    constr_value.noalias() += m_DiffMat * var.template head<VARX_SIZE>();
 }
 
 template <typename Dynamics, typename Polynomial, int NumSegments>
@@ -187,8 +188,7 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t 
     }
 
     b = m_DiffMat * var.template head<VARX_SIZE>() - t_scale * value;
-
-    A.template leftCols<VARX_SIZE>() = m_DiffMat + A.template leftCols<VARX_SIZE>();
+    A.template leftCols<VARX_SIZE>() += m_DiffMat;
 }
 
 

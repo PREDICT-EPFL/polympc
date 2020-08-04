@@ -25,7 +25,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(constraint_collocation_test constraint_collocation_test.cpp)
   target_link_libraries(constraint_collocation_test Eigen3::Eigen)
 
-  add_executable(continuous_ocp_test continuous_ocp.cpp)
+  add_executable(continuous_ocp_test continuous_ocp_test.cpp)
   target_link_libraries(continuous_ocp_test Eigen3::Eigen)
 
 endif()

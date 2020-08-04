@@ -233,7 +233,17 @@ PSODESolver<PolyOrder, NumSegments, NX, NU, NP>::PSODESolver(casadi::Function OD
     }
     else
     {
-        G = spectral.CollocateDynamics(ODE, 0, dt);
+        /** workaround to the Chebyshev class */
+        casadi::SX d = casadi::SX::sym("d", 0);
+        casadi::SX x = casadi::SX::sym("x", NX);
+        casadi::SX u = casadi::SX::sym("u", NU);
+        casadi::SX p = casadi::SX::sym("p", NP);
+        casadi::Function FunSODE;
+        if( NP > 0 )
+            FunSODE = casadi::Function("augmented_ode", {x,u,p,d}, { ODE(casadi::SXVector({x,u,p}))[0] });
+        else
+            FunSODE = casadi::Function("augmented_ode", {x,u}, { ODE(casadi::SXVector({x,u}))[0] });
+        G = spectral.CollocateDynamics(FunSODE, 0, dt);
     }
 
     G = G(casadi::Slice(0, G.size1() - NX), 0);

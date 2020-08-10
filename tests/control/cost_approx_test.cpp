@@ -72,7 +72,7 @@ int main(void)
 {
     using namespace polympc;
 
-    using chebyshev = Chebyshev<3>;
+    using chebyshev = Chebyshev<5>;
     using cost_collocation = polympc::cost_collocation<Lagrange<double>, Mayer<double>, chebyshev, 2>;
 
     cost_collocation::var_t x = cost_collocation::var_t::Ones();
@@ -89,9 +89,10 @@ int main(void)
     cost_f.value_gradient_hessian(x, value, gradient, hessian);
     std::chrono::time_point<std::chrono::system_clock> stop = get_time();
 
+    Eigen::IOFormat fmt(3);
     std::cout << "Cost: " << value << "\n";
-    std::cout << "Gradient: " << gradient.transpose() << "\n";
-    //std::cout << "Hessian: \n" << hessian << "\n";
+    std::cout << "Gradient: " << gradient.transpose().format(fmt) << "\n";
+    std::cout << "Hessian: \n" << hessian.template rightCols<33>().format(fmt) << "\n";
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
     std::cout << "Eigen time: " << std::setprecision(9)

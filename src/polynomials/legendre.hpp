@@ -32,34 +32,34 @@ public:
     using basis_t = Eigen::Matrix<scalar_t, POLY_ORDER + 1, POLY_ORDER + 1>;
 
     /** some getters */
-    diff_mat_t  D() const {return _D;}
-    q_weights_t QWeights() const {return _QuadWeights;}
-    nodes_t     CPoints()  const {return _Nodes;}
-    q_weights_t NFactors() const {return _NormFactors;}
-    tensor_t    getGalerkinTensor() const {return _Galerkin;}
+    diff_mat_t  D() const noexcept {return _D;}
+    q_weights_t QWeights() const noexcept {return _QuadWeights;}
+    nodes_t     CPoints()  const noexcept {return _Nodes;}
+    q_weights_t NFactors() const noexcept {return _NormFactors;}
+    tensor_t    getGalerkinTensor() const noexcept {return _Galerkin;}
 
     /** Evaluate Legendre polynomial of order n @bug put protectin against n > PolyOrder*/
-    scalar_t eval(const scalar_t &arg, const int &n){return Ln(arg, n);}
+    scalar_t eval(const scalar_t &arg, const int &n)  noexcept {return Ln(arg, n);}
 
     /** numerical integration of an arbitrary function using LGL quadratures*/
     template<class Integrand>
     scalar_t integrate(const scalar_t &t0= -1, const scalar_t &tf = 1);
 
     /** Evaluate density function associated with Chebyshev basis */
-    static scalar_t weight(const scalar_t &arg){return static_cast<scalar_t>(1);}
+    static constexpr scalar_t weight(const scalar_t &arg) noexcept{return static_cast<scalar_t>(1);}
 
     /** compute basis */
-    static basis_t compute_basis();
+    static basis_t compute_basis() noexcept;
     /** generate differentiation matrix */
-    static diff_mat_t  compute_diff_matrix();
+    static diff_mat_t compute_diff_matrix() noexcept;
     /** compute nodal points */
-    static nodes_t     compute_nodes();
+    static nodes_t    compute_nodes() noexcept;
     /** compute quadrature weights */
-    static q_weights_t compute_int_weights();
+    static q_weights_t compute_int_weights() noexcept;
     /** compute quadrature weights */
-    static q_weights_t compute_quad_weights();
+    static q_weights_t compute_quad_weights() noexcept;
     /** compute normalization factors */
-    static q_weights_t compute_norm_factors();
+    static q_weights_t compute_norm_factors() noexcept;
 
 private:
 
@@ -88,9 +88,9 @@ private:
     /** Tensor to hold Galerkin product */
     tensor_t _Galerkin;
     //Eigen::DynamicSGroup symmetry; // NOT EFFICIENT
-    void compute_galerkin_tensor();
+    void compute_galerkin_tensor() noexcept;
 
-    scalar_t poly_eval(const int &order, const scalar_t &arg) {return Eigen::poly_eval(_Ln.col(order), arg); }
+    scalar_t poly_eval(const int &order, const scalar_t &arg) noexcept {return Eigen::poly_eval(_Ln.col(order), arg); }
 
     /** Evaluate Lengendre polynomial of order n*/
     scalar_t Ln(const scalar_t &arg, const int &n){return Eigen::poly_eval(_Ln.col(n), arg);}
@@ -116,7 +116,7 @@ Legendre<PolyOrder, Qtype, Scalar>::Legendre()
 /** @brief : compute nodal points for the Legendre collocation scheme */
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::nodes_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_nodes()
+Legendre<PolyOrder, Qtype, Scalar>::compute_nodes() noexcept
 {
     basis_t Ln = compute_basis();
     /** Legendre (LGL) collocation points for the interval [-1, 1]*/
@@ -147,7 +147,7 @@ Legendre<PolyOrder, Qtype, Scalar>::compute_nodes()
 /** compute differentiation matrix */
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::diff_mat_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_diff_matrix()
+Legendre<PolyOrder, Qtype, Scalar>::compute_diff_matrix() noexcept
 {
     diff_mat_t D  = diff_mat_t::Zero();
     nodes_t nodes = compute_nodes();
@@ -172,7 +172,7 @@ Legendre<PolyOrder, Qtype, Scalar>::compute_diff_matrix()
 /** @brief : compute LGL quadrature weights */
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_quad_weights()
+Legendre<PolyOrder, Qtype, Scalar>::compute_quad_weights() noexcept
 {
     const basis_t Ln = compute_basis();
     const nodes_t nodes = compute_nodes();
@@ -189,7 +189,7 @@ Legendre<PolyOrder, Qtype, Scalar>::compute_quad_weights()
 
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_int_weights()
+Legendre<PolyOrder, Qtype, Scalar>::compute_int_weights() noexcept
 {
     return compute_quad_weights();
 }
@@ -197,7 +197,7 @@ Legendre<PolyOrder, Qtype, Scalar>::compute_int_weights()
 /** @brief : compute LGL normalization factors c = 1 / ck */
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_norm_factors()
+Legendre<PolyOrder, Qtype, Scalar>::compute_norm_factors() noexcept
 {
     q_weights_t factors = q_weights_t::Zero();
     for(int k = 0; k < PolyOrder; ++k)
@@ -227,7 +227,7 @@ Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sca
 /** @brief : Compute Legendre basis*/
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::basis_t
-Legendre<PolyOrder, Qtype, Scalar>::compute_basis()
+Legendre<PolyOrder, Qtype, Scalar>::compute_basis() noexcept
 {
     basis_t Ln = basis_t::Zero();
     /** the first basis polynomial is L0(x) = 1 */
@@ -256,7 +256,7 @@ Legendre<PolyOrder, Qtype, Scalar>::compute_basis()
 
 /** @brief : Compute Galerkin Tensor */
 template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
-void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
+void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor() noexcept
 {
     /** naive implementation */
     for(int k = 0; k <= PolyOrder; ++k){

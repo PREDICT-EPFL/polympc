@@ -212,7 +212,23 @@ public:
                         scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient, Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept;
     /** compute lagrangian */
     void lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                    const Eigen::Ref<const nlp_lam_t> lam, scalar_t &cost) noexcept;
+                    const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian) noexcept;
+    void lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                    const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept;
+    /** lagrangian gradient */
+    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                             const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept;
+    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                             const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                             Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept;
+    /** lagrangian hessian */
+    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                                     const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                     Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept;
+    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                                     const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                     Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                     Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept;
 
 };
 
@@ -552,6 +568,185 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<c
     cost_hessian.template block<NU, NP>(VARX_SIZE, VARX_SIZE + VARU_SIZE) += hes.template block<NX, NP>(NX, NX + NU);
     cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE) += hes.template block<NP, NU>(NX + NU, NX);
 
+}
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                                                   const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian) noexcept
+{
+    /** create temporary */
+    nlp_constraints_t g;
+    this->cost(var, p, _lagrangian);
+    this->equalities(var, p, g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+}
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                                                   const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept
+{
+    this->cost(var, p, _lagrangian);
+    this->equalities(var, p, g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+}
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                         const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
+{
+    nlp_constraints_t g;
+    nlp_eq_jacobian_t jac_g;
+    this->cost_gradient(var, p, _lagrangian, lag_gradient);
+    this->equalities_linerised(var, p, g, jac_g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+}
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                         const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                         Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept
+{
+    this->cost_gradient(var, p, _lagrangian, lag_gradient);
+    this->equalities_linerised(var, p, g, jac_g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+}
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var,
+                                                                    const Eigen::Ref<const static_parameter_t> p,
+                                                                    const Eigen::Ref<const nlp_lam_t> lam,
+                                                                    scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                    Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
+{
+    nlp_constraints_t g;
+    nlp_eq_jacobian_t jac_g;
+    this->cost_gradient_hessian(var, p, _lagrangian, lag_gradient, lag_hessian);
+    this->equalities_linerised(var, p, g, jac_g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+
+    /** hessian part */
+    Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
+    const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
+    Eigen::Matrix<ad2_scalar_t, NX, 1> ad2_xdot;
+    for(int i = 0; i < NP; i++)
+        m_ad2_p(i).value().value() = var.template tail<NP>()(i);
+
+    for(int k = 0; k < NUM_NODES; k++)
+    {
+        for(int i = 0; i < NX; i++)
+            m_ad2_x(i).value().value() = var.template segment<NX>(k * NX)(i);
+        for(int i = 0; i < NU; i++)
+            m_ad2_u(i).value().value() = var.template segment<NX>(k * NU + VARX_SIZE)(i);
+
+        dynamics<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, static_cast<ad2_scalar_t>(time_nodes(k)), ad2_xdot);
+
+        for(int n = 0; n < NX; n++)
+        {
+
+            for(int i = 0; i < NX + NU + NP; ++i)
+            {
+                hes.col(i) = ad2_xdot(n).derivatives()(i).derivatives();
+            }
+            hes.transposeInPlace();
+
+            scalar_t coeff = lam(n + k * NX) * t_scale;
+
+            /** append Lagrangian Hessian */
+            lag_hessian.template block<NX, NX>(k * NX, k * NX).noalias() -=
+                    coeff * hes.template topLeftCorner<NX, NX>();
+            lag_hessian.template block<NU, NU>(k * NU + VARX_SIZE, k * NU + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NU, NU>(NX, NX);
+            lag_hessian.template bottomRightCorner<NP, NP>().noalias() -=
+                    coeff * hes.template bottomRightCorner<NP, NP>();
+
+            lag_hessian.template block<NX, NU>(k * NX, k * NU + VARX_SIZE).noalias() -=
+                    coeff * hes. template block<NX, NU>(0, NX);
+            lag_hessian.template block<NU, NX>(k * NU + VARX_SIZE, k * NX).noalias() -=
+                    coeff * hes.template block<NU, NX>(NX, 0);
+
+            lag_hessian.template block<NX, NP>(k * NX, VARX_SIZE + VARU_SIZE).noalias() -=
+                    coeff * hes.template block<NX, NP>(0, NX + NU);
+            lag_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, k * NX).noalias() -=
+                    coeff * hes.template block<NP, NX>(NX + NU, 0);
+
+            lag_hessian.template block<NU, NP>(k * NU + VARX_SIZE, VARX_SIZE + VARU_SIZE).noalias() -=
+                    coeff * hes.template block<NX, NP>(NX, NX + NU);
+            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NX + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NP, NU>(NX + NU, NX);
+        }
+
+    }
+
+
+}
+
+
+template<typename OCP, typename Approximation>
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+                                 const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                 Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept
+{
+    this->cost_gradient_hessian(var, p, _lagrangian, lag_gradient, lag_hessian);
+    this->equalities_linerised(var, p, g, jac_g);
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+
+    /** hessian part */
+    Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
+    const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
+    Eigen::Matrix<ad2_scalar_t, NX, 1> ad2_xdot;
+    for(int i = 0; i < NP; i++)
+        m_ad2_p(i).value().value() = var.template tail<NP>()(i);
+
+    for(int k = 0; k < NUM_NODES; k++)
+    {
+        for(int i = 0; i < NX; i++)
+            m_ad2_x(i).value().value() = var.template segment<NX>(k * NX)(i);
+        for(int i = 0; i < NU; i++)
+            m_ad2_u(i).value().value() = var.template segment<NX>(k * NU + VARX_SIZE)(i);
+
+        dynamics<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, static_cast<ad2_scalar_t>(time_nodes(k)), ad2_xdot);
+
+        for(int n = 0; n < NX; n++)
+        {
+
+            for(int i = 0; i < NX + NU + NP; ++i)
+            {
+                hes.col(i) = ad2_xdot(n).derivatives()(i).derivatives();
+            }
+            hes.transposeInPlace();
+
+            scalar_t coeff = lam(n + k * NX) * t_scale;
+
+            /** append Lagrangian Hessian */
+            lag_hessian.template block<NX, NX>(k * NX, k * NX).noalias() -=
+                    coeff * hes.template topLeftCorner<NX, NX>();
+            lag_hessian.template block<NU, NU>(k * NU + VARX_SIZE, k * NU + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NU, NU>(NX, NX);
+            lag_hessian.template bottomRightCorner<NP, NP>().noalias() -=
+                    coeff * hes.template bottomRightCorner<NP, NP>();
+
+            lag_hessian.template block<NX, NU>(k * NX, k * NU + VARX_SIZE).noalias() -=
+                    coeff * hes. template block<NX, NU>(0, NX);
+            lag_hessian.template block<NU, NX>(k * NU + VARX_SIZE, k * NX).noalias() -=
+                    coeff * hes.template block<NU, NX>(NX, 0);
+
+            lag_hessian.template block<NX, NP>(k * NX, VARX_SIZE + VARU_SIZE).noalias() -=
+                    coeff * hes.template block<NX, NP>(0, NX + NU);
+            lag_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, k * NX).noalias() -=
+                    coeff * hes.template block<NP, NX>(NX + NU, 0);
+
+            lag_hessian.template block<NU, NP>(k * NU + VARX_SIZE, VARX_SIZE + VARU_SIZE).noalias() -=
+                    coeff * hes.template block<NX, NP>(NX, NX + NU);
+            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NX + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NP, NU>(NX + NU, NX);
+        }
+
+    }
 }
 
 

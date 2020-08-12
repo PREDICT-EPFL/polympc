@@ -87,46 +87,40 @@ int main(void)
     RobotOCP::nlp_constraints_t constr;
     RobotOCP::nlp_eq_jacobian_t eq_jac;
     RobotOCP::nlp_cost_t cost = 0;
+    RobotOCP::nlp_cost_t lagrangian = 0;
+    RobotOCP::nlp_lam_t lam = RobotOCP::nlp_lam_t::Ones();
     RobotOCP::static_parameter_t p; p(0) = 2.0;
-    RobotOCP::nlp_variable_t cost_gradient;
-    RobotOCP::nlp_hessian_t cost_hessian;
+    RobotOCP::nlp_variable_t cost_gradient, lag_gradient;
+    RobotOCP::nlp_hessian_t cost_hessian, lag_hessian;
 
     std::chrono::time_point<std::chrono::system_clock> start = get_time();
     for(int i = 0; i < test_NUM_EXP; ++i)
-        robot_nlp.cost_gradient_hessian(var,p,cost,cost_gradient,cost_hessian);
+        robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, constr, eq_jac);
+        //robot_nlp.lagrangian_gradient(var, p, lam, lagrangian, lag_gradient, constr, eq_jac);
+        //robot_nlp.cost_gradient_hessian(var,p,cost,cost_gradient,cost_hessian);
         //robot_nlp.cost_gradient(var, p, cost, cost_gradient);
         //robot_nlp.cost(var, p, cost);
         //robot_nlp.equalities_linerised(var, p, constr, eq_jac);
         //robot_nlp.equalities(var, p, constr);
     std::chrono::time_point<std::chrono::system_clock> stop = get_time();
 
-    robot_nlp.equalities_linerised(var, p, constr, eq_jac);
+    //robot_nlp.equalities_linerised(var, p, constr, eq_jac);
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Collocation time: " << std::setprecision(9)
               << static_cast<double>(duration.count()) / test_NUM_EXP << " [microseconds]" << "\n";
 
-    std::cout << "Constraint new: " << constr(0) << "\n";
-    std::cout << "Size of NLP:" << sizeof (robot_nlp) << "\n";
-
-    /**
-    start = get_time();
-    robot_nlp.equalities_linerised(var, p, constr, eq_jac);
-    stop = get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    std::cout << "Linearisation time: " << std::setprecision(9)
-              << static_cast<double>(duration.count()) << " [microseconds]" << "\n";
-              */
-
 
     Eigen::IOFormat fmt(3);
     //std::cout << "Constraint \n" << constr.transpose() << "\n";
     //std::cout << eq_jac.template rightCols<29>().format(fmt) << "\n";
+    std::cout << "Size of NLP:" << sizeof (robot_nlp) << "\n";
     std::cout << eq_jac(0,0) << "\n";
-    std::cout << "Cost: " << cost << "\n";
-    std::cout << "Cost gradient: " << cost_gradient.transpose().format(fmt) << "\n";
-    std::cout << "Cost Hessian: \n" << cost_hessian.template rightCols<33>().format(fmt) << "\n";
+    std::cout << "Lagrangian: " << lagrangian << "\n";
+    //std::cout << "Cost: " << cost << "\n";
+    //std::cout << "Cost gradient: " << cost_gradient.transpose().format(fmt) << "\n";
+    //std::cout << "Hessian: \n" << lag_hessian.template rightCols<25>().format(fmt) << "\n";
 
     return EXIT_SUCCESS;
 }

@@ -95,7 +95,7 @@ int main(void)
 
     std::chrono::time_point<std::chrono::system_clock> start = get_time();
     for(int i = 0; i < test_NUM_EXP; ++i)
-        robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, constr, eq_jac);
+        robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, eq_jac);
         //robot_nlp.lagrangian_gradient(var, p, lam, lagrangian, lag_gradient, constr, eq_jac);
         //robot_nlp.cost_gradient_hessian(var,p,cost,cost_gradient,cost_hessian);
         //robot_nlp.cost_gradient(var, p, cost, cost_gradient);

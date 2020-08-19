@@ -100,9 +100,8 @@ public:
 int main(void)
 {
     MySolver<RobotOCP> solver;
-    MySolver<RobotOCP>::nlp_variable_t p = MySolver<RobotOCP>::nlp_variable_t::Ones();
-
     solver.settings().max_iter = 100;
+    solver.parameters()(0) = 2.0;
 
     time_point start = get_time();
     solver.solve();

@@ -58,6 +58,8 @@ public:
         /** set default constraints */
         m_lbx.noalias() =  INF * nlp_variable_t::Ones();
         m_ubx.noalias() = -INF * nlp_variable_t::Ones();
+        m_x.setZero();
+        m_lam.setZero();
 
         m_qp_solver.settings().warm_start = true;
         m_qp_solver.settings().check_termination = 10;
@@ -295,8 +297,10 @@ SQPBase<Derived, Problem>::constraints_violation_impl(const Eigen::Ref<const nlp
     */
 
     // l <= x <= u
+    /**
     cl1 += (m_lbx - x).cwiseMax(0.0).sum();
     cl1 += (x - m_ubx).cwiseMax(0.0).sum();
+    */
 
     return cl1;
 }
@@ -323,8 +327,10 @@ SQPBase<Derived, Problem>::max_constraints_violation_impl(const Eigen::Ref<const
     }*/
 
     // l <= x <= u
+    /**
     c = fmax(c, (m_lbx - x).maxCoeff());
     c = fmax(c, (x - m_ubx).maxCoeff());
+    */
 
     return c;
 }
@@ -357,6 +363,7 @@ void SQPBase<Derived, Problem>::update_linearisation_impl(const Eigen::Ref<const
 template<typename Derived, typename Problem>
 bool SQPBase<Derived, Problem>::termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
+    std::cout << m_primal_norm << " " << m_dual_norm << " " << max_constraints_violation(x) << "\n";
     return (m_primal_norm <= m_settings.eps_prim) && (m_dual_norm <= m_settings.eps_dual) &&
             (max_constraints_violation(x) <= m_settings.eps_prim) ? true : false;
 }
@@ -451,10 +458,8 @@ void SQPBase<Derived, Problem>::solve() noexcept
 
     for (iter = 2; iter <= m_settings.max_iter; iter++)
     {
-        // Solve QP
-        //solve_qp(prob, p, p_lambda);
         /** linearise and solve qp here*/
-        update_linearisation(m_x, m_p, alpha * p, m_lam, m_h, m_H, m_A, m_b);
+        update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_b);
         solve_qp(p, p_lambda);
 
         p_lambda -= m_lam;

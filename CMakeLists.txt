@@ -35,6 +35,8 @@ else()
     message(STATUS "Target architecture 32 bits")
 endif()
 
+add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=0)
+
 
 #if(ARM_ENABLE_VECTORIZATION AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" )
 #    message(STATUS "EIGEN: ARM VECTORIZATION ENABLED")

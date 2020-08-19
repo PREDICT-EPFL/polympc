@@ -618,8 +618,7 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<con
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linerised(var, p, g, jac_g);
-    _lagrangian = g.dot(lam.template head<VARX_SIZE>());
-    _lagrangian += cost_gradient;
+    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
     /** @badcode: replace with block products ???*/
     lag_gradient.noalias() = jac_g.transpose() * lam.template head<VARX_SIZE>();
     lag_gradient.noalias() += cost_gradient;

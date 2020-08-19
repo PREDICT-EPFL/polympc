@@ -181,7 +181,7 @@ public:
                             Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
                             Eigen::Ref<nlp_eq_jacobian_t> Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
   {
-      static_cast<Derived*>(this)->update_linearisation_impl(x, p, lam, cost_grad, lag_hessian, Ae, be);
+      static_cast<Derived*>(this)->update_linearisation_impl(x, p, x_step, lam, cost_grad, lag_hessian, Ae, be);
   }
 
   /** Hessian update: room for creativity: L-BFGS, BFGS (default), sparse BFGS, SR1 */
@@ -431,15 +431,33 @@ void SQPBase<Derived, Problem>::solve() noexcept
     linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_b);
     solve_qp(p, p_lambda);
 
+    p_lambda -= m_lam;
+    alpha = step_size_selection(p);
+
+    // take step
+    m_x.noalias()   += alpha * p;
+    m_lam.noalias() -= alpha * p_lambda;
+
+    // update step info
+    m_step_prev.noalias() = alpha * p;
+    m_primal_norm = alpha * p.template lpNorm<Eigen::Infinity>();
+    m_dual_norm   = alpha * p_lambda.template lpNorm<Eigen::Infinity>();
+
+
+    if (termination_criteria(m_x)) {
+        m_info.status.value = sqp_status_t::SOLVED;
+        return;
+    }
+
     for (iter = 2; iter <= m_settings.max_iter; iter++)
     {
         // Solve QP
         //solve_qp(prob, p, p_lambda);
         /** linearise and solve qp here*/
-
+        update_linearisation(m_x, m_p, alpha * p, m_lam, m_h, m_H, m_A, m_b);
+        solve_qp(p, p_lambda);
 
         p_lambda -= m_lam;
-
         alpha = step_size_selection(p);
 
         // take step

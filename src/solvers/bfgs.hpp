@@ -16,7 +16,7 @@ void BFGS_update(Eigen::MatrixBase<Mat>& B, const Eigen::MatrixBase<Vec>& s, con
 {
     using Scalar = typename Mat::Scalar;
     Scalar sy, sr, sBs;
-    Vec Bs, r;
+    typename Vec::PlainObject Bs, r;
 
     Bs.noalias() = B * s;
     sBs = s.dot(Bs);

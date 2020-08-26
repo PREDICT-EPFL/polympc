@@ -55,7 +55,7 @@ public:
         ND = polympc_traits<OCP>::ND,
         NG = polympc_traits<OCP>::NG,
 
-        /** NLP dimensions */
+        /** Collocation dimensions */
         NUM_NODES    = Approximation::NUM_NODES,
         POLY_ORDER   = Approximation::POLY_ORDER,
         NUM_SEGMENTS = Approximation::NUM_SEGMENTS,
@@ -63,7 +63,13 @@ public:
         VARU_SIZE  = NU * NUM_NODES,
         VARP_SIZE  = NP * NUM_NODES,
         VARD_SIZE  = ND * NUM_NODES,
-        VAR_SIZE   = VARX_SIZE + VARU_SIZE + VARP_SIZE
+
+        /** NLP dimensions */
+        VAR_SIZE  = VARX_SIZE + VARU_SIZE + VARP_SIZE,
+        NUM_EQ    = VARX_SIZE,
+        NUM_INEQ  = NG * NUM_NODES,
+        NUM_BOX   = VAR_SIZE,
+        DUAL_SIZE = NUM_EQ + NUM_INEQ + NUM_BOX
     };
 
     /** define types*/
@@ -122,7 +128,7 @@ public:
     using nlp_eq_jacobian_t = Eigen::Matrix<scalar_t, VARX_SIZE, VAR_SIZE>;
     using nlp_hessian_t     = Eigen::Matrix<scalar_t, VAR_SIZE, VAR_SIZE>;
     using nlp_cost_t        = scalar_t;
-    using nlp_lam_t         = Eigen::Matrix<scalar_t, VARX_SIZE + NUM_NODES * NG, 1>;
+    using nlp_dual_t        = Eigen::Matrix<scalar_t, DUAL_SIZE, 1>;
 
     /** @brief
      *
@@ -196,44 +202,44 @@ public:
     }
 
     /** equality constraint */
-    EIGEN_STRONG_INLINE void equalities(const Eigen::Ref<const nlp_variable_t> var,
-                             const Eigen::Ref<const static_parameter_t> p,
+    EIGEN_STRONG_INLINE void equalities(const Eigen::Ref<const nlp_variable_t>& var,
+                             const Eigen::Ref<const static_parameter_t>& p,
                              Eigen::Ref<nlp_constraints_t> constraint) const noexcept;
 
     /** linearise equality constraints */
-    void equalities_linerised(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+    void equalities_linerised(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                               Eigen::Ref<nlp_constraints_t> constraint, Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept;
 
     /** compute cost */
-    EIGEN_STRONG_INLINE void cost(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p, scalar_t &cost) noexcept;
-    void cost_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+    EIGEN_STRONG_INLINE void cost(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept;
+    void cost_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                        scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept;
 
-    void cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+    void cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                         scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient, Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept;
     /** compute Lagrangian */
-    EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                    const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian) noexcept;
+    EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                    const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian) noexcept;
 
-    EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                    const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept;
+    EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept;
 
     /** Lagrangian gradient */
-    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                             const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept;
+    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept;
 
-    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                             const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                              Eigen::Ref<nlp_variable_t> cost_gradient,
                              Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept;
 
     /** lagrangian hessian */
-    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                                     const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                      Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept;
 
-    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                                     const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+    void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                      Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
                                      Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept;
 
@@ -282,8 +288,8 @@ void ContinuousOCP<OCP, Approximation>::seed_derivatives()
 
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::equalities(const Eigen::Ref<const nlp_variable_t> var,
-                                                            const Eigen::Ref<const static_parameter_t> p,
+void ContinuousOCP<OCP, Approximation>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
+                                                            const Eigen::Ref<const static_parameter_t>& p,
                                                             Eigen::Ref<nlp_constraints_t> constraint) const noexcept
 {
     state_t<scalar_t> f_res;
@@ -312,7 +318,7 @@ void ContinuousOCP<OCP, Approximation>::equalities(const Eigen::Ref<const nlp_va
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::equalities_linerised(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+void ContinuousOCP<OCP, Approximation>::equalities_linerised(const Eigen::Ref<const nlp_variable_t> &var, const Eigen::Ref<const static_parameter_t> &p,
                                                              Eigen::Ref<nlp_constraints_t> constraint,
                                                              Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
 {
@@ -397,8 +403,8 @@ void ContinuousOCP<OCP, Approximation>::equalities_linerised(const Eigen::Ref<co
 
 /** cost computation */
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::cost(const Eigen::Ref<const nlp_variable_t> var,
-                                             const Eigen::Ref<const static_parameter_t> p, scalar_t &cost) noexcept
+void ContinuousOCP<OCP, Approximation>::cost(const Eigen::Ref<const nlp_variable_t>& var,
+                                             const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
 {
     cost = scalar_t(0);
     scalar_t cost_i = scalar_t(0);
@@ -425,7 +431,7 @@ void ContinuousOCP<OCP, Approximation>::cost(const Eigen::Ref<const nlp_variable
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::cost_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+void ContinuousOCP<OCP, Approximation>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var, const Eigen::Ref<const static_parameter_t> &p,
                                                       scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
 {
     cost = scalar_t(0);
@@ -468,7 +474,7 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient(const Eigen::Ref<const nlp
 
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
+void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                                               scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient, Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept
 {
     cost = scalar_t(0);
@@ -578,56 +584,58 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<c
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                                                   const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian) noexcept
+void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                   const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) noexcept
 {
     /** create temporary */
     nlp_constraints_t g;
     this->cost(var, p, _lagrangian);
     this->equalities(var, p, g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                                                   const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept
+void ContinuousOCP<OCP, Approximation>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                   const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept
 {
     this->cost(var, p, _lagrangian);
     this->equalities(var, p, g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                         const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var, const Eigen::Ref<const static_parameter_t> &p,
+                         const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
 {
     nlp_constraints_t g;
     nlp_eq_jacobian_t jac_g;
     this->cost_gradient(var, p, _lagrangian, lag_gradient);
     this->equalities_linerised(var, p, g, jac_g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
-    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<NUM_EQ>();
+    lag_gradient += lam.template tail<NUM_BOX>();
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                         const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                         const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                          Eigen::Ref<nlp_variable_t> cost_gradient,
                          Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linerised(var, p, g, jac_g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
-    lag_gradient.noalias() = jac_g.transpose() * lam.template head<VARX_SIZE>();
-    lag_gradient.noalias() += cost_gradient;
+    lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ>();
+    lag_gradient += cost_gradient;
+    lag_gradient += lam.template tail<NUM_BOX>();
 }
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var,
-                                                                    const Eigen::Ref<const static_parameter_t> p,
-                                                                    const Eigen::Ref<const nlp_lam_t> lam,
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                    const Eigen::Ref<const static_parameter_t>& p,
+                                                                    const Eigen::Ref<const nlp_dual_t>& lam,
                                                                     scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                     Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
 {
@@ -635,9 +643,10 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
     nlp_eq_jacobian_t jac_g;
     this->cost_gradient_hessian(var, p, _lagrangian, lag_gradient, lag_hessian);
     this->equalities_linerised(var, p, g, jac_g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
-    lag_gradient.noalias() += jac_g.transpose() * lam.template head<VARX_SIZE>();
+    lag_gradient.noalias() += jac_g.transpose() * lam.template head<NUM_EQ>();
+    lag_gradient += lam.template tail<NUM_BOX>();
 
     /** hessian part */
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
@@ -697,17 +706,19 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
 
 
 template<typename OCP, typename Approximation>
-void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> var, const Eigen::Ref<const static_parameter_t> p,
-                                 const Eigen::Ref<const nlp_lam_t> lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                    const Eigen::Ref<const static_parameter_t> &p,
+                                 const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                  Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
                                  Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_eq_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linerised(var, p, g, jac_g);
-    _lagrangian += g.dot(lam.template head<VARX_SIZE>());
+    _lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
-    lag_gradient.noalias() = jac_g.transpose() * lam.template head<VARX_SIZE>();
+    lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ>();
     lag_gradient += cost_gradient;
+    lag_gradient += lam.template tail<NUM_BOX>();
 
     /** hessian part */
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();

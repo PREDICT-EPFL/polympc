@@ -88,7 +88,7 @@ int main(void)
     RobotOCP::nlp_eq_jacobian_t eq_jac;
     RobotOCP::nlp_cost_t cost = 0;
     RobotOCP::nlp_cost_t lagrangian = 0;
-    RobotOCP::nlp_lam_t lam = RobotOCP::nlp_lam_t::Ones();
+    RobotOCP::nlp_dual_t lam = RobotOCP::nlp_dual_t::Ones();
     RobotOCP::static_parameter_t p; p(0) = 2.0;
     RobotOCP::nlp_variable_t cost_gradient, lag_gradient;
     RobotOCP::nlp_hessian_t cost_hessian, lag_hessian;

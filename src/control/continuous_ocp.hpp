@@ -501,7 +501,7 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<c
                 m_ad2_x(i).value().value() = var.template segment<NX>((k + shift) * NX)(i);
             // set u values
             for(int i = 0; i < NU; i++)
-                m_ad2_u(i).value().value() = var.template segment<NX>((k + shift) * NU + VARX_SIZE)(i);
+                m_ad2_u(i).value().value() = var.template segment<NU>((k + shift) * NU + VARX_SIZE)(i);
 
             lagrange_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(t + shift), m_ad2_cost);
             cost += t_scale * m_quad_weights(k) * m_ad2_cost.value().value();
@@ -533,10 +533,11 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<c
             cost_hessian.template block<NX, NP>((k + shift) * NX, VARX_SIZE + VARU_SIZE).noalias() +=
                     coeff * hes.template block<NX, NP>(0, NX + NU);
             cost_hessian.template block<NU, NP>((k + shift) * NU + VARX_SIZE, VARX_SIZE + VARU_SIZE).noalias() +=
-                    coeff * hes.template block<NX, NP>(NX, NX + NU);
+                    coeff * hes.template block<NU, NP>(NX, NX + NU);
             cost_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, (k + shift) * NX).noalias() +=
                     coeff * hes.template block<NP, NX>(NX + NU, 0);
-            cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, (k + shift) * NX + VARX_SIZE).noalias() +=
+
+            cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, (k + shift) * NU + VARX_SIZE).noalias() +=
                     coeff * hes.template block<NP, NU>(NX + NU, NX);
 
             cost_hessian.template bottomRightCorner<NP, NP>().noalias() +=
@@ -578,7 +579,7 @@ void ContinuousOCP<OCP, Approximation>::cost_gradient_hessian(const Eigen::Ref<c
     cost_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, 0) += hes.template block<NP, NX>(NX + NU, 0);
 
     /** dudp */
-    cost_hessian.template block<NU, NP>(VARX_SIZE, VARX_SIZE + VARU_SIZE) += hes.template block<NX, NP>(NX, NX + NU);
+    cost_hessian.template block<NU, NP>(VARX_SIZE, VARX_SIZE + VARU_SIZE) += hes.template block<NU, NP>(NX, NX + NU);
     cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE) += hes.template block<NP, NU>(NX + NU, NX);
 
 }
@@ -660,7 +661,7 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
         for(int i = 0; i < NX; i++)
             m_ad2_x(i).value().value() = var.template segment<NX>(k * NX)(i);
         for(int i = 0; i < NU; i++)
-            m_ad2_u(i).value().value() = var.template segment<NX>(k * NU + VARX_SIZE)(i);
+            m_ad2_u(i).value().value() = var.template segment<NU>(k * NU + VARX_SIZE)(i);
 
         dynamics<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, static_cast<ad2_scalar_t>(time_nodes(k)), ad2_xdot);
 
@@ -694,8 +695,8 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
                     coeff * hes.template block<NP, NX>(NX + NU, 0);
 
             lag_hessian.template block<NU, NP>(k * NU + VARX_SIZE, VARX_SIZE + VARU_SIZE).noalias() -=
-                    coeff * hes.template block<NX, NP>(NX, NX + NU);
-            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NX + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NU, NP>(NX, NX + NU);
+            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NU + VARX_SIZE).noalias() -=
                     coeff * hes.template block<NP, NU>(NX + NU, NX);
         }
 
@@ -732,7 +733,7 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
         for(int i = 0; i < NX; i++)
             m_ad2_x(i).value().value() = var.template segment<NX>(k * NX)(i);
         for(int i = 0; i < NU; i++)
-            m_ad2_u(i).value().value() = var.template segment<NX>(k * NU + VARX_SIZE)(i);
+            m_ad2_u(i).value().value() = var.template segment<NU>(k * NU + VARX_SIZE)(i);
 
         dynamics<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, static_cast<ad2_scalar_t>(time_nodes(k)), ad2_xdot);
 
@@ -766,8 +767,8 @@ void ContinuousOCP<OCP, Approximation>::lagrangian_gradient_hessian(const Eigen:
                     coeff * hes.template block<NP, NX>(NX + NU, 0);
 
             lag_hessian.template block<NU, NP>(k * NU + VARX_SIZE, VARX_SIZE + VARU_SIZE).noalias() -=
-                    coeff * hes.template block<NX, NP>(NX, NX + NU);
-            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NX + VARX_SIZE).noalias() -=
+                    coeff * hes.template block<NU, NP>(NX, NX + NU);
+            lag_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, k * NU + VARX_SIZE).noalias() -=
                     coeff * hes.template block<NP, NU>(NX + NU, NX);
         }
 

@@ -148,7 +148,7 @@ public:
 int main(void)
 {
     MySolver<RobotOCP> solver;
-    solver.settings().max_iter = 10;
+    solver.settings().max_iter = 20;
     solver.settings().line_search_max_iter = 10;
     solver.parameters()(0) = 2.0;
 

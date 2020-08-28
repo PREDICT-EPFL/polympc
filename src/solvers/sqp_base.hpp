@@ -56,8 +56,8 @@ public:
     SQPBase()
     {
         /** set default constraints */
-        m_lbx.noalias() = -INF * nlp_variable_t::Ones();
-        m_ubx.noalias() =  INF * nlp_variable_t::Ones();
+        m_lbx.noalias() = static_cast<scalar_t>(-INF) * nlp_variable_t::Ones();
+        m_ubx.noalias() = static_cast<scalar_t>( INF) * nlp_variable_t::Ones();
         m_x.setOnes();
         m_lam.setZero();
 
@@ -492,6 +492,7 @@ void SQPBase<Derived, Problem>::solve() noexcept
     {
         /** linearise and solve qp here*/
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_b);
+        //linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_b);
         solve_qp(p, p_lambda);
 
         /** trial */

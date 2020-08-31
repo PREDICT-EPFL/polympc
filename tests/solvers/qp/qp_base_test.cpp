@@ -12,8 +12,8 @@ int main(void)
 {
     MyQP qp;
 
-    MyQP::qp_var_t lb;
-    MyQP::qp_var_t ub;
+    MyQP::qp_dual_t lb;
+    MyQP::qp_dual_t ub;
 
     lb.setZero();
     ub.setOnes();

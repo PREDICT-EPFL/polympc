@@ -42,8 +42,8 @@ struct qp_solver_info_t {
 /**-----------------------------------------------------------------------------------*/
 /** (Almost) Interface class for general QP solvers */
 template<typename Derived, int N, int M, typename Scalar = double,
-         template <typename, int, typename... Args> class LinearSolver = Eigen::LDLT,
-         int LinearSolver_UpLo = Eigen::Lower>
+         template <typename, int, typename ...Args> class LinearSolver = Eigen::LDLT,
+         int LinearSolver_UpLo = Eigen::Lower, typename ...Args>
 class QPBase
 {
   public:
@@ -51,67 +51,45 @@ class QPBase
 
     using scalar_t     = Scalar;
     using qp_var_t     = Eigen::Matrix<scalar_t, N, 1>;
-    using qp_constraint_t = Eigen::Matrix<scalar_t, M, 1>;
+    using qp_constraint_t = Eigen::Matrix<scalar_t, M, N>;
     using qp_dual_t    = Eigen::Matrix<scalar_t, M, 1>;
     using qp_kkt_vec_t = Eigen::Matrix<scalar_t, N + M, 1>;
     using kkt_mat_t    = Eigen::Matrix<scalar_t, N + M, N + M>;
+    using kkt_vec_t    = Eigen::Matrix<scalar_t, N + M, 1>;
     using qp_hessian_t = Eigen::Matrix<scalar_t, N, N>;
 
     using settings_t = qp_sover_settings_t<scalar_t>;
     using info_t = qp_solver_info_t<scalar_t>;
-    using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo>;
+    using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo, Args...>;
 
     static constexpr scalar_t LOOSE_BOUNDS_THRESH = 1e+10;
+    static constexpr scalar_t EQ_TOL = 1e-4;
     static constexpr scalar_t DIV_BY_ZERO_REGUL = std::numeric_limits<scalar_t>::epsilon();
 
-    /** ADMM specific */
-    static constexpr scalar_t RHO_MIN = 1e-6;
-    static constexpr scalar_t RHO_MAX = 1e+6;
-    static constexpr scalar_t RHO_TOL = 1e-4;
-    static constexpr scalar_t RHO_EQ_FACTOR = 1e+3;
-
     // Solver state variables
-    qp_var_t x;
-    qp_dual_t y;
-    /** ADMM specific */
-    qp_var_t x_tilde;
-    qp_constraint_t z;
-    qp_constraint_t z_tilde;
-    qp_constraint_t z_prev;
-    qp_dual_t rho_vec;
-    qp_dual_t rho_inv_vec;
-    scalar_t rho;
+    qp_var_t  m_x;
+    qp_dual_t m_y;
 
-    // State
-        int iter;
-    scalar_t res_prim;
-    scalar_t res_dual;
-
-    /** ADMM specific */
-    scalar_t _max_Ax_z_norm;
-    scalar_t _max_Px_ATy_q_norm;
-
-    enum {
+    using constraint_type = enum {
         INEQUALITY_CONSTRAINT,
         EQUALITY_CONSTRAINT,
         LOOSE_BOUNDS
-    } constr_type[M]; /**< constraint type classification */
+    };
+
+    constraint_type constr_type[M]; /**< constraint type classification */
 
     settings_t m_settings;
     info_t m_info;
-
-    kkt_mat_t kkt_mat;
-    linear_solver_t linear_solver;
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     //EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /** getters  / setters */
-    EIGEN_STRONG_INLINE const qp_var_t& primal_solution() const noexcept { return x; }
-    EIGEN_STRONG_INLINE qp_var_t& primal_solution() noexcept { return x; }
+    EIGEN_STRONG_INLINE const qp_var_t& primal_solution() const noexcept { return m_x; }
+    EIGEN_STRONG_INLINE qp_var_t& primal_solution() noexcept { return m_x; }
 
-    EIGEN_STRONG_INLINE const qp_dual_t& dual_solution() const { return y; }
-    EIGEN_STRONG_INLINE qp_dual_t& dual_solution() noexcept { return y; }
+    EIGEN_STRONG_INLINE const qp_dual_t& dual_solution() const { return m_y; }
+    EIGEN_STRONG_INLINE qp_dual_t& dual_solution() noexcept { return m_y; }
 
     EIGEN_STRONG_INLINE const settings_t& settings() const noexcept { return m_settings; }
     EIGEN_STRONG_INLINE settings_t& settings() noexcept { return m_settings; }
@@ -122,20 +100,20 @@ class QPBase
     /** general functions*/
     /** solve */
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
-                   const Eigen::Ref<const qp_var_t>& Alb, const Eigen::Ref<qp_var_t>&Aub) noexcept
+                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>&Aub) noexcept
     {
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub);
     }
     /** solve using initial guess */
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
-                   const Eigen::Ref<const qp_var_t>& Alb, const Eigen::Ref<qp_var_t>& Aub,
+                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>& Aub,
                    const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
     {
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, x_guess, y_guess);
     }
 
     /** parse constraints bounds */
-    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_var_t>& Alb, const Eigen::Ref<qp_var_t>&Aub) noexcept
+    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>&Aub) noexcept
     {
         eigen_assert((Alb.array() < Aub.array()).any());
 
@@ -143,7 +121,7 @@ class QPBase
         {
             if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub[i] > LOOSE_BOUNDS_THRESH)
                 constr_type[i] = LOOSE_BOUNDS;
-            else if (Aub[i] - Alb[i] < RHO_TOL)
+            else if (Aub[i] - Alb[i] < EQ_TOL)
                 constr_type[i] = EQUALITY_CONSTRAINT;
             else
                 constr_type[i] = INEQUALITY_CONSTRAINT;
@@ -153,7 +131,7 @@ class QPBase
 
     /** standard function to estimate primal residual */
     EIGEN_STRONG_INLINE scalar_t primal_residual(const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
-                                                 const Eigen::Ref<const qp_var_t>& b) const noexcept
+                                                 const Eigen::Ref<const qp_dual_t>& b) const noexcept
     {
         return (A * x - b).template lpNorm<Eigen::Infinity>();
     }

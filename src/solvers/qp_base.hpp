@@ -100,20 +100,20 @@ class QPBase
     /** general functions*/
     /** solve */
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
-                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>&Aub) noexcept
+                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub);
     }
     /** solve using initial guess */
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
-                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>& Aub,
+                   const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
                    const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
     {
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, x_guess, y_guess);
     }
 
     /** parse constraints bounds */
-    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>&Aub) noexcept
+    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
         eigen_assert((Alb.array() < Aub.array()).any());
 

@@ -46,7 +46,7 @@ public:
     linear_solver_t linear_solver;
 
     status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
-    const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<qp_dual_t>& Aub) noexcept
+    const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
         /** setup part */
         kkt_vec_t rhs, x_tilde_nu;

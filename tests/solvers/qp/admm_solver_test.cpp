@@ -178,3 +178,78 @@ TEST(QPSolverTest, admmLox)
     EXPECT_EQ(info.status, SOLVED);
 }
 
+#ifdef EIGEN_NO_DEBUG
+TEST(QPSolverTest, admmConjugateGradientLinearSolver)
+{
+    using Scalar = double;
+
+    Eigen::MatrixXd H(2,2);
+    Eigen::MatrixXd h(2,1);
+    Eigen::MatrixXd A(3,2);
+    Eigen::MatrixXd l(3,1);
+    Eigen::MatrixXd u(3,1);
+    Eigen::MatrixXd solution(2,1);
+
+    H << 4, 1,
+         1, 2;
+    h << 1, 1;
+    A << 1, 1,
+         1, 0,
+         0, 1;
+    l << 1, 0, 0;
+    u << 1, 0.7, 0.7;
+    solution << 0.3, 0.7;
+
+    ADMM<2,3,double, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    prob.solve(H,h,A,l,u);
+    Eigen::Vector2d sol = prob.primal_solution();
+
+    auto info = prob.info();
+    EXPECT_TRUE(sol.isApprox(solution, 1e-2));
+    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
+}
+#endif
+
+TEST(QPSolverTest, admmTestConstraint)
+{
+    using Scalar = double;
+
+    Eigen::MatrixXd H(5,5);
+    Eigen::MatrixXd h(5,1);
+    Eigen::MatrixXd A(5,5);
+    Eigen::MatrixXd l(5,1);
+    Eigen::MatrixXd u(5,1);
+    Eigen::MatrixXd solution(5,1);
+
+    H.setIdentity();
+    h.setConstant(-1);
+    A.setIdentity();
+
+    using solver_t = ADMM<5,5,Scalar>;
+    solver_t prob;
+
+    int type_expect[5];
+    l(0) = -1e+17;
+    u(0) =  1e+17;
+    type_expect[0] = solver_t::LOOSE_BOUNDS;
+    l(1) = -101;
+    u(1) = 1e+17;
+    type_expect[1] = solver_t::INEQUALITY_CONSTRAINT;
+    l(2) = -1e+17;
+    u(2) = 123;
+    type_expect[2] = solver_t::INEQUALITY_CONSTRAINT;
+    l(3) = -1;
+    u(3) = 1;
+    type_expect[3] = solver_t::INEQUALITY_CONSTRAINT;
+    l(4) = 42;
+    u(4) = 42;
+    type_expect[4] = solver_t::EQUALITY_CONSTRAINT;
+
+    prob.parse_constraints_bounds(l,u);
+
+    for (int i = 0; i < l.rows(); i++)
+        EXPECT_EQ(prob.constr_type[i], type_expect[i]);
+}
+
+

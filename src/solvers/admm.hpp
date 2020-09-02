@@ -48,13 +48,23 @@ public:
     status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
     const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
+        return solve_impl(H, h, A, Alb, Aub, qp_var_t::Zero(N,1), qp_dual_t::Zero(N,1));
+    }
+
+
+    status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
+    const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
+    const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
+    {
         /** setup part */
         kkt_vec_t rhs, x_tilde_nu;
         bool check_termination = false;
 
-        this->m_x.setZero();
-        this->m_y.setZero();
-        m_z.setZero();
+        this->m_x = x_guess;
+        this->m_y = y_guess;
+
+        if(!this->m_settings.warm_start)
+            m_z.setZero();
 
         /** Set QP constraint type */
         this->parse_constraints_bounds(Alb, Aub);

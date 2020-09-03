@@ -17,9 +17,9 @@ class ADMM : public QPBase<ADMM<N, M, Scalar, LinearSolver, LinearSolver_UpLo>, 
     using kkt_mat_t       = typename Base::kkt_mat_t;
     using kkt_vec_t       = typename Base::kkt_vec_t;
     using linear_solver_t = typename Base::linear_solver_t;
-    using status_t        = status_t;
 
 public:
+    using status_t        = status_t;
     /** ADMM specific */
     qp_var_t m_x_tilde;
     qp_dual_t m_z, m_z_tilde, m_z_prev;
@@ -48,7 +48,7 @@ public:
     status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
     const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
-        return solve_impl(H, h, A, Alb, Aub, qp_var_t::Zero(N,1), qp_dual_t::Zero(N,1));
+        return solve_impl(H, h, A, Alb, Aub, qp_var_t::Zero(N,1), qp_dual_t::Zero(M,1));
     }
 
 

@@ -4,6 +4,7 @@
 #include <memory>
 #include "Eigen/Core"
 #include "bfgs.hpp"
+#include "admm.hpp"
 #include "qp_solver.hpp"
 #include <iostream>
 
@@ -47,9 +48,9 @@ struct sqp_info_t {
 };
 
 
-template<typename Derived, typename Problem> class SQPBase;
+template<typename Derived, typename Problem, typename QPSolver> class SQPBase;
 
-template<typename Derived, typename Problem>
+template<typename Derived, typename Problem, typename QPSolver>
 class SQPBase
 {
 public:
@@ -58,6 +59,7 @@ public:
         /** set default constraints */
         m_lbx.noalias() = static_cast<scalar_t>(-INF) * nlp_variable_t::Ones();
         m_ubx.noalias() = static_cast<scalar_t>( INF) * nlp_variable_t::Ones();
+        /** @bug: fix initialisation */
         m_x.setOnes();
         m_lam.setZero();
 
@@ -92,7 +94,8 @@ public:
   using parameter_t       = typename Problem::static_parameter_t;
 
   using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, scalar_t>;
-  using qp_solver_t = qp_solver::QPSolver<qp_t>;
+  //using qp_solver_t = qp_solver::QPSolver<qp_t>;
+  using qp_solver_t = QPSolver;
 
   /** instantiate the problem */
   Problem problem;
@@ -109,8 +112,12 @@ public:
   sqp_info_t        m_info;
   nlp_variable_t    m_lbx, m_ubx;
 
+  /** @badcode : remove this temporaries after ADMM refactoring*/
+  Eigen::Matrix<scalar_t, NUM_CONSTR, VAR_SIZE> m_A_full;
+  Eigen::Matrix<scalar_t, NUM_CONSTR, 1> m_Alb, m_Aub;
+
   /** QP solver */
-  qp_t m_qp;
+  //qp_t m_qp;
   qp_solver_t m_qp_solver;
 
   /** temporary storage for Lagrange gradient */
@@ -253,8 +260,9 @@ public:
 
 };
 
-template<typename Derived, typename Problem>
-typename SQPBase<Derived, Problem>::scalar_t SQPBase<Derived, Problem>::step_size_selection_impl(const Eigen::Ref<const nlp_variable_t>& p) noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+typename SQPBase<Derived, Problem, QPSolver>::scalar_t
+SQPBase<Derived, Problem, QPSolver>::step_size_selection_impl(const Eigen::Ref<const nlp_variable_t>& p) noexcept
 {
     scalar_t mu, phi_l1, Dp_phi_l1;
     nlp_variable_t cost_gradient = m_h;
@@ -300,9 +308,9 @@ typename SQPBase<Derived, Problem>::scalar_t SQPBase<Derived, Problem>::step_siz
     return alpha;
 }
 
-template<typename Derived, typename Problem>
-typename SQPBase<Derived, Problem>::scalar_t
-SQPBase<Derived, Problem>::constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+typename SQPBase<Derived, Problem, QPSolver>::scalar_t
+SQPBase<Derived, Problem, QPSolver>::constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
     scalar_t cl1 = EPSILON;
     nlp_constraints_t c_eq;
@@ -325,9 +333,9 @@ SQPBase<Derived, Problem>::constraints_violation_impl(const Eigen::Ref<const nlp
     return cl1;
 }
 
-template<typename Derived, typename Problem>
-typename SQPBase<Derived, Problem>::scalar_t
-SQPBase<Derived, Problem>::max_constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+typename SQPBase<Derived, Problem, QPSolver>::scalar_t
+SQPBase<Derived, Problem, QPSolver>::max_constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
     scalar_t c = scalar_t(0);
     nlp_constraints_t c_eq;
@@ -353,8 +361,8 @@ SQPBase<Derived, Problem>::max_constraints_violation_impl(const Eigen::Ref<const
     return c;
 }
 
-template<typename Derived, typename Problem>
-void SQPBase<Derived, Problem>::linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+template<typename Derived, typename Problem, typename QPSolver>
+void SQPBase<Derived, Problem, QPSolver>::linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                                    const Eigen::Ref<const nlp_dual_t>& lam,
                                                    Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
                                                    Eigen::Ref<nlp_eq_jacobian_t> Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
@@ -364,8 +372,8 @@ void SQPBase<Derived, Problem>::linearisation_impl(const Eigen::Ref<const nlp_va
     //std::cout << "optimality: " << m_lag_gradient.template lpNorm<Eigen::Infinity>() << "\n";
 }
 
-template<typename Derived, typename Problem>
-void SQPBase<Derived, Problem>::update_linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+template<typename Derived, typename Problem, typename QPSolver>
+void SQPBase<Derived, Problem, QPSolver>::update_linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                                           const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                                           Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
                                                           Eigen::Ref<nlp_eq_jacobian_t> Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
@@ -380,8 +388,8 @@ void SQPBase<Derived, Problem>::update_linearisation_impl(const Eigen::Ref<const
     m_lag_gradient = _lag_grad;
 }
 
-template<typename Derived, typename Problem>
-bool SQPBase<Derived, Problem>::termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+bool SQPBase<Derived, Problem, QPSolver>::termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
     //std::cout << "residuals: " << m_primal_norm << " " << m_dual_norm << " " << max_constraints_violation(x) << "\n";
     return (m_primal_norm <= m_settings.eps_prim) && (m_dual_norm <= m_settings.eps_dual) &&
@@ -389,8 +397,8 @@ bool SQPBase<Derived, Problem>::termination_criteria_impl(const Eigen::Ref<const
 }
 
 
-template<typename Derived, typename Problem>
-void SQPBase<Derived, Problem>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, Eigen::Ref<nlp_dual_t> dual_step) noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, Eigen::Ref<nlp_dual_t> dual_step) noexcept
 {
     enum {
         EQ_IDX = 0,
@@ -399,15 +407,12 @@ void SQPBase<Derived, Problem>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, E
     };
     const scalar_t UNBOUNDED = std::numeric_limits<scalar_t>::max();
 
-    m_qp.P = m_H;
-    m_qp.q = m_h;
-
     // Equality constraints
     // from        A.x + b  = 0
     // to    -b <= A.x     <= -b
-    m_qp.u.template segment<NUM_EQ>(EQ_IDX) = -m_b;
-    m_qp.l.template segment<NUM_EQ>(EQ_IDX) = -m_b;
-    m_qp.A.template block<NUM_EQ, VAR_SIZE>(EQ_IDX, 0) = m_A;
+    m_Aub.template segment<NUM_EQ>(EQ_IDX) = -m_b;
+    m_Alb.template segment<NUM_EQ>(EQ_IDX) = -m_b;
+    m_A_full.template block<NUM_EQ, VAR_SIZE>(EQ_IDX, 0) = m_A;
 
     // Inequality constraints
     // from          A.x + b <= 0
@@ -421,29 +426,30 @@ void SQPBase<Derived, Problem>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, E
     // Box constraints
     // from     l <= x + p <= u
     // to     l-x <= p     <= u-x
-    m_qp.u.template segment<VAR_SIZE>(BOX_IDX) = m_ubx - m_x;
-    m_qp.l.template segment<VAR_SIZE>(BOX_IDX) = m_lbx - m_x;
-    m_qp.A.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
+    m_Aub.template segment<VAR_SIZE>(BOX_IDX) = m_ubx - m_x;
+    m_Alb.template segment<VAR_SIZE>(BOX_IDX) = m_lbx - m_x;
+    m_A_full.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
 
     // solve the QP
+    typename qp_solver_t::status_t qp_status;
     if (m_info.iter == 1) {
-        m_qp_solver.setup(m_qp);
+        qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub);
+        m_qp_solver.settings().warm_start = true;
     } else {
-        m_qp_solver.update_qp(m_qp);
+        qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub, m_x, m_lam);
     }
-    m_qp_solver.solve(m_qp);
 
-    //std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
+    std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
 
     m_info.qp_solver_iter += m_qp_solver.info().iter;
 
-    prim_step = m_qp_solver.x;
-    dual_step = m_qp_solver.y;
+    prim_step = m_qp_solver.primal_solution();
+    dual_step = m_qp_solver.dual_solution();
 }
 
 /** solve method */
-template<typename Derived, typename Problem>
-void SQPBase<Derived, Problem>::solve() noexcept
+template<typename Derived, typename Problem, typename QPSolver>
+void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
 {
     nlp_variable_t p;   // search direction
     nlp_dual_t p_lambda; // dual search direction
@@ -492,7 +498,6 @@ void SQPBase<Derived, Problem>::solve() noexcept
     {
         /** linearise and solve qp here*/
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_b);
-        //linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_b);
         solve_qp(p, p_lambda);
 
         /** trial */

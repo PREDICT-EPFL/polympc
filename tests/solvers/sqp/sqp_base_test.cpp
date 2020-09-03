@@ -79,13 +79,13 @@ public:
 };
 
 /** create solver */
-template<typename Problem> class MySolver;
+template<typename Problem, typename QPSolver> class MySolver;
 
-template<typename Problem>
-class MySolver : public SQPBase<MySolver<Problem>, Problem>
+template<typename Problem, typename QPSolver>
+class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
-    using Base = SQPBase<MySolver<Problem>, Problem>;
+    using Base = SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
 
@@ -147,7 +147,9 @@ public:
 
 int main(void)
 {
-    MySolver<RobotOCP> solver;
+    using admm = ADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, RobotOCP::scalar_t>;
+
+    MySolver<RobotOCP, admm> solver;
     solver.settings().max_iter = 20;
     solver.settings().line_search_max_iter = 10;
     solver.parameters()(0) = 2.0;
@@ -165,7 +167,6 @@ int main(void)
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
     std::cout << "Size of the solver: " << sizeof (solver) << "\n";
-
 
     return EXIT_SUCCESS;
 }

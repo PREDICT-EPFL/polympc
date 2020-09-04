@@ -117,7 +117,7 @@ class QPBase
     {
         eigen_assert((Alb.array() < Aub.array()).any());
 
-        for (int i = 0; i < qp_var_t::RowsAtCompileTime; i++)
+        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
         {
             if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub[i] > LOOSE_BOUNDS_THRESH)
                 constr_type[i] = LOOSE_BOUNDS;

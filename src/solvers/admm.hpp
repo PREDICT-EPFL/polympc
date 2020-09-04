@@ -62,9 +62,7 @@ public:
 
         this->m_x = x_guess;
         this->m_y = y_guess;
-
-        if(!this->m_settings.warm_start)
-            m_z.setZero();
+        this->m_z.noalias() = A * x_guess;
 
         /** Set QP constraint type */
         this->parse_constraints_bounds(Alb, Aub);

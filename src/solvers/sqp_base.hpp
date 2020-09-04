@@ -50,7 +50,7 @@ struct sqp_info_t {
 
 template<typename Derived, typename Problem, typename QPSolver> class SQPBase;
 
-template<typename Derived, typename Problem, typename QPSolver>
+template<typename Derived, typename Problem, typename QPSolver = ADMM<Problem::VAR_SIZE, Problem::DUAL_SIZE, typename Problem::scalar_t>>
 class SQPBase
 {
 public:
@@ -257,6 +257,12 @@ public:
 
   /** finally solve the NLP */
   void solve() noexcept;
+  void solve(const Eigen::Ref<const nlp_variable_t>& x_guess, const Eigen::Ref<const nlp_dual_t>& lam_guess) noexcept
+  {
+      m_x = x_guess;
+      m_lam = lam_guess;
+      this->solve();
+  }
 
 };
 
@@ -432,14 +438,18 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
 
     // solve the QP
     typename qp_solver_t::status_t qp_status;
+
+    /**
     if (m_info.iter == 1) {
         qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub);
-        m_qp_solver.settings().warm_start = true;
     } else {
         qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub, m_x, m_lam);
     }
+    */
 
-    std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
+    m_qp_solver.settings().warm_start = true;
+    qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub, m_x, m_lam);
+    //std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
 
     m_info.qp_solver_iter += m_qp_solver.info().iter;
 

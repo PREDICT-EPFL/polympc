@@ -81,7 +81,7 @@ public:
 /** create solver */
 template<typename Problem, typename QPSolver> class MySolver;
 
-template<typename Problem, typename QPSolver>
+template<typename Problem, typename QPSolver = ADMM<Problem::VAR_SIZE, Problem::DUAL_SIZE, typename Problem::scalar_t>>
 class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
@@ -149,13 +149,14 @@ int main(void)
 {
     using admm = ADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, RobotOCP::scalar_t>;
 
-    MySolver<RobotOCP, admm> solver;
+    MySolver<RobotOCP> solver;
     solver.settings().max_iter = 20;
     solver.settings().line_search_max_iter = 10;
     solver.parameters()(0) = 2.0;
+    Eigen::Matrix<double, 3, 1> init_cond; init_cond << 0.5, 0.5, 0.5;
 
-    solver.upper_bound_x().segment(30, 3) = Eigen::Matrix<double, 3,1>::Constant(0.5);
-    solver.lower_bound_x().segment(30, 3) = Eigen::Matrix<double, 3,1>::Constant(0.5);
+    solver.upper_bound_x().segment(30, 3) = init_cond;
+    solver.lower_bound_x().segment(30, 3) = init_cond;
 
     time_point start = get_time();
     solver.solve();
@@ -167,6 +168,80 @@ int main(void)
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
     std::cout << "Size of the solver: " << sizeof (solver) << "\n";
+
+    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+
+    /** warm started iteration */
+    init_cond << 0.3, 0.4, 0.45;
+    solver.upper_bound_x().segment(30, 3) = init_cond;
+    solver.lower_bound_x().segment(30, 3) = init_cond;
+
+    start = get_time();
+    solver.solve();
+    stop = get_time();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+    std::cout << "Solve status: " << solver.info().status.value << "\n";
+    std::cout << "Num iterations: " << solver.info().iter << "\n";
+    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+
+    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+
+    /**
+    MySolver<RobotOCP, admm>::nlp_hessian_t H;
+    MySolver<RobotOCP, admm>::nlp_variable_t h;
+    MySolver<RobotOCP, admm>::nlp_eq_jacobian_t A_eq;
+    MySolver<RobotOCP, admm>::nlp_constraints_t b_eq;
+    MySolver<RobotOCP, admm>::nlp_dual_t Alb, Aub;
+    Eigen::Matrix<double, RobotOCP::DUAL_SIZE, RobotOCP::VAR_SIZE> A;
+    */
+
+    /** compute QP */
+    //solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
+
+    /** feel-in A matrix */
+    /**
+    enum {
+        EQ_IDX = 0,
+        INEQ_IDX = RobotOCP::NUM_EQ,
+        BOX_IDX  = RobotOCP::NUM_INEQ + RobotOCP::NUM_EQ
+    };
+
+    // Equality constraints
+    Aub.template segment<RobotOCP::NUM_EQ>(EQ_IDX) = -b_eq;
+    Alb.template segment<RobotOCP::NUM_EQ>(EQ_IDX) = -b_eq;
+    A.template block<RobotOCP::NUM_EQ, RobotOCP::VAR_SIZE>(EQ_IDX, 0) = A_eq;
+
+    // Box constraints
+    Aub.template segment<RobotOCP::VAR_SIZE>(BOX_IDX) = solver.upper_bound_x() - solver.m_x;
+    Alb.template segment<RobotOCP::VAR_SIZE>(BOX_IDX) = solver.lower_bound_x() - solver.m_x;
+    A.template block<RobotOCP::VAR_SIZE, RobotOCP::VAR_SIZE>(BOX_IDX, 0).setIdentity();
+    */
+    /** create new ADMM solver */
+    /**
+    admm new_admm;
+    new_admm.solve(H,h,A,Alb,Aub);
+    std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter << "\n";
+    */
+
+    /** create old ADMM solver */
+    /**
+    using qp_t = qp_solver::QP<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, double>;
+    qp_solver::QPSolver<qp_t> old_admm;
+    qp_t qp;
+    qp.P = H;
+    qp.q = h;
+    qp.A = A;
+    qp.l = Alb;
+    qp.u = Aub;
+
+    old_admm.setup(qp);
+    old_admm.solve(qp);
+
+    std::cout << "Old QP status: " << old_admm.info().status << " iterations: " << old_admm.info().iter << "\n";
+    std::cout << "Solvers error: " << (new_admm.primal_solution().transpose() -
+                                       new_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << "\n";
+                                       */
 
     return EXIT_SUCCESS;
 }

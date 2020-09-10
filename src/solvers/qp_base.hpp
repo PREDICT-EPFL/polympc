@@ -35,8 +35,8 @@ struct qp_solver_info_t {
     int iter = 0;               /**< Number of iterations */
     int rho_updates = 0;        /**< Number of rho updates (factorizations) */
     Scalar rho_estimate = 0;    /**< Last rho estimate */
-    Scalar res_prim = 0;        /**< Primal residual */
-    Scalar res_dual = 0;        /**< Dual residual */
+    Scalar res_prim = 1;        /**< Primal residual */
+    Scalar res_dual = 1;        /**< Dual residual */
 };
 
 /**-----------------------------------------------------------------------------------*/
@@ -77,6 +77,7 @@ class QPBase
     };
 
     constraint_type constr_type[M]; /**< constraint type classification */
+    constraint_type box_constr_type[N]; /** box constraints parsing */
 
     settings_t m_settings;
     info_t m_info;
@@ -112,10 +113,19 @@ class QPBase
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, x_guess, y_guess);
     }
 
+    /** solve with box constraints*/
+    status_t solve_box(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
+                       const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
+                       const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
+    {
+        return static_cast<Derived*>(this)->solve_box_impl(H, h, A, Alb, Aub, xlb, xub);
+    }
+
+
     /** parse constraints bounds */
     EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
-        eigen_assert((Alb.array() < Aub.array()).any());
+        eigen_assert((Alb.array() <= Aub.array()).any());
 
         for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
         {
@@ -125,6 +135,35 @@ class QPBase
                 constr_type[i] = EQUALITY_CONSTRAINT;
             else
                 constr_type[i] = INEQUALITY_CONSTRAINT;
+        }
+
+    }
+
+    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
+                                                      const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
+    {
+        eigen_assert((Alb.array() <= Aub.array()).any());
+        eigen_assert((xlb.array() <= xub.array()).any());
+
+        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
+        {
+            if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub[i] > LOOSE_BOUNDS_THRESH)
+                constr_type[i] = LOOSE_BOUNDS;
+            else if (Aub[i] - Alb[i] < EQ_TOL)
+                constr_type[i] = EQUALITY_CONSTRAINT;
+            else
+                constr_type[i] = INEQUALITY_CONSTRAINT;
+        }
+
+        /** parse box constraints*/
+        for (int i = 0; i < qp_var_t::RowsAtCompileTime; i++)
+        {
+            if (xlb(i) < -LOOSE_BOUNDS_THRESH and xub[i] > LOOSE_BOUNDS_THRESH)
+                box_constr_type[i] = LOOSE_BOUNDS;
+            else if (xub[i] - xlb[i] < EQ_TOL)
+                box_constr_type[i] = EQUALITY_CONSTRAINT;
+            else
+                box_constr_type[i] = INEQUALITY_CONSTRAINT;
         }
 
     }

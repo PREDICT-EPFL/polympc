@@ -7,6 +7,7 @@
 #include <iostream>
 #include <chrono>
 #include "control/simple_robot_model.hpp"
+#include "solvers/box_admm.hpp"
 
 
 typedef std::chrono::time_point<std::chrono::system_clock> time_point;
@@ -195,7 +196,6 @@ int main(void)
     MySolver<RobotOCP, admm>::nlp_dual_t Alb, Aub;
     Eigen::Matrix<double, RobotOCP::DUAL_SIZE, RobotOCP::VAR_SIZE> A;
     */
-
     /** compute QP */
     //solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
 
@@ -220,10 +220,13 @@ int main(void)
     /** create new ADMM solver */
     /**
     admm new_admm;
+    time_point start = get_time();
     new_admm.solve(H,h,A,Alb,Aub);
-    std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter << "\n";
+    time_point stop = get_time();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter
+              << " size: " << sizeof (new_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
     */
-
     /** create old ADMM solver */
     /**
     using qp_t = qp_solver::QP<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, double>;
@@ -235,14 +238,31 @@ int main(void)
     qp.l = Alb;
     qp.u = Aub;
 
+    start = get_time();
     old_admm.setup(qp);
     old_admm.solve(qp);
+    stop = get_time();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Old QP status: " << old_admm.info().status << " iterations: " << old_admm.info().iter << "\n";
+    std::cout << "Old QP status: " << old_admm.info().status << " iterations: " << old_admm.info().iter
+              << " size: " << sizeof (old_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    */
+    /** create box ADMM solver */
+    /**
+    boxADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE - RobotOCP::VAR_SIZE, double> box_admm;
+    start = get_time();
+    box_admm.solve_box(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x);
+    stop = get_time();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+    std::cout << "Box QP status: " << box_admm.info().status << " iterations: " << box_admm.info().iter
+              << " size: " << sizeof (box_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+
     std::cout << "Solvers error: " << (new_admm.primal_solution().transpose() -
-                                       new_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << "\n";
-                                       */
-
+                                       old_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << " | "
+                                   <<  (new_admm.primal_solution().transpose() -
+                                        box_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << "\n";
+    */
     return EXIT_SUCCESS;
 }
 

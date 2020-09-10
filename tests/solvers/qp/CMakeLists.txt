@@ -7,7 +7,7 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 if(BUILD_TESTS OR QP_TESTS)
 
-  add_executable(qp_solver_test qp_solver_test.cpp admm_solver_test.cpp qp_solver_sparse_test.cpp test_main.cpp)
+  add_executable(qp_solver_test qp_solver_test.cpp admm_solver_test.cpp box_admm_test.cpp qp_solver_sparse_test.cpp test_main.cpp)
   target_link_libraries(qp_solver_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
 
   add_executable(qp_test_1D qp_solver_tests_1D.cpp test_main.cpp)

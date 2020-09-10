@@ -19,7 +19,7 @@ class ADMM : public QPBase<ADMM<N, M, Scalar, LinearSolver, LinearSolver_UpLo>, 
     using linear_solver_t = typename Base::linear_solver_t;
 
 public:
-    using status_t        = status_t;
+    //using status_t        = status_t;
     /** ADMM specific */
     qp_var_t m_x_tilde;
     qp_dual_t m_z, m_z_tilde, m_z_prev;

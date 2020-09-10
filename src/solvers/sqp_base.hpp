@@ -5,6 +5,7 @@
 #include "Eigen/Core"
 #include "bfgs.hpp"
 #include "admm.hpp"
+#include "qp_base.hpp"
 #include "qp_solver.hpp"
 #include <iostream>
 
@@ -437,7 +438,8 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
     m_A_full.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
 
     // solve the QP
-    typename qp_solver_t::status_t qp_status;
+    //typename qp_solver_t::status_t qp_status;
+    status_t qp_status;
 
     /**
     if (m_info.iter == 1) {

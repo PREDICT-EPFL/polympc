@@ -7,6 +7,7 @@
 #endif
 #include <cmath>
 #include <limits>
+#include <iostream>
 
 #ifndef SOLVER_ASSERT
 #define SOLVER_ASSERT(x) eigen_assert(x)

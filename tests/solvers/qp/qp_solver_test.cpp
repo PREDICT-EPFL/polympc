@@ -41,7 +41,6 @@ TEST(QPSolverTest, testSimpleQP) {
     EXPECT_EQ(prob.info().status, SOLVED);
 }
 
-
 TEST(QPSolverTest, testSinglePrecisionFloat) {
     using SimpleQPf = _SimpleQP<float>;
     SimpleQPf qp;
@@ -164,3 +163,4 @@ TEST(QPSolverTest, TestConstraint) {
         EXPECT_EQ(prob.constr_type[i], type_expect[i]);
     }
 }
+

@@ -26,13 +26,14 @@ TEST(ADMMSolverTest, box_admmSimpleQP)
     boxADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 150;
 
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
     EXPECT_EQ(prob.info().status, status_t::SOLVED);
 }
+
 
 TEST(ADMMSolverTest, box_admmSinglePrecisionFloat)
 {
@@ -56,9 +57,9 @@ TEST(ADMMSolverTest, box_admmSinglePrecisionFloat)
     solution << Scalar(0.3), Scalar(0.7);
 
     boxADMM<2, 1, Scalar> prob;
-    prob.settings().max_iter = 1000;
+    prob.settings().max_iter = 150;
 
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2f sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(solution, Scalar(1e-2)));
@@ -92,7 +93,7 @@ TEST(ADMMSolverTest, box_admmConstraintViolation)
     prob.settings().eps_rel = 1e-4;
     prob.settings().eps_abs = 1e-4;
 
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     // check feasibility (with some epsilon margin)
@@ -132,7 +133,7 @@ TEST(ADMMSolverTest, box_admmAdaptiveRho)
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
 
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_EQ(prob.info().status, SOLVED);
@@ -168,13 +169,13 @@ TEST(ADMMSolverTest, box_admmLox)
 
     // solve whithout adaptive rho
     prob.settings().adaptive_rho = false;
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     int prev_iter = prob.info().iter;
 
     // solve with adaptive rho
     prob.settings().adaptive_rho = true;
     prob.settings().adaptive_rho_interval = 10;
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
 
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
@@ -205,7 +206,7 @@ TEST(ADMMSolverTest, admmConjugateGradientLinearSolver)
     solution << 0.3, 0.7;
 
     boxADMM<2,1,double, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
-    prob.solve_box(H,h,A,Al,Au,xl,xu);
+    prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     auto info = prob.info();

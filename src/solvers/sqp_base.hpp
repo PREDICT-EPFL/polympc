@@ -58,6 +58,7 @@ public:
     SQPBase()
     {
         /** set default constraints */
+        /** @badcode: change to Constant */
         m_lbx.noalias() = static_cast<scalar_t>(-INF) * nlp_variable_t::Ones();
         m_ubx.noalias() = static_cast<scalar_t>( INF) * nlp_variable_t::Ones();
         /** @bug: fix initialisation */
@@ -94,7 +95,7 @@ public:
   using scalar_t          = typename Problem::scalar_t;
   using parameter_t       = typename Problem::static_parameter_t;
 
-  using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, scalar_t>;
+  //using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, scalar_t>;
   //using qp_solver_t = qp_solver::QPSolver<qp_t>;
   using qp_solver_t = QPSolver;
 
@@ -114,8 +115,8 @@ public:
   nlp_variable_t    m_lbx, m_ubx;
 
   /** @badcode : remove this temporaries after ADMM refactoring*/
-  Eigen::Matrix<scalar_t, NUM_CONSTR, VAR_SIZE> m_A_full;
-  Eigen::Matrix<scalar_t, NUM_CONSTR, 1> m_Alb, m_Aub;
+  //Eigen::Matrix<scalar_t, NUM_CONSTR, VAR_SIZE> m_A_full;
+  //Eigen::Matrix<scalar_t, NUM_CONSTR, 1> m_Alb, m_Aub;
 
   /** QP solver */
   //qp_t m_qp;
@@ -417,9 +418,11 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
     // Equality constraints
     // from        A.x + b  = 0
     // to    -b <= A.x     <= -b
+    /**
     m_Aub.template segment<NUM_EQ>(EQ_IDX) = -m_b;
     m_Alb.template segment<NUM_EQ>(EQ_IDX) = -m_b;
     m_A_full.template block<NUM_EQ, VAR_SIZE>(EQ_IDX, 0) = m_A;
+    */
 
     // Inequality constraints
     // from          A.x + b <= 0
@@ -430,28 +433,15 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
     _qp.A.template block<NUM_INEQ, VAR_SIZE>(INEQ_IDX, 0) = A_ineq;
     */
 
-    // Box constraints
-    // from     l <= x + p <= u
-    // to     l-x <= p     <= u-x
-    m_Aub.template segment<VAR_SIZE>(BOX_IDX) = m_ubx - m_x;
-    m_Alb.template segment<VAR_SIZE>(BOX_IDX) = m_lbx - m_x;
-    m_A_full.template block<VAR_SIZE, VAR_SIZE>(BOX_IDX, 0).setIdentity();
-
     // solve the QP
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
 
-    /**
-    if (m_info.iter == 1) {
-        qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub);
-    } else {
-        qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub, m_x, m_lam);
-    }
-    */
-
     m_qp_solver.settings().warm_start = true;
-    qp_status = m_qp_solver.solve(m_H, m_h, m_A_full, m_Alb, m_Aub, m_x, m_lam);
-    //std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
+
+    /** @badcode: m_x -> x step; m_lam -> lam step */
+    qp_status = m_qp_solver.solve(m_H, m_h, m_A, -m_b, -m_b, m_lbx - m_x, m_ubx - m_x, m_x, m_lam);
+    std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
 
     m_info.qp_solver_iter += m_qp_solver.info().iter;
 

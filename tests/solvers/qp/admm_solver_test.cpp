@@ -8,30 +8,31 @@ TEST(QPSolverTest, admmSimpleQP)
 
     Eigen::Matrix<Scalar, 2,2> H;
     Eigen::Matrix<Scalar, 2,1> h;
-    Eigen::Matrix<Scalar, 3,2> A;
-    Eigen::Matrix<Scalar, 3,1> l;
-    Eigen::Matrix<Scalar, 3,1> u;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
     Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 3, Scalar> prob;
+    ADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 1000;
 
-    prob.solve(H,h,A,l,u);
+    prob.solve(H, h, A, al, au, xl, xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
     EXPECT_EQ(prob.info().status, status_t::SOLVED);
+
+    //std::cout << prob.primal_solution().transpose() << " | " << prob.dual_solution().transpose() << "\n";
 }
 
 TEST(QPSolverTest, admmSinglePrecisionFloat)
@@ -40,25 +41,23 @@ TEST(QPSolverTest, admmSinglePrecisionFloat)
 
     Eigen::Matrix<Scalar, 2,2> H;
     Eigen::Matrix<Scalar, 2,1> h;
-    Eigen::Matrix<Scalar, 3,2> A;
-    Eigen::Matrix<Scalar, 3,1> l;
-    Eigen::Matrix<Scalar, 3,1> u;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
     Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, Scalar(0.7), Scalar(0.7);
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << Scalar(0.7), Scalar(0.7);
     solution << Scalar(0.3), Scalar(0.7);
 
-    ADMM<2, 3, Scalar> prob;
-    prob.settings().max_iter = 1000;
+    ADMM<2, 1, Scalar> prob;
 
-    prob.solve(H,h,A,l,u);
+    prob.solve(H,h,A,al,au,xl,xu);
     Eigen::Vector2f sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(solution, Scalar(1e-2)));
@@ -72,32 +71,35 @@ TEST(QPSolverTest, admmConstraintViolation)
 
     Eigen::Matrix<Scalar, 2,2> H;
     Eigen::Matrix<Scalar, 2,1> h;
-    Eigen::Matrix<Scalar, 3,2> A;
-    Eigen::Matrix<Scalar, 3,1> l;
-    Eigen::Matrix<Scalar, 3,1> u;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
     Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 3, Scalar> prob;
+    ADMM<2, 1, Scalar> prob;
 
     prob.settings().eps_rel = 1e-4;
     prob.settings().eps_abs = 1e-4;
 
-    prob.solve(H,h,A,l,u);
+    prob.solve(H,h,A,al,au, xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     // check feasibility (with some epsilon margin)
-    Eigen::Vector3d lower = A * sol - l;
-    Eigen::Vector3d upper = A * sol - u;
+    Eigen::Vector3d lower;
+    Eigen::Vector3d upper;
+    lower.segment<1>(0) = A * sol - al;
+    upper.segment<1>(0) = A * sol - au;
+    lower.segment<2>(1) = sol - xl;
+    upper.segment<2>(1) = sol - xu;
     EXPECT_GE(lower.minCoeff(), -1e-3);
     EXPECT_LE(upper.maxCoeff(), 1e-3);
 }
@@ -108,27 +110,26 @@ TEST(QPSolverTest, admmAdaptiveRho)
 
     Eigen::Matrix<Scalar, 2,2> H;
     Eigen::Matrix<Scalar, 2,1> h;
-    Eigen::Matrix<Scalar, 3,2> A;
-    Eigen::Matrix<Scalar, 3,1> l;
-    Eigen::Matrix<Scalar, 3,1> u;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
     Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 3, Scalar> prob;
+    ADMM<2, 1, Scalar> prob;
 
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
 
-    prob.solve(H,h,A,l,u);
+    prob.solve(H,h,A,al,au, xl, xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     EXPECT_EQ(prob.info().status, SOLVED);
@@ -141,22 +142,21 @@ TEST(QPSolverTest, admmLox)
 
     Eigen::Matrix<Scalar, 2,2> H;
     Eigen::Matrix<Scalar, 2,1> h;
-    Eigen::Matrix<Scalar, 3,2> A;
-    Eigen::Matrix<Scalar, 3,1> l;
-    Eigen::Matrix<Scalar, 3,1> u;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
     Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 3, Scalar> prob;
+    ADMM<2, 1, Scalar> prob;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -164,13 +164,13 @@ TEST(QPSolverTest, admmLox)
 
     // solve whithout adaptive rho
     prob.settings().adaptive_rho = false;
-    prob.solve(H,h,A,l,u);
+    prob.solve(H,h,A,al,au, xl,xu);
     int prev_iter = prob.info().iter;
 
     // solve with adaptive rho
     prob.settings().adaptive_rho = true;
     prob.settings().adaptive_rho_interval = 10;
-    prob.solve(H,h,A,l,u);
+    prob.solve(H,h,A,al,au,xl,xu);
 
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
@@ -183,25 +183,24 @@ TEST(QPSolverTest, admmConjugateGradientLinearSolver)
 {
     using Scalar = double;
 
-    Eigen::MatrixXd H(2,2);
-    Eigen::MatrixXd h(2,1);
-    Eigen::MatrixXd A(3,2);
-    Eigen::MatrixXd l(3,1);
-    Eigen::MatrixXd u(3,1);
-    Eigen::MatrixXd solution(2,1);
+    Eigen::Matrix<Scalar, 2,2> H;
+    Eigen::Matrix<Scalar, 2,1> h;
+    Eigen::Matrix<Scalar, 1,2> A;
+    Eigen::Matrix<Scalar, 1,1> al;
+    Eigen::Matrix<Scalar, 1,1> au;
+    Eigen::Matrix<Scalar, 2,1> xl,xu;
+    Eigen::Matrix<Scalar, 2,1> solution;
 
     H << 4, 1,
          1, 2;
     h << 1, 1;
-    A << 1, 1,
-         1, 0,
-         0, 1;
-    l << 1, 0, 0;
-    u << 1, 0.7, 0.7;
+    A << 1, 1;
+    al << 1; xl << 0, 0;
+    au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2,3,double, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
-    prob.solve(H,h,A,l,u);
+    ADMM<2,1,double, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    prob.solve(H,h,A,al,au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     auto info = prob.info();
@@ -226,7 +225,7 @@ TEST(QPSolverTest, admmTestConstraint)
     h.setConstant(-1);
     A.setIdentity();
 
-    using solver_t = ADMM<5,5,Scalar>;
+    using solver_t = ADMM<5,0,Scalar>;
     solver_t prob;
 
     int type_expect[5];
@@ -246,10 +245,11 @@ TEST(QPSolverTest, admmTestConstraint)
     u(4) = 42;
     type_expect[4] = solver_t::EQUALITY_CONSTRAINT;
 
-    prob.parse_constraints_bounds(l,u);
+    solver_t::qp_dual_a_t al, ul;
+
+    prob.parse_constraints_bounds(al, ul, l,u);
 
     for (int i = 0; i < l.rows(); i++)
-        EXPECT_EQ(prob.constr_type[i], type_expect[i]);
+        EXPECT_EQ(prob.box_constr_type[i], type_expect[i]);
 }
-
 

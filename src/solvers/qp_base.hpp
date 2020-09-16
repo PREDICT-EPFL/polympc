@@ -40,7 +40,10 @@ struct qp_solver_info_t {
 };
 
 /**-----------------------------------------------------------------------------------*/
-/** (Almost) Interface class for general QP solvers */
+/** (Almost) Interface class for general QP solvers
+ * N - state dimension
+ * M - numer of generic constraints
+*/
 template<typename Derived, int N, int M, typename Scalar = double,
          template <typename, int, typename ...Args> class LinearSolver = Eigen::LDLT,
          int LinearSolver_UpLo = Eigen::Lower, typename ...Args>
@@ -52,7 +55,8 @@ class QPBase
     using scalar_t     = Scalar;
     using qp_var_t     = Eigen::Matrix<scalar_t, N, 1>;
     using qp_constraint_t = Eigen::Matrix<scalar_t, M, N>;
-    using qp_dual_t    = Eigen::Matrix<scalar_t, M, 1>;
+    using qp_dual_t    = Eigen::Matrix<scalar_t, M + N, 1>;
+    using qp_dual_a_t  = Eigen::Matrix<scalar_t, M, 1>;
     using qp_kkt_vec_t = Eigen::Matrix<scalar_t, N + M, 1>;
     using kkt_mat_t    = Eigen::Matrix<scalar_t, N + M, N + M>;
     using kkt_vec_t    = Eigen::Matrix<scalar_t, N + M, 1>;
@@ -100,12 +104,14 @@ class QPBase
 
     /** general functions*/
     /** solve */
+    /**
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
                    const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
     {
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub);
     }
     /** solve using initial guess */
+    /**
     status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
                    const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
                    const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
@@ -113,21 +119,30 @@ class QPBase
         return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, x_guess, y_guess);
     }
 
-    /** solve with box constraints*/
-    status_t solve_box(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>&A,
-                       const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
-                       const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
+    /** solve with generic and box constraints*/
+    status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
+                   const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,
+                   const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
     {
-        return static_cast<Derived*>(this)->solve_box_impl(H, h, A, Alb, Aub, xlb, xub);
+        return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, xlb, xub);
+    }
+
+    /** solve with an intial guess */
+    status_t solve(const Eigen::Ref<const qp_hessian_t>&H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
+                   const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,
+                   const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub,
+                   const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
+    {
+        return static_cast<Derived*>(this)->solve_impl(H, h, A, Alb, Aub, xlb, xub, x_guess, y_guess);
     }
 
 
     /** parse constraints bounds */
-    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub) noexcept
+    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub) noexcept
     {
         eigen_assert((Alb.array() <= Aub.array()).any());
 
-        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
+        for (int i = 0; i < qp_dual_a_t::RowsAtCompileTime; i++)
         {
             if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub[i] > LOOSE_BOUNDS_THRESH)
                 constr_type[i] = LOOSE_BOUNDS;
@@ -139,15 +154,15 @@ class QPBase
 
     }
 
-    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
+    EIGEN_STRONG_INLINE void parse_constraints_bounds(const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,
                                                       const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
     {
-        eigen_assert((Alb.array() <= Aub.array()).any());
+        eigen_assert((Alb.array() <= Aub.array()).any() xor (M <= 0)) ;
         eigen_assert((xlb.array() <= xub.array()).any());
 
-        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
+        for (int i = 0; i < qp_dual_a_t::RowsAtCompileTime; i++)
         {
-            if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub[i] > LOOSE_BOUNDS_THRESH)
+            if (Alb(i) < -LOOSE_BOUNDS_THRESH and Aub(i) > LOOSE_BOUNDS_THRESH)
                 constr_type[i] = LOOSE_BOUNDS;
             else if (Aub[i] - Alb[i] < EQ_TOL)
                 constr_type[i] = EQUALITY_CONSTRAINT;
@@ -158,7 +173,7 @@ class QPBase
         /** parse box constraints*/
         for (int i = 0; i < qp_var_t::RowsAtCompileTime; i++)
         {
-            if (xlb(i) < -LOOSE_BOUNDS_THRESH and xub[i] > LOOSE_BOUNDS_THRESH)
+            if (xlb(i) < -LOOSE_BOUNDS_THRESH and xub(i) > LOOSE_BOUNDS_THRESH)
                 box_constr_type[i] = LOOSE_BOUNDS;
             else if (xub[i] - xlb[i] < EQ_TOL)
                 box_constr_type[i] = EQUALITY_CONSTRAINT;
@@ -170,9 +185,9 @@ class QPBase
 
     /** standard function to estimate primal residual */
     EIGEN_STRONG_INLINE scalar_t primal_residual(const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
-                                                 const Eigen::Ref<const qp_dual_t>& b) const noexcept
+                                                 const Eigen::Ref<const qp_dual_a_t>& b) const noexcept
     {
-        return (A * x - b).template lpNorm<Eigen::Infinity>();
+        return static_cast<const Derived*>(this)->primal_residual_impl(A, x, b);
     }
 
     /** dual residual estimation */
@@ -180,7 +195,22 @@ class QPBase
                                                const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
                                                const Eigen::Ref<const qp_dual_t>& y) const noexcept
     {
-        return (H * x + h + A.transpose() * y).template lpNorm<Eigen::Infinity>();
+        return static_cast<const Derived*>(this)->dual_residual_impl(H, h, A, x, y);
+    }
+
+    /** default implementation of the primal and dual residuals*/
+    EIGEN_STRONG_INLINE scalar_t primal_residual_impl(const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
+                                                 const Eigen::Ref<const qp_dual_a_t>& b) const noexcept
+    {
+        return (A * x - b).template lpNorm<Eigen::Infinity>();
+    }
+
+    /** dual residual estimation */
+    EIGEN_STRONG_INLINE scalar_t dual_residual_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h,
+                                               const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
+                                               const Eigen::Ref<const qp_dual_t>& y) const noexcept
+    {
+        return (H * x + h + A.transpose() * y.template head<M>() + y.template tail<N>()).template lpNorm<Eigen::Infinity>();
     }
 
 };

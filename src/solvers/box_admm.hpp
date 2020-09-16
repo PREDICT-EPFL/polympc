@@ -11,6 +11,7 @@ class boxADMM : public QPBase<boxADMM<N, M, Scalar, LinearSolver, LinearSolver_U
     using Base = QPBase<boxADMM<N, M, Scalar, LinearSolver, LinearSolver_UpLo>, N, M, Scalar, LinearSolver, LinearSolver_UpLo>;
     using qp_var_t        = typename Base::qp_var_t;
     using qp_dual_t       = typename Base::qp_dual_t;
+    using qp_dual_a_t     = typename Base::qp_dual_a_t;
     using qp_constraint_t = typename Base::qp_constraint_t;
     using qp_hessian_t    = typename Base::qp_hessian_t;
     using scalar_t        = typename Base::scalar_t;
@@ -21,10 +22,10 @@ class boxADMM : public QPBase<boxADMM<N, M, Scalar, LinearSolver, LinearSolver_U
 public:
     //using status_t        = status_t;
     /** ADMM specific */
-    qp_var_t m_x_tilde, m_y_box;
-    qp_var_t m_q, m_q_prev;
-    qp_dual_t m_z, m_z_tilde, m_z_prev;
-    qp_dual_t m_rho_vec, m_rho_inv_vec;
+    qp_var_t m_x_tilde;
+    qp_var_t m_q;
+    qp_dual_a_t m_z, m_z_tilde, m_z_prev;
+    qp_dual_a_t m_rho_vec, m_rho_inv_vec;
     qp_var_t  m_rho_vec_box, m_rho_vec_box_inv, m_rho_vec_box_prev;
     scalar_t rho;
 
@@ -46,16 +47,16 @@ public:
     kkt_mat_t m_K;
     linear_solver_t linear_solver;
 
-    status_t solve_box_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
-                            const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
-                            const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
+    status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
+                        const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,
+                        const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub) noexcept
     {
-        return solve_box_impl(H, h, A, Alb, Aub, xlb, xub, qp_var_t::Zero(N,1), qp_dual_t::Zero(M,1));
+        return solve_impl(H, h, A, Alb, Aub, xlb, xub, qp_var_t::Zero(N,1), qp_dual_t::Zero(M + N, 1));
     }
 
 
-    status_t solve_box_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
-                        const Eigen::Ref<const qp_dual_t>& Alb, const Eigen::Ref<const qp_dual_t>& Aub,
+    status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
+                        const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,
                         const Eigen::Ref<const qp_var_t>& xlb, const Eigen::Ref<const qp_var_t>& xub,
                         const Eigen::Ref<const qp_var_t>& x_guess, const Eigen::Ref<const qp_dual_t>& y_guess) noexcept
     {
@@ -84,14 +85,13 @@ public:
         for (iter = 1; iter <= this->m_settings.max_iter; iter++)
         {
             m_z_prev = m_z;
-            m_q_prev = m_q;
 
             /** update x_tilde z_tilde */
             compute_kkt_rhs(h, rhs);
             x_tilde_nu = linear_solver.solve(rhs);
 
             m_x_tilde = x_tilde_nu.template head<N>();
-            m_z_tilde = m_z_prev + m_rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<M>() - this->m_y);
+            m_z_tilde = m_z_prev + m_rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<M>() - this->m_y.template head<M>());
 
             /** update x */
             this->m_x.noalias() = this->m_settings.alpha * m_x_tilde;
@@ -99,19 +99,20 @@ public:
 
             /** update z */
             m_z.noalias() = this->m_settings.alpha * m_z_tilde;
-            m_z.noalias() += (1 - this->m_settings.alpha) * m_z_prev + m_rho_inv_vec.cwiseProduct(this->m_y);
+            m_z.noalias() += (1 - this->m_settings.alpha) * m_z_prev + m_rho_inv_vec.cwiseProduct(this->m_y.template head<M>());
             m_z = m_z.cwiseMax(Alb).cwiseMin(Aub); //box projection
 
             /** update q */
-            m_q.noalias() = this->m_x + m_rho_vec_box_inv.cwiseProduct(this->m_y_box);
+            m_q.noalias() = this->m_x + m_rho_vec_box_inv.cwiseProduct(this->m_y.template tail<N>());
             m_q = m_q.cwiseMax(xlb).cwiseMin(xub); // box projection
 
             /** update y (dual) */
-            this->m_y.noalias() += m_rho_vec.cwiseProduct(this->m_settings.alpha * m_z_tilde + (1 - this->m_settings.alpha) * m_z_prev - m_z);
+            this->m_y.template head<M>().noalias() += m_rho_vec.cwiseProduct(this->m_settings.alpha * m_z_tilde +
+                                                                             (1 - this->m_settings.alpha) * m_z_prev - m_z);
 
             /** update y_box (dual) */
             //m_y_box.noalias() += m_rho_vec_box.cwiseProduct(this->m_settings.alpha * m_x_tilde + (1 - this->m_settings.alpha) * m_q_prev - m_q);
-            m_y_box.noalias() += m_rho_vec_box.cwiseProduct(this->m_x - m_q);
+            this->m_y.template tail<N>().noalias() += m_rho_vec_box.cwiseProduct(this->m_x - m_q);
 
             if (this->m_settings.check_termination != 0 && iter % this->m_settings.check_termination == 0)
                 check_termination = true;
@@ -158,7 +159,7 @@ public:
             std::cout << "dual: "   << this->m_y.transpose() << " " << m_y_box.transpose() << " | "
                       << " residuals: " << this->info().res_prim << " : " << this->info().res_dual << " | "
                       << " rho: " << m_rho_vec.transpose() << " " << m_rho_vec_box.transpose() << "\n";
-                      */
+            */
         }
 
         if (iter > this->m_settings.max_iter)
@@ -195,13 +196,13 @@ public:
 
     EIGEN_STRONG_INLINE void compute_kkt_rhs(const Eigen::Ref<const qp_var_t>& h, Eigen::Ref<kkt_vec_t> rhs) const noexcept
     {
-        rhs.template head<N>() = this->m_settings.sigma * this->m_x - h + m_rho_vec_box.cwiseProduct(m_q) - m_y_box;
-        rhs.template tail<M>() = m_z - m_rho_inv_vec.cwiseProduct(this->m_y);
+        rhs.template head<N>() = this->m_settings.sigma * this->m_x - h + m_rho_vec_box.cwiseProduct(m_q) - this->m_y.template tail<N>(); //m_y_box;
+        rhs.template tail<M>() = m_z - m_rho_inv_vec.cwiseProduct(this->m_y.template head<M>());
     }
 
     EIGEN_STRONG_INLINE void rho_vec_update(const scalar_t& rho0) noexcept
     {
-        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
+        for (int i = 0; i < qp_dual_a_t::RowsAtCompileTime; i++)
         {
             switch (this->constr_type[i])
             {
@@ -246,17 +247,17 @@ public:
         scalar_t norm_Ax, norm_z;
         norm_Ax = (A * this->m_x).template lpNorm<Eigen::Infinity>();
         norm_z = m_z.template lpNorm<Eigen::Infinity>();
-        m_max_Ax_z_norm = fmax(norm_Ax, norm_z);
+        m_max_Ax_z_norm = fmax(norm_Ax, fmax(norm_z, this->m_x.template lpNorm<Eigen::Infinity>()));
 
         scalar_t norm_Hx, norm_ATy, norm_h, norm_y_box;
         norm_Hx  = (H * this->m_x).template lpNorm<Eigen::Infinity>();
-        norm_ATy = (A.transpose() * this->m_y).template lpNorm<Eigen::Infinity>();
+        norm_ATy = (A.transpose() * this->m_y.template head<M>()).template lpNorm<Eigen::Infinity>();
         norm_h   = h.template lpNorm<Eigen::Infinity>();
-        norm_y_box = m_y_box.template lpNorm<Eigen::Infinity>();
+        norm_y_box = (this->m_y.template tail<N>()).template lpNorm<Eigen::Infinity>();
         m_max_Hx_ATy_h_norm = fmax(norm_Hx, fmax(norm_ATy, fmax(norm_h, norm_y_box)));
 
         this->m_info.res_prim = this->primal_residual(A, this->m_x, m_z) + (this->m_x - m_q).template lpNorm<Eigen::Infinity>();
-        this->m_info.res_dual = this->dual_residual_(H, h, A, this->m_x, this->m_y, m_y_box);
+        this->m_info.res_dual = this->dual_residual(H, h, A, this->m_x, this->m_y);
     }
 
     EIGEN_STRONG_INLINE scalar_t eps_prim() const noexcept
@@ -292,12 +293,14 @@ public:
     }
 
     /** dual residual estimation */
+
     EIGEN_STRONG_INLINE scalar_t dual_residual_(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h,
                                                const Eigen::Ref<const qp_constraint_t>& A, const Eigen::Ref<const qp_var_t>& x,
                                                const Eigen::Ref<const qp_dual_t>& y, const Eigen::Ref<const qp_var_t>& y_box) const noexcept
     {
-        return (H * x + h + A.transpose() * y + y_box).template lpNorm<Eigen::Infinity>();
+        return (H * x + h + A.transpose() * y.template head<M>() + y_box).template lpNorm<Eigen::Infinity>();
     }
+
 
 };
 

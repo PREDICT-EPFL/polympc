@@ -148,9 +148,9 @@ public:
 
 int main(void)
 {
-    using admm = ADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, RobotOCP::scalar_t>;
+    using admm = ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 
-    MySolver<RobotOCP> solver;
+    MySolver<RobotOCP, admm> solver;
     solver.settings().max_iter = 20;
     solver.settings().line_search_max_iter = 10;
     solver.parameters()(0) = 2.0;
@@ -172,7 +172,7 @@ int main(void)
 
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
-    /** warm started iteration */
+    // warm started iteration
     init_cond << 0.3, 0.4, 0.45;
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
@@ -195,12 +195,11 @@ int main(void)
     MySolver<RobotOCP, admm>::nlp_constraints_t b_eq;
     MySolver<RobotOCP, admm>::nlp_dual_t Alb, Aub;
     Eigen::Matrix<double, RobotOCP::DUAL_SIZE, RobotOCP::VAR_SIZE> A;
-    */
-    /** compute QP */
-    //solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
 
-    /** feel-in A matrix */
-    /**
+    // compute QP
+    solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
+
+    // feel-in A matrix
     enum {
         EQ_IDX = 0,
         INEQ_IDX = RobotOCP::NUM_EQ,
@@ -221,7 +220,7 @@ int main(void)
     /**
     admm new_admm;
     time_point start = get_time();
-    new_admm.solve(H,h,A,Alb,Aub);
+    new_admm.solve(H,h,A_eq,-b_eq,-b_eq,solver.lower_bound_x()- solver.m_x, solver.upper_bound_x()- solver.m_x);
     time_point stop = get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
     std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter
@@ -251,7 +250,7 @@ int main(void)
     /**
     boxADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE - RobotOCP::VAR_SIZE, double> box_admm;
     start = get_time();
-    box_admm.solve_box(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x);
+    box_admm.solve(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x);
     stop = get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 

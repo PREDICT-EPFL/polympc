@@ -16,7 +16,7 @@ if(BUILD_TESTS OR QP_TESTS)
   add_executable(qp_test_qplib qp_solver_tests_qplib.cpp test_main.cpp load_matrix_from_csv.hpp)
   target_link_libraries(qp_test_qplib Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
 
-  add_executable(qp_base_test qp_base_test.cpp)
-  target_link_libraries(qp_base_test Eigen3::Eigen)
+  #add_executable(qp_base_test qp_base_test.cpp)
+  #target_link_libraries(qp_base_test Eigen3::Eigen)
 
 endif()

@@ -145,12 +145,10 @@ public:
                     factorise_kkt_matrix();
                 }
             }
-
             /**
             std::cout << "admm iter: " << iter << " | " << this->m_x.transpose() << " | " << this->m_y.transpose() <<
                          " | " << this->m_info.res_prim << " | " << this->m_info.res_dual << " | " << m_rho_vec.transpose() << "\n";
-                         */
-
+            */
         }
 
 

@@ -72,7 +72,7 @@ public:
         m_qp_solver.settings().max_iter = 100;
         m_qp_solver.settings().adaptive_rho = true;
         m_qp_solver.settings().adaptive_rho_interval = 50;
-        m_qp_solver.settings().alpha = 1.6;
+        m_qp_solver.settings().alpha = 1.0; //1.6
 
         //std::cout << "QP size: " << sizeof (m_qp_solver) << "\n";
     }
@@ -408,6 +408,7 @@ bool SQPBase<Derived, Problem, QPSolver>::termination_criteria_impl(const Eigen:
 template<typename Derived, typename Problem, typename QPSolver>
 void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, Eigen::Ref<nlp_dual_t> dual_step) noexcept
 {
+    /**
     enum {
         EQ_IDX = 0,
         INEQ_IDX = NUM_EQ,
@@ -437,11 +438,11 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
 
-    m_qp_solver.settings().warm_start = true;
-
     /** @badcode: m_x -> x step; m_lam -> lam step */
-    qp_status = m_qp_solver.solve(m_H, m_h, m_A, -m_b, -m_b, m_lbx - m_x, m_ubx - m_x, m_x, m_lam);
-    std::cout << "QP status: " << m_qp_solver.info().status << " QP iter: " << m_qp_solver.info().iter << "\n";
+    qp_status = m_qp_solver.solve(m_H, m_h, m_A, -m_b, -m_b, m_lbx - m_x, m_ubx - m_x);
+    //std::cout << "QP status: " << qp_status << " QP iter: " << m_qp_solver.info().iter << "\n";
+
+    eigen_assert(qp_status == status_t::SOLVED);
 
     m_info.qp_solver_iter += m_qp_solver.info().iter;
 

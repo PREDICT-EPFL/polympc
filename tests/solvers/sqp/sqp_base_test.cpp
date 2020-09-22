@@ -148,7 +148,7 @@ public:
 
 int main(void)
 {
-    using admm = ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
+    using admm = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 
     MySolver<RobotOCP, admm> solver;
     solver.settings().max_iter = 20;
@@ -199,68 +199,31 @@ int main(void)
     // compute QP
     solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
 
-    // feel-in A matrix
-    enum {
-        EQ_IDX = 0,
-        INEQ_IDX = RobotOCP::NUM_EQ,
-        BOX_IDX  = RobotOCP::NUM_INEQ + RobotOCP::NUM_EQ
-    };
+    std::cout << "b: " << -b_eq.transpose() << "\n";
+    std::cout << "h: " << h.transpose() << "\n";
+    std::cout << h.size() << "\n";
 
-    // Equality constraints
-    Aub.template segment<RobotOCP::NUM_EQ>(EQ_IDX) = -b_eq;
-    Alb.template segment<RobotOCP::NUM_EQ>(EQ_IDX) = -b_eq;
-    A.template block<RobotOCP::NUM_EQ, RobotOCP::VAR_SIZE>(EQ_IDX, 0) = A_eq;
-
-    // Box constraints
-    Aub.template segment<RobotOCP::VAR_SIZE>(BOX_IDX) = solver.upper_bound_x() - solver.m_x;
-    Alb.template segment<RobotOCP::VAR_SIZE>(BOX_IDX) = solver.lower_bound_x() - solver.m_x;
-    A.template block<RobotOCP::VAR_SIZE, RobotOCP::VAR_SIZE>(BOX_IDX, 0).setIdentity();
-    */
-    /** create new ADMM solver */
-    /**
-    admm new_admm;
+    // create new ADMM solver
+    ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, double> new_admm;
     time_point start = get_time();
-    new_admm.solve(H,h,A_eq,-b_eq,-b_eq,solver.lower_bound_x()- solver.m_x, solver.upper_bound_x()- solver.m_x);
+    new_admm.solve(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x, solver.m_x, solver.m_lam);
     time_point stop = get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
     std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter
               << " size: " << sizeof (new_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    */
-    /** create old ADMM solver */
-    /**
-    using qp_t = qp_solver::QP<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE, double>;
-    qp_solver::QPSolver<qp_t> old_admm;
-    qp_t qp;
-    qp.P = H;
-    qp.q = h;
-    qp.A = A;
-    qp.l = Alb;
-    qp.u = Aub;
 
+    // create box ADMM solver
+    boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, double> box_admm;
     start = get_time();
-    old_admm.setup(qp);
-    old_admm.solve(qp);
-    stop = get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-    std::cout << "Old QP status: " << old_admm.info().status << " iterations: " << old_admm.info().iter
-              << " size: " << sizeof (old_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    */
-    /** create box ADMM solver */
-    /**
-    boxADMM<RobotOCP::VAR_SIZE, RobotOCP::DUAL_SIZE - RobotOCP::VAR_SIZE, double> box_admm;
-    start = get_time();
-    box_admm.solve(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x);
+    box_admm.solve(H, h, A_eq, -b_eq, -b_eq, solver.lower_bound_x() - solver.m_x, solver.upper_bound_x() - solver.m_x, solver.m_x, solver.m_lam);
     stop = get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Box QP status: " << box_admm.info().status << " iterations: " << box_admm.info().iter
               << " size: " << sizeof (box_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
-    std::cout << "Solvers error: " << (new_admm.primal_solution().transpose() -
-                                       old_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << " | "
-                                   <<  (new_admm.primal_solution().transpose() -
-                                        box_admm.primal_solution().transpose()).template lpNorm<Eigen::Infinity>() << "\n";
+    std::cout << "Solvers error: " <<  (new_admm.primal_solution() -
+                                        box_admm.primal_solution()).template lpNorm<Eigen::Infinity>() << "\n";
     */
     return EXIT_SUCCESS;
 }

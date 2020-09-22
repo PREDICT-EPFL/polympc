@@ -67,7 +67,7 @@ public:
         this->m_x = x_guess;
         this->m_y = y_guess; // change guess here
         this->m_z.noalias() = A * x_guess;
-        this->m_q = this->m_x;
+        this->m_q = x_guess;
 
         /** Set QP constraint type */
         this->parse_constraints_bounds(Alb, Aub, xlb, xub);
@@ -156,10 +156,11 @@ public:
 
             /**
             std::cout << "iter: " << iter << " primal: " << this->m_x.transpose() << "  ";
-            std::cout << "dual: "   << this->m_y.transpose() << " " << m_y_box.transpose() << " | "
+            std::cout << "dual: "   << this->m_y.transpose() << " | "
                       << " residuals: " << this->info().res_prim << " : " << this->info().res_dual << " | "
                       << " rho: " << m_rho_vec.transpose() << " " << m_rho_vec_box.transpose() << "\n";
-            */
+                      */
+
         }
 
         if (iter > this->m_settings.max_iter)

@@ -99,7 +99,7 @@ int main()
 
     casadi::SX deriv = cheb.DifferentiateFunction(poly);
     casadi::Function deriv_f = casadi::Function("deriv", {varx}, {deriv});
-    casadi::DM lin_space = casadi::DM({0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000, 0.5477, 0.6727, 0.8273, 0.9523, 1.0000});
+    casadi::DM lin_space = casadi::DM(std::vector<double>{0, 0.0477, 0.1727, 0.3273, 0.4523, 0.5000, 0.5477, 0.6727, 0.8273, 0.9523, 1.0000});
     casadi::DM points = casadi::DM::zeros(3, NUM_SEGMENTS * POLY_ORDER + 1);
     points(0, casadi::Slice()) = pow(lin_space,2);
     //std::cout << "x: \n" << points << "\n";

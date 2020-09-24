@@ -184,7 +184,7 @@ TEST(ADMMSolverTest, box_admmLox)
 }
 
 #ifdef EIGEN_NO_DEBUG
-TEST(ADMMSolverTest, admmConjugateGradientLinearSolver)
+TEST(ADMMSolverTest, box_admmConjugateGradientLinearSolver)
 {
     using Scalar = double;
 
@@ -215,5 +215,75 @@ TEST(ADMMSolverTest, admmConjugateGradientLinearSolver)
     EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
 }
 #endif
+
+TEST(ADMMSolverTest, box_admmSimpleLP)
+{
+    using Scalar = double;
+
+    Eigen::Matrix<Scalar, 1,1> H;
+    Eigen::Matrix<Scalar, 1,1> h;
+    Eigen::Matrix<Scalar, 0,1> A;
+    Eigen::Matrix<Scalar, 0,1> al;
+    Eigen::Matrix<Scalar, 0,1> au;
+    Eigen::Matrix<Scalar, 1,1> xl,xu;
+    Eigen::Matrix<Scalar, 1,1> solution;
+
+    H << 0;
+    h << 1;
+    xl << -1e6;
+    xu <<  1e6;
+    solution << -1e6;
+
+    boxADMM<1, 0, Scalar> prob;
+
+    prob.settings().max_iter = 200;
+    prob.settings().alpha = 1.0;
+    prob.settings().adaptive_rho = true;
+    prob.settings().check_termination = 10;
+
+    prob.solve(H,h,A,al,au,xl,xu);
+    Eigen::VectorXd sol = prob.primal_solution();
+
+    EXPECT_TRUE(sol.isApprox(solution, 1e-2));
+    EXPECT_LT(prob.iter, prob.settings().max_iter);
+    EXPECT_EQ(prob.info().status, SOLVED);
+}
+
+TEST(ADMMSolverTest, box_admmNonConvex)
+{
+    using Scalar = double;
+
+    Eigen::Matrix<Scalar, 1,1> H;
+    Eigen::Matrix<Scalar, 1,1> h;
+    Eigen::Matrix<Scalar, 0,1> A;
+    Eigen::Matrix<Scalar, 0,1> al;
+    Eigen::Matrix<Scalar, 0,1> au;
+    Eigen::Matrix<Scalar, 1,1> xl,xu;
+    Eigen::Matrix<Scalar, 1,1> solution, guess, dual_guess;
+
+    H << -1;
+    h << 0;
+    xl << -1;
+    xu <<  2;
+    solution << 2;
+    guess << 0.1;
+    dual_guess << 0.1;
+
+
+    boxADMM<1, 0, Scalar> prob;
+
+    prob.settings().max_iter = 200;
+    prob.settings().alpha = 1.0;
+    prob.settings().adaptive_rho = true;
+    prob.settings().rho = 2;
+    prob.settings().check_termination = 10;
+
+    prob.solve(H,h,A,al,au,xl,xu, guess, dual_guess);
+    Eigen::VectorXd sol = prob.primal_solution();
+
+    EXPECT_TRUE(sol.isApprox(solution, 1e-2));
+    EXPECT_LT(prob.iter, prob.settings().max_iter);
+    EXPECT_EQ(prob.info().status, SOLVED);
+}
 
 

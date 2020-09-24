@@ -106,7 +106,7 @@ SX mat_dynamics(const SX &arg_x, const SX &arg_u, Function &func)
     SXVector x = SX::horzsplit(arg_x, 1);
     SXVector u = SX::horzsplit(arg_u, 1);
 
-    for(uint i = 0; i < u.size(); ++i)
+    for(unsigned i = 0; i < u.size(); ++i)
     {
         SXVector eval = func(SXVector{x[i], u[i]});
         xdot.push_back(eval[0]);
@@ -116,15 +116,15 @@ SX mat_dynamics(const SX &arg_x, const SX &arg_u, Function &func)
     return SX::vertcat(xdot);
 }
 
-casadi::Function lagrange_poly(const uint &n_degree)
+casadi::Function lagrange_poly(const unsigned &n_degree)
 {
     casadi::SX t = casadi::SX::sym("t");
     casadi::SX nodes = casadi::SX::sym("nodes", n_degree + 1);
     casadi::SX phi_sym = casadi::SX::ones(n_degree + 1, 1); //polynomial coefficients
 
-    for(uint k = 0; k <= n_degree; ++k)
+    for(unsigned k = 0; k <= n_degree; ++k)
     {
-        for(uint j = 0; j <= n_degree; ++j)
+        for(unsigned j = 0; j <= n_degree; ++j)
         {
             if(j != k)
                 phi_sym(k) *= (t - nodes(j)) / (nodes(k) - nodes(j));
@@ -181,11 +181,11 @@ Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::Vect
     Eigen::VectorXd polynomial(X.rows());
 
     Eigen::MatrixXd P(X.rows(), polynomial.rows());
-    for(uint i = 0; i < P.rows(); ++i)
+    for(unsigned i = 0; i < P.rows(); ++i)
     {
         Eigen::VectorXd roots(X.rows() - 1);
-        uint count = 0;
-        for(uint j = 0; j < X.rows(); ++j)
+        unsigned count = 0;
+        for(unsigned j = 0; j < X.rows(); ++j)
         {    if(i != j)
             {
                 roots(count) = X(j);
@@ -205,11 +205,11 @@ Eigen::MatrixXd lagrange_poly_basis(const Eigen::VectorXd &nodes)
     Eigen::VectorXd polynomial(nodes.rows());
     Eigen::MatrixXd P(nodes.rows(), nodes.rows());
 
-    for(uint i = 0; i < P.rows(); ++i)
+    for(unsigned i = 0; i < P.rows(); ++i)
     {
         Eigen::VectorXd roots(nodes.rows() - 1);
-        uint count = 0;
-        for(uint j = 0; j < nodes.rows(); ++j)
+        unsigned count = 0;
+        for(unsigned j = 0; j < nodes.rows(); ++j)
         {    if(i != j)
             {
                 roots(count) = nodes(j);
@@ -313,9 +313,9 @@ bool LinearSystem::is_controllable()
         return false;
 }
 
-uint factorial(const uint &n)
+unsigned factorial(const unsigned &n)
 {
-    uint fact = 1;
+    unsigned fact = 1;
     for (int i = 1; i <= n; ++i)
         fact *= i;
 

@@ -153,14 +153,13 @@ public:
                     factorise_kkt_matrix();
                 }
             }
-
             /**
             std::cout << "iter: " << iter << " primal: " << this->m_x.transpose() << "  ";
             std::cout << "dual: "   << this->m_y.transpose() << " | "
                       << " residuals: " << this->info().res_prim << " : " << this->info().res_dual << " | "
                       << " rho: " << m_rho_vec.transpose() << " " << m_rho_vec_box.transpose() << "\n";
-                      */
 
+                */
         }
 
         if (iter > this->m_settings.max_iter)

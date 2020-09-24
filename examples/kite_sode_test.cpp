@@ -73,7 +73,7 @@ int main(void)
     }
 
     casadi::Function sode_fun = casadi::Function("sode_fun",{x, u},{sode});
-    casadi::DM x0  = casadi::DM({M_PI_4,0,0,0,0,0,  M_PI_4,0,0,0,0,0,  0,0,0,0,0,0,});
+    casadi::DM x0  = casadi::DM(std::vector<double>{M_PI_4,0,0,0,0,0,  M_PI_4,0,0,0,0,0,  0,0,0,0,0,0,});
     casadi::DM ctl = 0.05;
 
     double tf = 1.0;

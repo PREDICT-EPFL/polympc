@@ -51,7 +51,7 @@ namespace polymath
     casadi::DM flip(const casadi::DM &matrix, const unsigned &axis);
 
     /** factorial computation 'n!' */
-    uint factorial(const uint &n);
+    unsigned factorial(const unsigned &n);
 
     /** Chebyshev exapnsion of a function u(x) = Sum_0^K uk * Tk(x) */
     template<typename Scalar>
@@ -114,7 +114,7 @@ namespace polymath
      * Lagrange polynomials
      * returns: Function({point, nodes})
      * */
-    casadi::Function lagrange_poly(const uint &n_degree);
+    casadi::Function lagrange_poly(const unsigned &n_degree);
 
     /** @brief: compute lagrangian interpolator
      * returns: Function({point}) : y_point = polyval(P, point)
@@ -165,11 +165,11 @@ namespace polymath
         Eigen::VectorXd polynomial(nodes.rows());
         basis = Eigen::MatrixBase<Derived>::Zero(nodes.rows(), nodes.rows());
 
-        for(uint i = 0; i < basis.rows(); ++i)
+        for(unsigned i = 0; i < basis.rows(); ++i)
         {
             Eigen::VectorXd roots(nodes.rows() - 1);
-            uint count = 0;
-            for(uint j = 0; j < nodes.rows(); ++j)
+            unsigned count = 0;
+            for(unsigned j = 0; j < nodes.rows(); ++j)
             {    if(i != j)
                 {
                     roots(count) = nodes(j);

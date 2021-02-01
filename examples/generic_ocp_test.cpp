@@ -19,7 +19,7 @@ public:
     /** constructor inheritance */
     using GenericOCP::GenericOCP;
     //MyOCP() = default;
-    ~MyOCP() {}
+    ~MyOCP()  = default;
 
     casadi::Dict solver_options;
 

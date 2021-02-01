@@ -1,29 +1,13 @@
 #ifndef EBYSHEV_HPP
 #define EBYSHEV_HPP
 
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
+#include "polynomial_math.hpp"
 
-enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+namespace polympc {
 
-template<typename Derived, int size>
-Eigen::VectorBlock<Derived, size>
-segment(Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<Derived, size>(v.derived(), start);
-}
-template<typename Derived, int size>
-const Eigen::VectorBlock<const Derived, size>
-segment(const Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<const Derived, size>(v.derived(), start);
-}
+using namespace polymath;
 
-
-/** --------------------------------------------------------------- */
-/** --------------------------------------------------------------- */
-
-template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
+template<int PolyOrder, collocation_scheme Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Chebyshev
 {
 public:
@@ -39,41 +23,42 @@ public:
     Chebyshev();
     ~Chebyshev(){}
 
-    using Scalar = _Scalar;
+    using scalar_t = _Scalar;
 
-    using q_weights_t   = Eigen::Matrix<Scalar, NUM_NODES, 1>;
-    using nodes_t       = Eigen::Matrix<Scalar, NUM_NODES, 1>;
-    using diff_mat_t    = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
+    using q_weights_t   = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using nodes_t       = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using diff_mat_t    = Eigen::Matrix<scalar_t, NUM_NODES, NUM_NODES>;
 
     /** some getters */
-    diff_mat_t D(){return _D;}
-    q_weights_t QWeights(){return _QuadWeights;}
-    q_weights_t CCQWeights(){return _CCQuadWeights;}
-    nodes_t CPoints(){return _Nodes;}
-    q_weights_t NFactors(){return _NormFactors;}
+    diff_mat_t D() const {return _D;}
+    q_weights_t QWeights() const {return _QuadWeights;}
+    q_weights_t CCQWeights() const {return _CCQuadWeights;}
+    nodes_t CPoints() const {return _Nodes;}
+    q_weights_t NFactors() const {return _NormFactors;}
 
     /** numerical integration of an arbitrary function */
     template<class Integrand>
-    Scalar integrate(const Scalar &t0= -1, const Scalar &tf = 1);
+    scalar_t integrate(const scalar_t &t0= -1, const scalar_t &tf = 1);
 
     /** Evaluate Chebyshev polynomial of order n*/
-    Scalar eval(const Scalar &arg, const int &n){return Tn(arg, n);}
+    scalar_t eval(const scalar_t &arg, const int &n){return Tn(arg, n);}
+    static scalar_t eval(const scalar_t &arg){return std::cos(PolyOrder * std::acos(arg));}
 
     /** Evaluate density function associated with Chebyshev basis */
-    static Scalar weight(const Scalar &arg){return 1.0 / std::sqrt(1 - std::pow(arg, 2));}
+    static scalar_t weight(const scalar_t &arg){return 1.0 / std::sqrt(1 - std::pow(arg, 2));}
+
+    /** generate differentiation matrix */
+    static diff_mat_t  compute_diff_matrix() noexcept;
+    /** compute nodal points */
+    static nodes_t     compute_nodes() noexcept;
+    /** compute Clenshaw-Curtis quadrature weights */
+    static q_weights_t compute_int_weights() noexcept;
+    /** compute Chebyshev quadrature weights */
+    static q_weights_t compute_quad_weights() noexcept;
+    /** compute normalization factors */
+    static q_weights_t compute_norm_factors() noexcept;
 
 private:
-
-    /** generate Differentiation matrix */
-    diff_mat_t DiffMatrix();
-    /** compute nodal points */
-    nodes_t CollocPoints();
-    /** compute Clenshaw-Curtis quadrature weights */
-    q_weights_t CCQuadWeights();
-    /** compute Chebyshev quadrature points */
-    q_weights_t QuadWeights();
-    /** compute normalization factors */
-    q_weights_t NormFactors();
 
     /** private members */
     /** Diff matrix */
@@ -88,40 +73,37 @@ private:
     q_weights_t _NormFactors;
 
     /** Evaluate Chebyshev polynomial of order n*/
-    inline Scalar Tn(const Scalar &arg, const int &n){return std::cos(n * std::acos(arg));}
+    inline scalar_t Tn(const scalar_t &arg, const int &n){return std::cos(n * std::acos(arg));}
 };
 
 /** @brief constructor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 Chebyshev<PolyOrder, Qtype, Scalar>::Chebyshev()
 {
     EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
     /** initialize pseudopsectral scheme */
-    _Nodes = CollocPoints();
-    //std::cout << "Nodal points: " << _Nodes.transpose() << "\n";
-    _QuadWeights = QuadWeights();
-    //std::cout << "Quadrature weights: " << _QuadWeights.transpose() << "\n";
-    _CCQuadWeights = CCQuadWeights();
+    _Nodes         = compute_nodes();
+    _QuadWeights   = compute_quad_weights();
+    _CCQuadWeights = compute_int_weights();
 
-    _NormFactors = NormFactors();
-    _D           = DiffMatrix();
-    //_ComD        = CompDiffMatrix();
+    _NormFactors = compute_norm_factors();
+    _D           = compute_diff_matrix();
 }
 
 /** @brief : compute nodal points for the Chebyshev collocation scheme */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::nodes_t
-Chebyshev<PolyOrder, Qtype, Scalar>::CollocPoints()
+Chebyshev<PolyOrder, Qtype, Scalar>::compute_nodes() noexcept
 {
-    /** Chebyshev collocation points for the interval [-1, 1]*/
     nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
     return (grid * (M_PI / PolyOrder)).array().cos();
 }
 
+
 /** @brief : compute Clenshaw-Curtis quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
-Chebyshev<PolyOrder, Qtype, Scalar>::CCQuadWeights()
+Chebyshev<PolyOrder, Qtype, Scalar>::compute_int_weights() noexcept
 {
     /** Chebyshev collocation points for the interval [-1, 1]*/
     nodes_t theta = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
@@ -160,9 +142,9 @@ Chebyshev<PolyOrder, Qtype, Scalar>::CCQuadWeights()
 }
 
 /** @brief : compute Chebyshev quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
-Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
+Chebyshev<PolyOrder, Qtype, Scalar>::compute_quad_weights() noexcept
 {
     q_weights_t w = q_weights_t::Constant(static_cast<Scalar>(M_PI / PolyOrder));
     w[0] *= 0.5; w[PolyOrder] *= 0.5;
@@ -170,9 +152,9 @@ Chebyshev<PolyOrder, Qtype, Scalar>::QuadWeights()
 }
 
 /** @brief : compute Chebyshev normalisation factors: c = 1/ck */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::q_weights_t
-Chebyshev<PolyOrder, Qtype, Scalar>::NormFactors()
+Chebyshev<PolyOrder, Qtype, Scalar>::compute_norm_factors() noexcept
 {
     q_weights_t w = q_weights_t::Constant(static_cast<Scalar>(Scalar(2) / M_PI));
     w[0] *= Scalar(0.5);
@@ -180,7 +162,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::NormFactors()
 }
 
 /** @brief : Compute integrals using CC-quadrature rule */
-template<int PolyOrder, q_type Qtype,typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype,typename Scalar>
 template<class Integrand>
 Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
@@ -196,16 +178,16 @@ Scalar Chebyshev<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sc
 }
 
 
-/** @brief : compute Chebyshev differentiation matrix (Trefethen)*/
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Chebyshev<PolyOrder, Qtype, Scalar>::diff_mat_t
-Chebyshev<PolyOrder, Qtype, Scalar>::DiffMatrix()
+Chebyshev<PolyOrder, Qtype, Scalar>::compute_diff_matrix() noexcept
 {
     nodes_t grid = nodes_t::LinSpaced(NUM_NODES, 0, POLY_ORDER);
     nodes_t c    = nodes_t::Ones(); c[0] = Scalar(2); c[POLY_ORDER] = Scalar(2);
     c = (Eigen::pow(Scalar(-1), grid.array()).matrix()).asDiagonal() * c;
 
-    diff_mat_t XM = _Nodes.template replicate<1, NUM_NODES>();
+    nodes_t nodes = compute_nodes();
+    diff_mat_t XM = nodes.template replicate<1, NUM_NODES>();
     diff_mat_t dX = XM - XM.transpose();
 
     diff_mat_t Dn = (c * (c.cwiseInverse()).transpose()).array() * (dX + diff_mat_t::Identity()).cwiseInverse().array();
@@ -214,5 +196,7 @@ Chebyshev<PolyOrder, Qtype, Scalar>::DiffMatrix()
     return Dn - diag_D;
 }
 
+
+} // polympc namespace
 
 #endif // EBYSHEV_HPP

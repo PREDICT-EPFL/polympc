@@ -1,13 +1,22 @@
 cmake_minimum_required(VERSION 3.5)
-project(polympc)
+project(polympc VERSION 0.0.2)
 
 ## is used, also find other catkin packages
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
 
 
-find_package(CASADI REQUIRED)
+find_package(CASADI)
+find_package(QPMAD)
+find_package(OsqpEigen)
 find_package(Eigen3 REQUIRED NO_MODULE)
+
+if(${CASADI_FOUND})
+    message("Found CasADi [x]")
+else()
+    message(WARNING "CasADi is not found, the corresponding interface and examples will not be built")
+    set(CASADI_INCLUDE_DIR "")
+endif()
 
 option(BUILD_TESTS "Build all tests in PolyMPC project" OFF)
 option(CONTROL_TESTS "Build collocation tests" OFF)
@@ -15,25 +24,31 @@ option(QP_TESTS "Build QP solver tests" OFF)
 option(SQP_TESTS "Build SQP solver tests" OFF)
 option(POLY_TESTS "Build Polynomials tests" OFF)
 option(AUTODIFF_TESTS "Build AutoDiff tests" OFF)
-option(BUILD_RELEASE "Build release version w/o debugging symbols" OFF)
+option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 option(BUILD_EXAMPLES "Build examples for CasADi and Eigen interfaces" OFF)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror")
 set(CMAKE_VERBOSE_MAKEFILE “ON”)
+
 if(BUILD_RELEASE)
   set(CMAKE_BUILD_TYPE "Release")
 else()
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-#detect 32bit system
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(STATUS "Target architecture 64 bits")
-else()
-    message(STATUS "Target architecture 32 bits")
+if(QPMAD_FOUND)
+    add_compile_definitions(POLYMPC_FOUND_QPMAD=1)
 endif()
+
+if(OsqpEigen_FOUND)
+    add_compile_definitions(POLYMPC_FOUND_OSQP_EIGEN=1)
+endif()
+
+
+#add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB
 
 
 #if(ARM_ENABLE_VECTORIZATION AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" )

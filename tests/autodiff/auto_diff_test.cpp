@@ -145,8 +145,8 @@ int main(void)
 
     Jacx.generate("Jacx");
 
-    casadi::DM x_init = casadi::DM({1.0, 1.0, M_PI_4});
-    casadi::DM dx_dm = casadi::DM({ 0.1, 0.1, 0.05});
+    casadi::DM x_init = casadi::DM(std::vector<double>{1.0, 1.0, M_PI_4});
+    casadi::DM dx_dm = casadi::DM(std::vector<double>{ 0.1, 0.1, 0.05});
     casadi::DM result;
     start = get_time();
     for(int i = 0; i <= 100; ++i)
@@ -246,7 +246,6 @@ int main(void)
         hessian.middleRows(i,1) = Ares.derivatives()(i).derivatives().transpose();
     }
     std::cout << "Hessian: " << "\n" <<  hessian << "\n";
-
 
     return 0;
 }

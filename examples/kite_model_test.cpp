@@ -42,8 +42,8 @@ int main(void)
     double tf = 5.0;
     casadi::DMDict props;
     props["scale"] = 0;
-    props["P"] = casadi::DM::diag(casadi::DM({0.1, 1/3.0, 1/3.0, 1/2.0, 1/5.0, 1/2.0, 1/3.0, 1/3.0, 1/3.0, 1.0, 1.0, 1.0, 1.0}));
-    props["R"] = casadi::DM::diag(casadi::DM({1/0.15, 1/0.2618, 1/0.2618}));
+    props["P"] = casadi::DM::diag(casadi::DM(std::vector<double>{0.1, 1/3.0, 1/3.0, 1/2.0, 1/5.0, 1/2.0, 1/3.0, 1/3.0, 1/3.0, 1.0, 1.0, 1.0, 1.0}));
+    props["R"] = casadi::DM::diag(casadi::DM(std::vector<double>{1/0.15, 1/0.2618, 1/0.2618}));
 
     casadi::Dict solver_options;
     solver_options["ipopt.linear_solver"] = "mumps";

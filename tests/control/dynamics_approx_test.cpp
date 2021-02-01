@@ -1,9 +1,12 @@
 #include "polynomials/ebyshev.hpp"
 #include "control/ode_collocation.hpp"
+#include "control/continuous_ocp.hpp"
+#include "polynomials/splines.hpp"
 #include <iomanip>
 #include <iostream>
 #include <chrono>
 #include "control/simple_robot_model.hpp"
+
 
 typedef std::chrono::time_point<std::chrono::system_clock> time_point;
 time_point get_time()
@@ -16,13 +19,18 @@ time_point get_time()
 #endif
 }
 
+#define test_POLY_ORDER 5
+#define test_NUM_SEG    2
+#define test_NUM_EXP    1
+
 
 
 int main(void)
 {
-    using chebyshev = Chebyshev<3>;
-    using collocation = polympc::ode_collocation<MobileRobot<double>, chebyshev, 2>;
+    using namespace polympc;
 
+    using chebyshev = Chebyshev<test_POLY_ORDER>;
+    using collocation = polympc::ode_collocation<MobileRobot<double>, chebyshev, test_NUM_SEG>;
 
     collocation ps_ode;
     collocation::var_t x = collocation::var_t::Ones();
@@ -32,24 +40,39 @@ int main(void)
     collocation::jacobian_t A;
     collocation::constr_t b;
 
-    //ps_ode(x, y);
-
     std::chrono::time_point<std::chrono::system_clock> start = get_time();
-    ps_ode.linearized(x, A, b);
-    Eigen::SparseMatrix<double> As = A.sparseView();
+    for(int i = 0; i < test_NUM_EXP; ++i)
+        ps_ode.linearized(x, A, b);
+        //ps_ode(x, b);
+
+    //ps_ode.linearized(x, A, b);
     std::chrono::time_point<std::chrono::system_clock> stop = get_time();
-
-    std::cout << "Constraint: " << b.transpose() << "\n";
-
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Eigen time: " << std::setprecision(9)
-              << static_cast<double>(duration.count()) * 1e-3 << " [milliseconds]" << "\n";
+    std::cout << "ODE Collocation time: " << std::setprecision(9)
+              << static_cast<double>(duration.count()) / test_NUM_EXP << " [microseconds]" << "\n";
+
+    std::cout << "Constraint old: " << b.transpose() << "\n";
+    std::cout << "size of old:" << sizeof (ps_ode) << "\n";
+
+    /**
+    start = get_time();
+    ps_ode.linearized(x, A, b);
+    stop = get_time();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    */
+
+    std::cout << "Jacobian time: " << std::setprecision(9)
+              << static_cast<double>(duration.count())  << " [microseconds]" << "\n";
+
+    Eigen::SparseMatrix<double> As = A.sparseView();
 
     /** compute linearized PS constraints */
     std::cout << "Size: " << As.size() << "\n";
     std::cout << "NNZ: " << As.nonZeros() << "\n";
-    std::cout << "Jacobian: \n" << A.template leftCols<10>() << "\n";
+    Eigen::IOFormat fmt(3);
+    //std::cout << A.template leftCols<29>().format(fmt) << "\n";
+    std::cout << A(0,0) << "\n";
     Eigen::ColPivHouseholderQR< collocation::jacobian_t > lu(A);
     std::cout << "Jacobian: \n" << lu.rank() << "\n";
 

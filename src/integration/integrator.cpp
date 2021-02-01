@@ -34,8 +34,6 @@ ODESolver::ODESolver(const Function &rhs, const Dict &params)
     if(rhs.n_in() > 2)
         np = static_cast<int>(rhs.numel_in(2));
 
-    std::pair<double, double> time_interval;
-
     SX x = SX::sym("x", nx);
     SX u = SX::sym("u", nu);
     SX p = SX::sym("p", np);

@@ -20,6 +20,8 @@ time_point get_time()
 
 int main(void)
 {
+    using namespace polympc;
+
     using Scalar = double;
     using chebyshev = Chebyshev<3,GAUSS_LOBATTO,Scalar>;
     using collocation = polympc::sparse_ode_collocation<MobileRobot<Scalar>, chebyshev, 2>;

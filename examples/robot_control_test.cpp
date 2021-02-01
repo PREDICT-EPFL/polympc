@@ -9,10 +9,10 @@ int main(void)
 
     DMDict options;
     options["mpc.scaling"] = 0;
-    options["mpc.scale_x"] = DM::diag(DM({1,1,1}));
+    options["mpc.scale_x"] = DM::diag(DM(std::vector<double>{1,1,1}));
     options["mpc.scale_u"] = DM::diag(DM(std::vector<double>{1,1}));
 
-    DM Q  = casadi::SX::diag(casadi::SX({10,150,50}));
+    DM Q  = casadi::SX::diag(casadi::SX(std::vector<double>{10,150,50}));
     DM R  = casadi::SX::diag(casadi::SX(std::vector<double>{1,1}));
     DM P  = 1e1 * Q;
 
@@ -20,7 +20,7 @@ int main(void)
     options["mpc.R"] = R;
     options["mpc.P"] = P;
 
-    DM target  = DM({0, 0, 0});
+    DM target  = DM(std::vector<double>{0, 0, 0});
     double tf = 2.0;
     nmpc_controller robot_controller(target, tf, options);
 
@@ -36,7 +36,7 @@ int main(void)
     robot_controller.setLBX(lbx);
     robot_controller.setUBX(ubx);
 
-    DM state = DM({ -1, -1, 0});
+    DM state = DM(std::vector<double>{ -1, -1, 0});
     robot_controller.computeControl(state);
 
     return 0;

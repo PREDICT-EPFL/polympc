@@ -9,7 +9,7 @@ template<typename Basis>
 class Projection
 {
 public:
-    using Scalar = typename Basis::Scalar;
+    using Scalar  = typename Basis::scalar_t;
     using coeff_t = typename Basis::q_weights_t;
     using nodes_t = typename Basis::nodes_t;
 

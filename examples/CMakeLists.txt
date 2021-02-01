@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 
-include_directories(include ${CASADI_INCLUDE_DIR} ${Eigen3_INCLUDE_DIR})
+if(${CASADI_FOUND})
+	include_directories(include ${CASADI_INCLUDE_DIR} ${Eigen3_INCLUDE_DIR})
+else()
+	include_directories(include ${Eigen3_INCLUDE_DIR})
+endif()
 
-if(BUILD_EXAMPLES)
+if(BUILD_EXAMPLES AND (DEFINED ${CASADI_FOUND}))
 
     add_library(kite kite.cpp kite.h)
     target_link_libraries(kite polymath ${CASADI_LIBRARIES} Eigen3::Eigen)
@@ -33,5 +37,11 @@ if(BUILD_EXAMPLES)
 
     add_executable(generic_ocp_test generic_ocp_test.cpp)
     target_link_libraries(generic_ocp_test polymath Eigen3::Eigen)
+
+    add_executable(cstr_control_test cstr_control_test.cpp)
+    target_link_libraries(cstr_control_test polymath Eigen3::Eigen)
+
+    add_executable(lqr_test lqr_test.cpp)
+    target_link_libraries(lqr_test polymath Eigen3::Eigen)
 
 endif()

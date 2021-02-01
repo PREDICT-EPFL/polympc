@@ -51,7 +51,7 @@ namespace polymath
     casadi::DM flip(const casadi::DM &matrix, const unsigned &axis);
 
     /** factorial computation 'n!' */
-    uint factorial(const uint &n);
+    unsigned factorial(const unsigned &n);
 
     /** Chebyshev exapnsion of a function u(x) = Sum_0^K uk * Tk(x) */
     template<typename Scalar>
@@ -114,7 +114,7 @@ namespace polymath
      * Lagrange polynomials
      * returns: Function({point, nodes})
      * */
-    casadi::Function lagrange_poly(const uint &n_degree);
+    casadi::Function lagrange_poly(const unsigned &n_degree);
 
     /** @brief: compute lagrangian interpolator
      * returns: Function({point}) : y_point = polyval(P, point)
@@ -165,11 +165,11 @@ namespace polymath
         Eigen::VectorXd polynomial(nodes.rows());
         basis = Eigen::MatrixBase<Derived>::Zero(nodes.rows(), nodes.rows());
 
-        for(uint i = 0; i < basis.rows(); ++i)
+        for(unsigned i = 0; i < basis.rows(); ++i)
         {
             Eigen::VectorXd roots(nodes.rows() - 1);
-            uint count = 0;
-            for(uint j = 0; j < nodes.rows(); ++j)
+            unsigned count = 0;
+            for(unsigned j = 0; j < nodes.rows(); ++j)
             {    if(i != j)
                 {
                     roots(count) = nodes(j);
@@ -191,7 +191,7 @@ namespace polymath
         enum
         {
             is_casadi = std::is_same<T, casadi::DM>::value,
-            is_eigen  = std::is_same<T, Eigen::MatrixXd>::value or std::is_same<T, Eigen::VectorXd>::value
+            is_eigen  = std::is_same<T, Eigen::MatrixXd>::value || std::is_same<T, Eigen::VectorXd>::value
         };
 
         GenericLagrangeInterpolator(const T &nodes, const T &values)
@@ -282,7 +282,7 @@ namespace polymath
         LinearSystem(){}
         LinearSystem(const Eigen::MatrixXd &_F, const Eigen::MatrixXd &_G, const Eigen::MatrixXd &_H) :
             F(_F), G(_G), H(_H) {}
-        virtual ~LinearSystem(){}
+        ~LinearSystem(){}
 
         bool is_controllable();
         bool is_observable();
@@ -294,31 +294,32 @@ namespace polymath
     namespace oc
     {
         /** Solve Lyapunov equation: AX + XA' = Q */
-        Eigen::MatrixXd lyapunov(const Eigen::MatrixXd &A, const Eigen::MatrixXd &Q);
+        Eigen::MatrixXd lyapunov(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> Q) noexcept;
 
         /** solve Continuous Riccati Equation using Newton iteration with line search */
         /** C + XA + A'X - XBX = 0 */
-        Eigen::MatrixXd newton_ls_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B,
-                                       const Eigen::MatrixXd &C, const Eigen::MatrixXd &X0);
+        Eigen::MatrixXd newton_ls_care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B,
+                                       const Eigen::Ref<const Eigen::MatrixXd> C, const Eigen::Ref<const Eigen::MatrixXd> X0) noexcept;
 
         /** Compute a stabilizing intial approximation for X */
-        Eigen::MatrixXd init_newton_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B);
+        Eigen::MatrixXd init_newton_care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B) noexcept;
 
         /** Moore-Penrose pseudo-inverse */
-        Eigen::MatrixXd pinv(const Eigen::MatrixXd &mat);
+        Eigen::MatrixXd pinv(const Eigen::Ref<const Eigen::MatrixXd> mat) noexcept;
 
         /** solve CARE : C + XA + A'X - XBX*/
-        Eigen::MatrixXd care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B, const Eigen::MatrixXd &C);
+        Eigen::MatrixXd care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B,
+                             const Eigen::Ref<const Eigen::MatrixXd> C) noexcept;
 
         /** Line search for CARE Newton iteration */
-        double line_search_care(const double &a, const double &b, const double &c);
+        double line_search_care(const double &a, const double &b, const double &c) noexcept;
 
         /** Linear Quadratic Regulator:
          * J(x) = INT { xQx + xMu + uRu }dt
          * xdot = Fx + Gu
          */
-        Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::MatrixXd Q,
-                            const Eigen::MatrixXd R, const Eigen::MatrixXd M, const bool &check = false);
+        Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::Ref<const Eigen::MatrixXd> Q,
+                            const Eigen::Ref<const Eigen::MatrixXd> R, const Eigen::Ref<const Eigen::MatrixXd> M, const bool &check = false) noexcept;
     }
 
 }

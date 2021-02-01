@@ -1,93 +1,19 @@
 #ifndef LEGENDRE_HPP
 #define LEGENDRE_HPP
 
-#include "iostream"
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#include "unsupported/Eigen/Polynomials"
-#include "unsupported/Eigen/CXX11/Tensor"
-#include "unsupported/Eigen/CXX11/TensorSymmetry"
+#include "polynomial_math.hpp"
 
-enum q_type: unsigned char{GAUSS, GAUSS_RADAU, GAUSS_LOBATTO};
+namespace polympc {
 
-/** utility functions */
-template<typename Derived, int size>
-Eigen::VectorBlock<Derived, size>
-segment(Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<Derived, size>(v.derived(), start);
-}
-template<typename Derived, int size>
-const Eigen::VectorBlock<const Derived, size>
-segment(const Eigen::MatrixBase<Derived>& v, int start)
-{
-  return Eigen::VectorBlock<const Derived, size>(v.derived(), start);
-}
+using namespace polymath;
 
-/** very partivular product of two polynomials that the maximum order */
-/** works with static matrices only */
-template<typename Derived, typename DerivedB>
-typename Derived::PlainObject poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
-{
-    typename Derived::PlainObject product;
-    const int p1_size = Derived::RowsAtCompileTime;
-    const int p2_size = Derived::RowsAtCompileTime;
-    static_assert(p1_size == p2_size, "poly_mul: polynomials should be of the same order!");
-
-    using Scalar = typename Derived::Scalar;
-    Scalar eps = std::numeric_limits<Scalar>::epsilon();
-
-    /** detect nonzeros */
-    int nnz_p1, nnz_p2;
-    for(int i = 0; i < p1_size; ++i)
-    {
-        if(std::fabs(p1[i]) >= eps)
-            nnz_p1 = i;
-        if(std::fabs(p2[i]) >= eps)
-            nnz_p2 = i;
-    }
-
-    for(int i = 0; i <= nnz_p2; ++i)
-    {
-        for(int j = 0; j <= nnz_p1; ++j)
-        {
-            /** truncate higher orders if neccessary */
-            if( (i+j) == p1_size )
-                break;
-            product[i+j] = p1[j] * p2[i];
-        }
-    }
-
-    return product;
-}
-
-
-/** differentiate polynomial */
-/** works for static matrices only */
-template<typename Derived>
-typename Derived::PlainObject poly_diff(const Eigen::MatrixBase<Derived> &p)
-{
-    typename Derived::Scalar max_order = Derived::RowsAtCompileTime;
-    using DerivedObj = typename Derived::PlainObject;
-    const DerivedObj ord = DerivedObj::LinSpaced(max_order, 0, max_order - 1);
-    DerivedObj derivative = DerivedObj::Zero();
-
-    for(int i = 0; i < max_order - 1; ++i)
-        derivative[i] = ord[i+1] * p[i+1];
-
-    return derivative;
-}
-
-
-/** ---------------------------------------------------------------------*/
-
-
-template<int PolyOrder, q_type Qtype = GAUSS_LOBATTO, typename _Scalar = double>
+template<int PolyOrder, collocation_scheme Qtype = GAUSS_LOBATTO, typename _Scalar = double>
 class Legendre
 {
 public:
 
-    enum{
+    enum
+    {
         POLY_ORDER = PolyOrder,
         NUM_NODES  = PolyOrder + 1
     };
@@ -97,29 +23,43 @@ public:
     Legendre();
     ~Legendre(){}
 
-    using Scalar = _Scalar;
-
-    using q_weights_t = Eigen::Matrix<Scalar, NUM_NODES, 1>;
-    using nodes_t     = Eigen::Matrix<Scalar, NUM_NODES, 1>;
-    using diff_mat_t  = Eigen::Matrix<Scalar, NUM_NODES, NUM_NODES>;
-    using tensor_t    = Eigen::TensorFixedSize<Scalar, Eigen::Sizes<NUM_NODES, NUM_NODES, NUM_NODES>>;
+    using scalar_t = _Scalar;
+    using q_weights_t = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using nodes_t     = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using diff_mat_t  = Eigen::Matrix<scalar_t, NUM_NODES, NUM_NODES>;
+    using tensor_t    = Eigen::TensorFixedSize<scalar_t, Eigen::Sizes<NUM_NODES, NUM_NODES, NUM_NODES>>;
+    /** Legendre basis */
+    using basis_t = Eigen::Matrix<scalar_t, POLY_ORDER + 1, POLY_ORDER + 1>;
 
     /** some getters */
-    diff_mat_t D(){return _D;}
-    q_weights_t QWeights(){return _QuadWeights;}
-    nodes_t CPoints(){return _Nodes;}
-    q_weights_t NFactors(){return _NormFactors;}
-    tensor_t getGalerkinTensor(){return _Galerkin;}
+    diff_mat_t  D() const noexcept {return _D;}
+    q_weights_t QWeights() const noexcept {return _QuadWeights;}
+    nodes_t     CPoints()  const noexcept {return _Nodes;}
+    q_weights_t NFactors() const noexcept {return _NormFactors;}
+    tensor_t    getGalerkinTensor() const noexcept {return _Galerkin;}
 
     /** Evaluate Legendre polynomial of order n @bug put protectin against n > PolyOrder*/
-    Scalar eval(const Scalar &arg, const int &n){return Ln(arg, n);}
+    scalar_t eval(const scalar_t &arg, const int &n)  noexcept {return Ln(arg, n);}
 
     /** numerical integration of an arbitrary function using LGL quadratures*/
     template<class Integrand>
-    Scalar integrate(const Scalar &t0= -1, const Scalar &tf = 1);
+    scalar_t integrate(const scalar_t &t0= -1, const scalar_t &tf = 1);
 
     /** Evaluate density function associated with Chebyshev basis */
-    static Scalar weight(const Scalar &arg){return static_cast<Scalar>(1);}
+    static constexpr scalar_t weight(const scalar_t &arg) noexcept{return static_cast<scalar_t>(1);}
+
+    /** compute basis */
+    static basis_t compute_basis() noexcept;
+    /** generate differentiation matrix */
+    static diff_mat_t compute_diff_matrix() noexcept;
+    /** compute nodal points */
+    static nodes_t    compute_nodes() noexcept;
+    /** compute quadrature weights */
+    static q_weights_t compute_int_weights() noexcept;
+    /** compute quadrature weights */
+    static q_weights_t compute_quad_weights() noexcept;
+    /** compute normalization factors */
+    static q_weights_t compute_norm_factors() noexcept;
 
 private:
 
@@ -142,71 +82,56 @@ private:
     /** Normalization factors */
     q_weights_t _NormFactors = q_weights_t::Zero();
 
-    /** Legendre basis */
-    using LnBASIS = Eigen::Matrix<Scalar, PolyOrder + 1, PolyOrder + 1>;
-    LnBASIS _Ln = LnBASIS::Zero();
+    basis_t _Ln = basis_t::Zero();
     void generate_legendre_basis();
 
     /** Tensor to hold Galerkin product */
     tensor_t _Galerkin;
     //Eigen::DynamicSGroup symmetry; // NOT EFFICIENT
-    void compute_galerkin_tensor();
+    void compute_galerkin_tensor() noexcept;
 
-    Scalar poly_eval(const int &order, const Scalar &arg) {return Eigen::poly_eval(_Ln.col(order), arg); }
+    scalar_t poly_eval(const int &order, const scalar_t &arg) noexcept {return Eigen::poly_eval(_Ln.col(order), arg); }
 
     /** Evaluate Lengendre polynomial of order n*/
-    Scalar Ln(const Scalar &arg, const int &n){return Eigen::poly_eval(_Ln.col(n), arg);}
+    scalar_t Ln(const scalar_t &arg, const int &n){return Eigen::poly_eval(_Ln.col(n), arg);}
 };
 
 /** @brief constructor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 Legendre<PolyOrder, Qtype, Scalar>::Legendre()
 {
     EIGEN_STATIC_ASSERT(Qtype == GAUSS_LOBATTO, "Sorry :( Only GAUSS_LOBATTO quadrature points available at the moment!");
 
     /** initialize pseudopsectral scheme */
-    generate_legendre_basis();
-    //std::cout << "Polynomial basis: \n" << _Ln << "\n";
+    _Ln    = compute_basis();
+    _Nodes = compute_nodes();
+    _D     = compute_diff_matrix();
 
-    _Nodes = CollocPoints();
-    //std::cout << "Nodal points: " << _Nodes.transpose() << "\n";
+    _QuadWeights = compute_quad_weights();
+    _NormFactors = compute_norm_factors();
 
-    _QuadWeights = QuadWeights();
-    //std::cout << "Quadrature weights: " << _QuadWeights.transpose() << "\n";
-
-    _NormFactors = NormFactors();
-    //std::cout << "Normalization factors: " << _NormFactors.transpose() << "\n";
-
-    compute_galerkin_tensor();
-    //Eigen::TensorFixedSize<Scalar, Eigen::Sizes<PolyOrder + 1, PolyOrder + 1>> lox = _Galerkin.chip(5, 2);
-    //Eigen::DynamicSGroup symmetry; // NOT EFFICIENT = _Galerkin.chip(1, 2);
-    //std::cout << lox << "\n \n";
-    //std::cout << "Galerkin: " << _Galerkin.dimension(0) << " x " << _Galerkin.dimension(1) << " x " << _Galerkin.dimension(2) << "\n";
-
-    //_D           = DiffMatrix();
-    //_ComD        = CompDiffMatrix();
-
-    std::cout << "Legendre: constuctor call \n";
+    //compute_galerkin_tensor();
 }
 
 /** @brief : compute nodal points for the Legendre collocation scheme */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::nodes_t
-Legendre<PolyOrder, Qtype, Scalar>::CollocPoints()
+Legendre<PolyOrder, Qtype, Scalar>::compute_nodes() noexcept
 {
+    basis_t Ln = compute_basis();
     /** Legendre (LGL) collocation points for the interval [-1, 1]*/
     /** compute roots of LN_dot(x) polynomial - extremas of LN(x) */
-    nodes_t LN_dot = poly_diff(_Ln.col(PolyOrder));
-    Scalar eps = std::numeric_limits<Scalar>::epsilon();
+    nodes_t LN_dot = poly_diff(Ln.col(PolyOrder));
+    scalar_t eps = std::numeric_limits<scalar_t>::epsilon();
 
     /** prepare the polynomial for the solver */
     for(int i = 0; i < PolyOrder; ++i)
     {
         if(std::fabs(LN_dot[i]) <= eps)
-            LN_dot[i] = Scalar(0);
+            LN_dot[i] = scalar_t(0);
     }
 
-    Eigen::PolynomialSolver<Scalar, PolyOrder-1> root_finder;
+    Eigen::PolynomialSolver<scalar_t, PolyOrder - 1> root_finder;
     root_finder.compute(segment<nodes_t, PolyOrder>(LN_dot, 0)); // remove the last zero
 
     nodes_t nodes = nodes_t::Zero();
@@ -219,38 +144,72 @@ Legendre<PolyOrder, Qtype, Scalar>::CollocPoints()
     return nodes;
 }
 
-/** @brief : compute LGL quadrature weights */
-template<int PolyOrder, q_type Qtype, typename Scalar>
-typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
-Legendre<PolyOrder, Qtype, Scalar>::QuadWeights()
+/** compute differentiation matrix */
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::diff_mat_t
+Legendre<PolyOrder, Qtype, Scalar>::compute_diff_matrix() noexcept
 {
+    diff_mat_t D  = diff_mat_t::Zero();
+    nodes_t nodes = compute_nodes();
+    basis_t Ln    = compute_basis();
+
+    /** use formula from Canuto-Quarteroni */
+    D(0,0) = (POLY_ORDER + 1) * POLY_ORDER / static_cast<scalar_t>(4);
+    D(POLY_ORDER, POLY_ORDER) = -D(0,0);
+
+    for(Eigen::Index i = 0; i < NUM_NODES; ++i)
+    {
+        for (Eigen::Index j = 0; j < NUM_NODES; ++j)
+        {
+            if(i != j)
+                D(i,j) = (Eigen::poly_eval(Ln.col(POLY_ORDER), nodes[i]) / Eigen::poly_eval(Ln.col(POLY_ORDER), nodes(j)))
+                        * (1 / (nodes(i) - nodes(j)));
+        }
+    }
+    return D;
+}
+
+/** @brief : compute LGL quadrature weights */
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
+Legendre<PolyOrder, Qtype, Scalar>::compute_quad_weights() noexcept
+{
+    const basis_t Ln = compute_basis();
+    const nodes_t nodes = compute_nodes();
     /** Chebyshev collocation points for the interval [-1, 1]*/
-    q_weights_t weights = q_weights_t::Zero();
-    const Scalar coeff = Scalar(2) / (PolyOrder * (PolyOrder + 1));
+    q_weights_t weights  = q_weights_t::Zero();
+    const scalar_t coeff = scalar_t(2) / (PolyOrder * (PolyOrder + 1));
     for(int i = 0; i <= PolyOrder; ++i)
     {
-        Scalar LN_xi = Eigen::poly_eval(_Ln.col(PolyOrder), _Nodes[i]);
+        scalar_t LN_xi = Eigen::poly_eval(Ln.col(PolyOrder), nodes[i]);
         weights[i] = coeff / std::pow(LN_xi, 2);
     }
     return weights;
 }
 
-/** @brief : compute LGL normalization factors c = 1 / ck */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
-Legendre<PolyOrder, Qtype, Scalar>::NormFactors()
+Legendre<PolyOrder, Qtype, Scalar>::compute_int_weights() noexcept
+{
+    return compute_quad_weights();
+}
+
+/** @brief : compute LGL normalization factors c = 1 / ck */
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::q_weights_t
+Legendre<PolyOrder, Qtype, Scalar>::compute_norm_factors() noexcept
 {
     q_weights_t factors = q_weights_t::Zero();
     for(int k = 0; k < PolyOrder; ++k)
     {
-        factors[k] = (Scalar(2) * k + 1) / Scalar(2);
+        factors[k] = (scalar_t(2) * k + 1) / scalar_t(2);
     }
-    factors[PolyOrder] =  PolyOrder / Scalar(2);
+    factors[PolyOrder] =  PolyOrder / scalar_t(2);
     return factors;
 }
 
 /** @brief : Compute integrals using LGL-quadrature rule */
-template<int PolyOrder, q_type Qtype, typename Scalar>
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
 template<class Integrand>
 Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Scalar &tf)
 {
@@ -266,13 +225,15 @@ Scalar Legendre<PolyOrder, Qtype, Scalar>::integrate(const Scalar &t0, const Sca
 }
 
 /** @brief : Compute Legendre basis*/
-template<int PolyOrder, q_type Qtype, typename Scalar>
-void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
+typename Legendre<PolyOrder, Qtype, Scalar>::basis_t
+Legendre<PolyOrder, Qtype, Scalar>::compute_basis() noexcept
 {
+    basis_t Ln = basis_t::Zero();
     /** the first basis polynomial is L0(x) = 1 */
-    _Ln(0,0) = 1;
+    Ln(0,0) = 1;
     /** the second basis polynomial is L1(x) = x */
-    _Ln(1,1) = 1;
+    Ln(1,1) = 1;
 
     /** compute recurrent coefficients */
     nodes_t a = nodes_t::Zero();
@@ -281,28 +242,27 @@ void Legendre<PolyOrder, Qtype, Scalar>::generate_legendre_basis()
     x[1] = 1;
     for(int n = 0; n <= PolyOrder; ++n)
     {
-        a[n] = Scalar(2 * n + 1) / (n + 1);
-        c[n] = Scalar(n) / (n + 1);
+        a(n) = scalar_t(2 * n + 1) / (n + 1);
+        c(n) = scalar_t(n) / (n + 1);
     }
 
     /** create polynomial basis */
-    /** @note had to put volatile here since the compiler messes copies of Ln
-     * columns here in Release mode */
-    for(volatile int n = 1; n < PolyOrder; ++n)
-    {
-        _Ln.col(n+1) = a[n] * poly_mul(_Ln.col(n), x) - c[n] * _Ln.col(n-1);
-    }
+    for(int n = 1; n < POLY_ORDER; ++n)
+        Ln.col(n+1)= a(n) * poly_mul(Ln.col(n), x) - c(n) * Ln.col(n-1);
+
+    return Ln;
 }
 
+
 /** @brief : Compute Galerkin Tensor */
-template<int PolyOrder, q_type Qtype, typename Scalar>
-void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
+template<int PolyOrder, collocation_scheme Qtype, typename Scalar>
+void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor() noexcept
 {
     /** naive implementation */
     for(int k = 0; k <= PolyOrder; ++k){
         for(int i = 0; i <= PolyOrder; ++i){
             for(int j = 0; j <= PolyOrder; ++j){
-                Scalar inner_prod = 0;
+                scalar_t inner_prod = 0;
                 for(int n = 0; n <= PolyOrder; ++n)
                 {
                     // compute projection //
@@ -310,12 +270,12 @@ void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor()
                 }
                 _Galerkin(i, j, k) = _NormFactors[k] * inner_prod;
             }
-            //std::cout << "\n";
         }
-        //std::cout << "\n \n";
     }
 
 }
+
+} // polympc namespace
 
 
 #endif // LEGENDRE_HPP

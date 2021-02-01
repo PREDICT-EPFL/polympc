@@ -38,6 +38,8 @@ MatrixType<Scalar> Tensor_to_Matrix(const Eigen::Tensor<Scalar,rank> &tensor,con
 
 int main()
 {
+    using namespace polympc;
+
     const int basis_size = 2;
     using Legendre = Legendre<basis_size, GAUSS_LOBATTO>;
     Legendre leg;

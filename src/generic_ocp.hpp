@@ -318,7 +318,7 @@ void GenericOCP<OCP, Approximation>::setup()
 
     /** soft formulation */
     if(MPC_OPTS.find("mpc.soft_rho") != MPC_OPTS.end())
-            scaling = MPC_OPTS["mpc.soft_rho"];
+            soft_rho = MPC_OPTS["mpc.soft_rho"];
 
     /** collocate dynamic equations*/
     casadi::SX diff_constr;
@@ -326,7 +326,7 @@ void GenericOCP<OCP, Approximation>::setup()
     dynamics = _mtimes(ScX, dynamics);
     casadi::Function dyn_func;
     /** @badcode : have to deal with the old Chebyshev interface */
-    if((NP == 0) and (ND == 0))
+    if((NP == 0) && (ND == 0))
         dyn_func = casadi::Function("dyn_func",{x,u},{dynamics});
     else
         dyn_func = casadi::Function("dyn_func",{x,u,p,d},{dynamics});
@@ -355,7 +355,7 @@ void GenericOCP<OCP, Approximation>::setup()
     }
 
     /** process differential operators */
-    if(!m_norm_diff.empty() and !cost.is_zero())
+    if(!m_norm_diff.empty() && !cost.is_zero())
     {
         casadi::SXVector::const_iterator it;
         for(it = m_norm_diff.begin(); it != m_norm_diff.end(); ++it)
@@ -367,7 +367,7 @@ void GenericOCP<OCP, Approximation>::setup()
         }
     }
 
-    if(!m_norm_ddiff.empty() and !cost.is_zero())
+    if(!m_norm_ddiff.empty() && !cost.is_zero())
     {
         casadi::SXVector::const_iterator it;
         for(it = m_norm_ddiff.begin(); it != m_norm_ddiff.end(); ++it)
@@ -484,7 +484,7 @@ void GenericOCP<OCP, Approximation>::setup()
     casadi::SX lbg = casadi::SX::vertcat({lbg_diff, lbg_ic, final_lbg_ic});
     casadi::SX ubg = casadi::SX::vertcat({ubg_diff, ubg_ic, final_ubg_ic});
 
-    if(use_slacks and !(slacks->empty()))
+    if(use_slacks && !(slacks->empty()))
     {
         /** append optvar and cost */
         opt_var = casadi::SX::vertcat({opt_var, slacks});
@@ -518,7 +518,7 @@ void GenericOCP<OCP, Approximation>::setup()
     ARG["ubg"] = ubg;
     ARG["p"]   = casadi::DM::zeros(vard.size1());
 
-    if(use_slacks and !slacks->empty())
+    if(use_slacks && !slacks->empty())
     {
         casadi::DM lbs = casadi::SX::zeros(slacks.size1());
         casadi::DM ubs = casadi::SX::inf(slacks.size1());

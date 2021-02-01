@@ -161,7 +161,7 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::initialize_deriv
     }
 }
 
-/** estimate number of nonzeros in Jacoabian */
+/** estimate number of nonzeros in Jacobian */
 template <typename Dynamics, typename Polynomial, int NumSegments>
 void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::compute_inner_nnz()
 {

@@ -106,7 +106,7 @@ SX mat_dynamics(const SX &arg_x, const SX &arg_u, Function &func)
     SXVector x = SX::horzsplit(arg_x, 1);
     SXVector u = SX::horzsplit(arg_u, 1);
 
-    for(uint i = 0; i < u.size(); ++i)
+    for(unsigned i = 0; i < u.size(); ++i)
     {
         SXVector eval = func(SXVector{x[i], u[i]});
         xdot.push_back(eval[0]);
@@ -116,15 +116,15 @@ SX mat_dynamics(const SX &arg_x, const SX &arg_u, Function &func)
     return SX::vertcat(xdot);
 }
 
-casadi::Function lagrange_poly(const uint &n_degree)
+casadi::Function lagrange_poly(const unsigned &n_degree)
 {
     casadi::SX t = casadi::SX::sym("t");
     casadi::SX nodes = casadi::SX::sym("nodes", n_degree + 1);
     casadi::SX phi_sym = casadi::SX::ones(n_degree + 1, 1); //polynomial coefficients
 
-    for(uint k = 0; k <= n_degree; ++k)
+    for(unsigned k = 0; k <= n_degree; ++k)
     {
-        for(uint j = 0; j <= n_degree; ++j)
+        for(unsigned j = 0; j <= n_degree; ++j)
         {
             if(j != k)
                 phi_sym(k) *= (t - nodes(j)) / (nodes(k) - nodes(j));
@@ -181,11 +181,11 @@ Eigen::VectorXd lagrange_interpolant(const Eigen::VectorXd &X, const Eigen::Vect
     Eigen::VectorXd polynomial(X.rows());
 
     Eigen::MatrixXd P(X.rows(), polynomial.rows());
-    for(uint i = 0; i < P.rows(); ++i)
+    for(unsigned i = 0; i < P.rows(); ++i)
     {
         Eigen::VectorXd roots(X.rows() - 1);
-        uint count = 0;
-        for(uint j = 0; j < X.rows(); ++j)
+        unsigned count = 0;
+        for(unsigned j = 0; j < X.rows(); ++j)
         {    if(i != j)
             {
                 roots(count) = X(j);
@@ -205,11 +205,11 @@ Eigen::MatrixXd lagrange_poly_basis(const Eigen::VectorXd &nodes)
     Eigen::VectorXd polynomial(nodes.rows());
     Eigen::MatrixXd P(nodes.rows(), nodes.rows());
 
-    for(uint i = 0; i < P.rows(); ++i)
+    for(unsigned i = 0; i < P.rows(); ++i)
     {
         Eigen::VectorXd roots(nodes.rows() - 1);
-        uint count = 0;
-        for(uint j = 0; j < nodes.rows(); ++j)
+        unsigned count = 0;
+        for(unsigned j = 0; j < nodes.rows(); ++j)
         {    if(i != j)
             {
                 roots(count) = nodes(j);
@@ -313,9 +313,9 @@ bool LinearSystem::is_controllable()
         return false;
 }
 
-uint factorial(const uint &n)
+unsigned factorial(const unsigned &n)
 {
-    uint fact = 1;
+    unsigned fact = 1;
     for (int i = 1; i <= n; ++i)
         fact *= i;
 
@@ -325,39 +325,41 @@ uint factorial(const uint &n)
 namespace oc {
 
 /** Lyapunov equation */
-Eigen::MatrixXd lyapunov(const Eigen::MatrixXd &A, const Eigen::MatrixXd &Q)
+Eigen::MatrixXd lyapunov(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> Q) noexcept
 {
-    int m = Q.rows();
+    const Eigen::Index m = Q.cols();
     /** compute Schur decomposition of A */
     Eigen::RealSchur<Eigen::MatrixXd> schur(A);
     Eigen::MatrixXd T = schur.matrixT();
     Eigen::MatrixXd U = schur.matrixU();
 
-    Eigen::MatrixXd Q1 = (U.transpose() * Q) * U;
-    Eigen::MatrixXd X  = Eigen::MatrixXd::Zero(m, m);
+    Eigen::MatrixXd Q1;
+    Q1.noalias() = (U.transpose() * Q) * U;
+    Eigen::MatrixXd X = Eigen::MatrixXd::Zero(m, m);
     Eigen::MatrixXd E = Eigen::MatrixXd::Identity(m,m);
 
-    X.col(m-1) = (T + T(m-1,m-1) * E).partialPivLu().solve(Q1.col(m-1));
+    X.col(m-1).noalias() = (T + T(m-1,m-1) * E).partialPivLu().solve(Q1.col(m-1));
+    Eigen::VectorXd v;
 
-    for(int i = m-2; i >= 0; --i)
+    for(Eigen::Index i = m-2; i >= 0; --i)
     {
-        Eigen::VectorXd v = Q1.col(i) - X.block(0, i+1, m, m-(i+1)) * T.block(i, i+1, 1, m-(i+1)).transpose();
+        v.noalias() = Q1.col(i) - X.block(0, i+1, m, m-(i+1)) * T.block(i, i+1, 1, m-(i+1)).transpose();
         X.col(i) = (T + T(i,i) * E).partialPivLu().solve(v);
     }
 
-    X = (U * X) * U.transpose();
+    X.noalias() = (U * X) * U.transpose();
     return X;
 }
 
 /** CARE Newton iteration */
-Eigen::MatrixXd newton_ls_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B,
-                               const Eigen::MatrixXd &C, const Eigen::MatrixXd &X0)
+Eigen::MatrixXd newton_ls_care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B,
+                               const Eigen::Ref<const Eigen::MatrixXd> C, const Eigen::Ref<const Eigen::MatrixXd> X0) noexcept
 {
     /** initial guess */
-    Eigen::EigenSolver<Eigen::MatrixXd> eig(A - B * X0);
-    std::cout << "INIT X0: \n" << eig.eigenvalues() << "\n";
-    double tol = 1e-5;
-    int kmax   = 20;
+    //Eigen::EigenSolver<Eigen::MatrixXd> eig(A - B * X0);
+    //std::cout << "INIT X0: \n" << eig.eigenvalues() << "\n";
+    const double tol = 1e-5;
+    const int kmax   = 20;
     Eigen::MatrixXd X = X0;
     double err = std::numeric_limits<double>::max();
     int k = 0;
@@ -368,36 +370,37 @@ Eigen::MatrixXd newton_ls_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &
 
     while( (err > tol) && (k < kmax) )
     {
-       RX = C + X * A + A.transpose() * X - (X * B) * X;
+       RX = C;
+       RX.noalias() += X * A + A.transpose() * X - (X * B) * X;
        /** newton update */
        H = lyapunov((A - B * X).transpose(), -RX);
        /** exact line search */
-       V = H * B * H;
+       V.noalias() = H * B * H;
        double a = (RX * RX).trace();
        double b = (RX * V).trace();
        double c = (V * V).trace();
        tk = line_search_care(a,b,c);
        /** inner loop to accept step */
-       X = X + tk * H;
+       X.noalias() += tk * H;
        //err = tk * (H.lpNorm<1>() / X.lpNorm<1>());
        err = RX.norm();
-       std::cout << "err " << err << " step " << tk << "\n";
+       //std::cout << "err " << err << " step " << tk << "\n";
        k++;
     }
 
     /** may be defect correction algorithm? */
 
-    std::cout << "CARE solve took " << k << " iterations. \n";
+    //std::cout << "CARE solve took " << k << " iterations. \n";
     if(k == kmax)
         std::cerr << "CARE cannot be solved to specified precision :" << err << " max number of iteration exceeded! \n ";
 
     return X;
 }
 
-Eigen::MatrixXd init_newton_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B)
+Eigen::MatrixXd init_newton_care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B) noexcept
 {
-    int n = A.rows();
-    double tolerance = 1e-12;
+    const Eigen::Index n = A.cols();
+    const double tolerance = 1e-12;
     /** compute Schur decomposition of A */
     Eigen::RealSchur<Eigen::MatrixXd> schur(A);
     Eigen::MatrixXd TA = schur.matrixT();
@@ -423,11 +426,11 @@ Eigen::MatrixXd init_newton_care(const Eigen::MatrixXd &A, const Eigen::MatrixXd
 }
 
 /** Moore-Penrose pseudo-inverse */
-Eigen::MatrixXd pinv(const Eigen::MatrixXd &mat)
+Eigen::MatrixXd pinv(const Eigen::Ref<const Eigen::MatrixXd> mat) noexcept
 {
     /** compute SVD */
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(mat, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    double pinvtol = 1e-6;
+    const double pinvtol = 1e-6;
     Eigen::VectorXd singular_values = svd.singularValues();
     /** make a copy */
     Eigen::VectorXd singular_values_inv = singular_values;
@@ -440,13 +443,14 @@ Eigen::MatrixXd pinv(const Eigen::MatrixXd &mat)
     return (svd.matrixV() * singular_values_inv.asDiagonal() * svd.matrixU().transpose());
 }
 
-Eigen::MatrixXd care(const Eigen::MatrixXd &A, const Eigen::MatrixXd &B, const Eigen::MatrixXd &C)
+Eigen::MatrixXd care(const Eigen::Ref<const Eigen::MatrixXd> A, const Eigen::Ref<const Eigen::MatrixXd> B,
+                     const Eigen::Ref<const Eigen::MatrixXd> C) noexcept
 {
     Eigen::MatrixXd X0 = init_newton_care(A, B);
     return newton_ls_care(A, B, C, X0);
 }
 
-double line_search_care(const double &a, const double &b, const double &c)
+double line_search_care(const double &a, const double &b, const double &c) noexcept
 {
     Eigen::Matrix<double, 5, 1> poly;
     Eigen::Matrix<double, 4, 1> poly_derivative;
@@ -483,14 +487,15 @@ double line_search_care(const double &a, const double &b, const double &c)
     return argmin;
 }
 
-Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::MatrixXd Q,
-                    const Eigen::MatrixXd R, const Eigen::MatrixXd M, const bool &check)
+Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::Ref<const Eigen::MatrixXd> Q,
+                    const Eigen::Ref<const Eigen::MatrixXd> R, const Eigen::Ref<const Eigen::MatrixXd> M, const bool &check) noexcept
 {
     /** check preliminary conditions */
     //assume F,G to be stabilizable
     if(check)
     {
-        Eigen::MatrixXd QR = Q - M * pinv(R) * M.transpose();
+        Eigen::MatrixXd QR = Q;
+        QR.noalias() -= M * pinv(R) * M.transpose();
         Eigen::EigenSolver<Eigen::MatrixXd> solver(QR);
         Eigen::VectorXd values = solver.eigenvalues().real();
         if( (values.array() < 0).any() )
@@ -504,16 +509,16 @@ Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::MatrixXd Q,
     Eigen::MatrixXd invR = pinv(R);
     Eigen::MatrixXd A = sys.F - M * invR * (sys.G).transpose();
     Eigen::MatrixXd B = sys.G * invR * (sys.G).transpose();
-    Eigen::MatrixXd C = M * invR * M + Q;
+    Eigen::MatrixXd C = M * invR * M.transpose() + Q;
 
-    std::cout << "A: \n" << A << "\n";
-    std::cout << "B: \n" << B << "\n";
-    std::cout << "C: \n" << C << "\n";
+    //std::cout << "A: \n" << A << "\n";
+    //std::cout << "B: \n" << B << "\n";
+    //std::cout << "C: \n" << C << "\n";
     /** solve Ricatti equation */
     Eigen::MatrixXd S = care(A, B, C);
-    std::cout << "CARE solution: \n" << (S*A) + (A.transpose() * S) - (S * B) * S.transpose() + C << "\n";
+    //std::cout << "CARE solution: \n" << (S*A) + (A.transpose() * S) - (S * B) * S.transpose() + C << "\n";
 
-    std::cout << "S: \n" << S << "\n";
+    //std::cout << "S: \n" << S << "\n";
     /** compute gain matrix */
     Eigen::MatrixXd K = invR * ( (sys.G).transpose() * S + M.transpose());
     return K;

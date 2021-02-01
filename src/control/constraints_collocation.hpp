@@ -14,7 +14,7 @@ template<int NX, int NU, int NP, typename Polynomial, int NumSegments = 1>
 class constraint_collocation
 {
 public:
-    using Scalar     = typename Polynomial::Scalar;
+    using Scalar     = typename Polynomial::scalar_t;
     using nodes_t    = typename Polynomial::nodes_t;
 
     enum

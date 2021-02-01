@@ -3,7 +3,8 @@ project(solvers)
 
 enable_testing()
 
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
-
+if(BUILD_TESTS)
+	find_package(GTest REQUIRED)
+	include_directories(${GTEST_INCLUDE_DIRS})
+endif()
 

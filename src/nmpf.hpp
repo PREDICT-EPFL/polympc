@@ -579,7 +579,7 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
     casadi::DM orthogonality = 1;
     casadi::DM th_grad, th_res, th_step;
 
-    while ((casadi::norm_2(orthogonality.nonzeros()) >= tol) and (counter <= max_iter) )
+    while ((casadi::norm_2(orthogonality.nonzeros()) >= tol) && (counter <= max_iter) )
     {
         counter++;
         /** try Gauss-Newton */

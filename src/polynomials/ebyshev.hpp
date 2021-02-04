@@ -3,6 +3,9 @@
 
 #include "polynomial_math.hpp"
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 namespace polympc {
 
 using namespace polymath;

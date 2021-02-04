@@ -162,7 +162,7 @@ namespace polymath
     template<typename  Derived>
     void lagrange_poly_basis(const Eigen::MatrixBase<Derived> &nodes, Eigen::MatrixBase<Derived> &basis)
     {
-        Eigen::VectorXd polynomial(nodes.rows());
+        Eigen::VectorXd polynomial(nodes.rows()); polynomial.setZero();
         basis = Eigen::MatrixBase<Derived>::Zero(nodes.rows(), nodes.rows());
 
         for(unsigned i = 0; i < basis.rows(); ++i)

@@ -105,6 +105,7 @@ public:
     using scalar_t = typename polympc_traits<OCP>::Scalar;
     using static_parameter_t = Eigen::Matrix<scalar_t, ND, 1>;
     using time_t   = typename Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using nodes_t  = typename Approximation::nodes_t;
 
     /** AD variables */
     using derivatives_t = Eigen::Matrix<scalar_t, NX + NU + NP, 1>;

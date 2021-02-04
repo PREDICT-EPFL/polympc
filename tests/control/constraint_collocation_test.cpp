@@ -1,20 +1,11 @@
 #include <control/constraints_collocation.hpp>
 #include "polynomials/ebyshev.hpp"
+#include "utils/helpers.hpp"
 #include "Eigen/Dense"
 #include <chrono>
 #include <iostream>
 #include <iomanip>
 
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
 
 
 struct Function
@@ -57,10 +48,10 @@ int main(void)
     Function f;
     Function2 f2;
 
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    time_point start = get_time();
     auto value  = c_col.generic_function<Function, 2>(f, x);
     auto value2 = c_col.generic_function<Function2, 1>(f2, x);
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+    time_point stop = get_time();
 
     std::cout  << value.transpose() << "\n";
     std::cout  << value2.transpose() << "\n";

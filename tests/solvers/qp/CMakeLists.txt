@@ -10,7 +10,7 @@ if(BUILD_TESTS OR QP_TESTS)
   add_executable(qp_solver_test admm_solver_test.cpp
                                 box_admm_test.cpp
                                 qpmad_interface_test.cpp
-                                #qp_solver_sparse_test.cpp
+                                qp_solver_sparse_test.cpp
                                 test_main.cpp)
   target_link_libraries(qp_solver_test Eigen3::Eigen ${GTEST_BOTH_LIBRARIES} pthread)
 

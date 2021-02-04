@@ -1,23 +1,11 @@
 #include "polynomials/ebyshev.hpp"
-//#include "control/ode_collocation.hpp"
 #include "control/continuous_ocp.hpp"
 #include "polynomials/splines.hpp"
+#include "utils/helpers.hpp"
 #include <iomanip>
 #include <iostream>
 #include <chrono>
 #include "control/simple_robot_model.hpp"
-
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -105,7 +93,7 @@ int main(void)
     RobotOCP::nlp_hessian_t lag_hessian(static_cast<int>(RobotOCP::VAR_SIZE), static_cast<int>(RobotOCP::VAR_SIZE));
 
     //robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, eq_jac);
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    polympc::time_point start = polympc::get_time();
     for(int i = 0; i < test_NUM_EXP; ++i)
     {
         //robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, eq_jac);
@@ -116,14 +104,11 @@ int main(void)
         //robot_nlp.equalities_linearised(var, p, constr, eq_jac);
         //robot_nlp.equalities(var, p, constr);
     }
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
-
+    polympc::time_point stop = polympc::get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Collocation time: " << std::setprecision(9)
               << static_cast<double>(duration.count()) / test_NUM_EXP << " [microseconds]" << "\n";
-
-
 
     Eigen::IOFormat fmt(3);
     Eigen::SparseMatrix<double> SpMat = 0.5 * cost_gradient.asDiagonal() * cost_hessian * cost_gradient.asDiagonal();

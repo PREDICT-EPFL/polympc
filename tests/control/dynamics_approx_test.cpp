@@ -2,22 +2,11 @@
 #include "control/ode_collocation.hpp"
 #include "control/continuous_ocp.hpp"
 #include "polynomials/splines.hpp"
+#include "utils/helpers.hpp"
 #include <iomanip>
 #include <iostream>
 #include <chrono>
 #include "control/simple_robot_model.hpp"
-
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -40,13 +29,13 @@ int main(void)
     collocation::jacobian_t A;
     collocation::constr_t b;
 
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    time_point start = get_time();
     for(int i = 0; i < test_NUM_EXP; ++i)
         ps_ode.linearized(x, A, b);
         //ps_ode(x, b);
 
     //ps_ode.linearized(x, A, b);
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+    time_point stop = get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "ODE Collocation time: " << std::setprecision(9)

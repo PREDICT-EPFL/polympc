@@ -1,21 +1,10 @@
 #include "control/cost_collocation.hpp"
 #include "polynomials/ebyshev.hpp"
+#include "utils/helpers.hpp"
 #include "Eigen/Dense"
 #include <chrono>
 #include <iostream>
 #include <iomanip>
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
-
 
 
 template<typename _Scalar = double>
@@ -83,11 +72,11 @@ int main(void)
     cost_collocation::hessian_t hessian;
     cost_collocation::Scalar value;
 
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    time_point start = get_time();
     //cost_f(x, value);
     //cost_f.value_gradient(x,value,gradient);
     cost_f.value_gradient_hessian(x, value, gradient, hessian);
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+    time_point stop = get_time();
 
     Eigen::IOFormat fmt(3);
     std::cout << "Cost: " << value << "\n";

@@ -1,25 +1,12 @@
 #include "solvers/sqp_base.hpp"
 #include "polynomials/ebyshev.hpp"
-//#include "control/ode_collocation.hpp"
 #include "control/continuous_ocp.hpp"
 #include "polynomials/splines.hpp"
+#include "solvers/box_admm.hpp"
+
 #include <iomanip>
 #include <iostream>
 #include <chrono>
-#include "control/simple_robot_model.hpp"
-#include "solvers/box_admm.hpp"
-
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -210,9 +197,9 @@ int main(void)
     solver.upper_bound_x().tail(22) = ubu.replicate(11,1);
     solver.lower_bound_x().tail(22) = lbu.replicate(11,1);
 
-    time_point start = get_time();
+    polympc::time_point start = polympc::get_time();
     solver.solve();
-    time_point stop = get_time();
+    polympc::time_point stop = polympc::get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";
@@ -228,9 +215,9 @@ int main(void)
     solver.upper_bound_x().segment(40, 4) = init_cond;
     solver.lower_bound_x().segment(40, 4) = init_cond;
 
-    start = get_time();
+    start = polympc::get_time();
     solver.solve();
-    stop = get_time();
+    stop = polympc::get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";

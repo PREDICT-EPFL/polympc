@@ -5,7 +5,7 @@
 #include <iostream>
 
 template <typename Scalar>
-struct qp_sover_settings_t {
+struct qp_solver_settings_t {
 
     /** Common settings */
     Scalar eps_rel = 1e-3;      /**< Relative tolerance for termination, 0 < eps_rel */
@@ -89,11 +89,8 @@ class QPBase
 
     using kkt_mat_t       = typename std::conditional<MatrixType == SPARSE, Eigen::SparseMatrix<scalar_t>,
                             typename dense_matrix_type_selector<scalar_t, N + M, N + M>::type>::type;
-    //using qp_constraint_t = Eigen::Matrix<scalar_t, M, N>;
-    //using qp_hessian_t    = Eigen::Matrix<scalar_t, N, N>;
-    //using kkt_mat_t       = Eigen::Matrix<scalar_t, N + M, N + M>;
 
-    using settings_t = qp_sover_settings_t<scalar_t>;
+    using settings_t = qp_solver_settings_t<scalar_t>;
     using info_t = qp_solver_info_t<scalar_t>;
     using linear_solver_t = LinearSolver<kkt_mat_t, LinearSolver_UpLo, Args...>;
 

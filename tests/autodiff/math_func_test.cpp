@@ -6,17 +6,6 @@
 #include <iomanip>
 #include <type_traits>
 
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
-
 int main(void)
 {
     Eigen::Matrix<double,3,1> x0;

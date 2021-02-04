@@ -2,7 +2,10 @@
 #define SPLINES_HPP
 
 #include "Eigen/Core"
+#include "unsupported/Eigen/Polynomials"
 #include "autodiff/AutoDiffScalar.h"
+
+#include <iostream>
 
 namespace polympc {
 
@@ -34,7 +37,7 @@ public:
  };
 
 
-
+/** Automatically differentiable Equidistant Cubic Spline */
 template<typename Scalar = double>
 class EquidistantCubicSpline
 {
@@ -62,6 +65,12 @@ public:
     {
         // compute the segment index
         Eigen::Index idx = (Eigen::Index)floor_( x / static_cast<scalar_t>(m_length));
+
+// due to some weird Windows redefinitions
+#if defined _WIN32  || defined _WIN64
+        #undef min
+        #undef max
+#endif
         idx = std::max(Eigen::Index(0), std::min(idx, m_coeffs.cols())); // clip idx stay within the spline bounds
 
         // evaluate polynomial using Horner's method
@@ -77,6 +86,46 @@ public:
 private:
     coeffs_matrix_type m_coeffs;
     Scalar m_length{Scalar(1)};
+};
+
+
+class LagrangeSpline
+{
+public:
+    template<typename Derived, typename Derived2>
+    static void compute_lagrange_basis(const Eigen::MatrixBase<Derived>& nodes, Eigen::MatrixBase<Derived2>& basis) noexcept
+    {
+        typename Derived::PlainObject polynomial(nodes.rows()); polynomial.setZero();
+        basis = Eigen::MatrixBase<Derived2>::Zero(nodes.rows(), nodes.rows());
+
+        for(unsigned i = 0; i < basis.rows(); ++i)
+        {
+            Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> roots(nodes.rows() - 1);
+            unsigned count = 0;
+            for(unsigned j = 0; j < nodes.rows(); ++j)
+            {    if(i != j)
+                {
+                    roots(count) = nodes(j);
+                    count++;
+                }
+            }
+            Eigen::roots_to_monicPolynomial(roots, polynomial);
+            basis.row(i) = polynomial / Eigen::poly_eval(polynomial, nodes(i));
+        }
+    }
+
+    // evaluation of a multidimensional polynomial
+    template<typename DerVal, typename DerBasis>
+    static auto eval(const typename DerVal::Scalar& arg, const Eigen::MatrixBase<DerVal>& values,
+                     const Eigen::MatrixBase<DerBasis>& basis) -> Eigen::Matrix<typename DerVal::Scalar, DerVal::RowsAtCompileTime, 1>
+    {
+        typename DerVal::PlainObject interpolant = values * basis;
+        Eigen::Matrix<typename DerVal::Scalar, DerVal::RowsAtCompileTime, 1> res;
+        for(int i = 0; i < interpolant.rows(); i++)
+            res(i) = Eigen::poly_eval(interpolant.row(i), arg);
+
+        return res;
+    }
 };
 
 

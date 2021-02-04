@@ -25,4 +25,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(cstr_control_test_eigen cstr_control_test.cpp)
   target_link_libraries(cstr_control_test_eigen Eigen3::Eigen)
 
+  add_executable(mpc_test mpc_wrapper_test.cpp)
+  target_link_libraries(mpc_test Eigen3::Eigen)
+
 endif()

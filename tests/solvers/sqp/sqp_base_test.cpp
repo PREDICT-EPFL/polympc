@@ -17,18 +17,6 @@
 #include "solvers/qpmad_interface.hpp"
 #endif
 
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
-
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
 #define test_NUM_EXP    1
@@ -202,9 +190,9 @@ int main(void)
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
 
-    time_point start = get_time();
+    polympc::time_point start = polympc::get_time();
     solver.solve();
-    time_point stop = get_time();
+    polympc::time_point stop = polympc::get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";
@@ -220,9 +208,9 @@ int main(void)
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
 
-    start = get_time();
+    start = polympc::get_time();
     solver.solve();
-    stop = get_time();
+    stop = polympc::get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";

@@ -102,9 +102,9 @@ public:
   using scalar_t          = typename Problem::scalar_t;
   using parameter_t       = typename Problem::static_parameter_t;
 
-  //using qp_t = qp_solver::QP<VAR_SIZE, NUM_CONSTR, scalar_t>;
-  //using qp_solver_t = qp_solver::QPSolver<qp_t>;
   using qp_solver_t = QPSolver;
+  using nlp_settings_t = sqp_settings_t<scalar_t>;
+  using nlp_info_t     = sqp_info_t;
 
   /** instantiate the problem */
   Problem problem;
@@ -117,16 +117,11 @@ public:
   nlp_constraints_t m_b;   // equality constraints evaluated
   parameter_t       m_p = parameter_t::Zero(); // problem parameters
   scalar_t          m_cost;
-  sqp_settings_t<scalar_t> m_settings;
+  nlp_settings_t    m_settings;
   sqp_info_t        m_info;
   nlp_variable_t    m_lbx, m_ubx;
 
-  /** @badcode : remove this temporaries after ADMM refactoring*/
-  //Eigen::Matrix<scalar_t, NUM_CONSTR, VAR_SIZE> m_A_full;
-  //Eigen::Matrix<scalar_t, NUM_CONSTR, 1> m_Alb, m_Aub;
-
   /** QP solver */
-  //qp_t m_qp;
   qp_solver_t m_qp_solver;
 
   /** temporary storage for Lagrange gradient */
@@ -140,14 +135,17 @@ public:
   static constexpr scalar_t INF     = std::numeric_limits<scalar_t>::infinity();
 
   /** getters / setters */
+  EIGEN_STRONG_INLINE const Problem& get_problem() const noexcept { return this->problem; }
+  EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
+
   EIGEN_STRONG_INLINE const nlp_variable_t& primal_solution() const noexcept { return m_x; }
   EIGEN_STRONG_INLINE nlp_variable_t& primal_solution() noexcept { return m_x; }
 
   EIGEN_STRONG_INLINE const nlp_dual_t& dual_solution() const noexcept { return m_lam; }
   EIGEN_STRONG_INLINE nlp_dual_t& dual_solution() noexcept { return m_lam; }
 
-  EIGEN_STRONG_INLINE const sqp_settings_t<scalar_t>& settings() const noexcept { return m_settings; }
-  EIGEN_STRONG_INLINE sqp_settings_t<scalar_t>& settings() noexcept { return m_settings; }
+  EIGEN_STRONG_INLINE const nlp_settings_t& settings() const noexcept { return m_settings; }
+  EIGEN_STRONG_INLINE nlp_settings_t& settings() noexcept { return m_settings; }
 
   EIGEN_STRONG_INLINE const sqp_info_t& info() const noexcept { return m_info; }
   EIGEN_STRONG_INLINE sqp_info_t& info() noexcept { return m_info; }
@@ -160,6 +158,9 @@ public:
 
   EIGEN_STRONG_INLINE const parameter_t& parameters() const noexcept { return m_p; }
   EIGEN_STRONG_INLINE parameter_t& parameters() noexcept { return m_p; }
+
+  EIGEN_STRONG_INLINE const typename qp_solver_t::settings_t& qp_settings() const noexcept { return m_qp_solver.m_settings; }
+  EIGEN_STRONG_INLINE typename qp_solver_t::settings_t& qp_settings() noexcept { return m_qp_solver.m_settings; }
 
 
   /** step size selection: line search / filter / trust resion */
@@ -564,7 +565,8 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
         /** linearise and solve qp here*/
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_b);
 
-        //if(is_psd(m_H))
+        //auto H_dense = Eigen::MatrixXd(m_H);
+        //if(is_psd(H_dense))
         //    std::cout << "POSITIVE \n";
 
         solve_qp(p, p_lambda);

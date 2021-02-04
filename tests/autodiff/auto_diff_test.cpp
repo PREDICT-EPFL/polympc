@@ -4,19 +4,7 @@
 #include <chrono>
 #include <iomanip>
 #include "casadi/casadi.hpp"
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
-
-
+#include "utils/helpers.hpp"
 
 template <typename Scalar>
 struct MobileRobot
@@ -113,7 +101,7 @@ int main(void)
     Eigen::AutoDiffJacobian<MobileRobot<double>> AD_jacobian(lox);
     Eigen::Matrix<double, 3, 1> dx;
     dx << 0.1, 0.1, 0.05;
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    polympc::time_point start = polympc::get_time();
 
     for(int i = 0; i <= 100; ++i)
     {
@@ -121,7 +109,7 @@ int main(void)
         AD_jacobian(x0, &output, &jacobian);
     }
 
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+    polympc::time_point stop = polympc::get_time();
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
@@ -148,13 +136,13 @@ int main(void)
     casadi::DM x_init = casadi::DM(std::vector<double>{1.0, 1.0, M_PI_4});
     casadi::DM dx_dm = casadi::DM(std::vector<double>{ 0.1, 0.1, 0.05});
     casadi::DM result;
-    start = get_time();
+    start = polympc::get_time();
     for(int i = 0; i <= 100; ++i)
     {
         x_init += dx_dm;
         result = Jacx({x_init})[0];
     }
-    stop = get_time();
+    stop = polympc::get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "Casadi time: " << std::setprecision(9)
@@ -220,7 +208,7 @@ int main(void)
     //std::cout << "AD derivatives: " << Ares.derivatives().transpose() << "\n";
 
 
-    start = get_time();
+    start = polympc::get_time();
     for(int i = 0; i < 100; ++i)
     {
         residual(Ax0, Au, Ares);
@@ -228,7 +216,7 @@ int main(void)
         Ax0(1).value().value() += dx[1];
         Ax0(2).value().value() += dx[2];
     }
-    stop = get_time();
+    stop = polympc::get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     std::cout << "AD derivatives: " << Ares.value().derivatives().transpose() << "\n";

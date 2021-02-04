@@ -4,18 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include "control/simple_robot_model.hpp"
-
-typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-time_point get_time()
-{
-    /** OS dependent */
-#ifdef __APPLE__
-    return std::chrono::system_clock::now();
-#else
-    return std::chrono::high_resolution_clock::now();
-#endif
-}
-
+#include "utils/helpers.hpp"
 
 
 int main(void)
@@ -38,10 +27,10 @@ int main(void)
     Eigen::SparseMatrix<Scalar> A1, A2;
 
     ps_ode.linearized(x, A, b);
-    std::chrono::time_point<std::chrono::system_clock> start = get_time();
+    time_point start = get_time();
     ps_ode.linearized(x, A, b);
     //ps_ode(x, b);
-    std::chrono::time_point<std::chrono::system_clock> stop = get_time();
+    time_point stop = get_time();
 
     std::cout << "Constraint: " << b.transpose() << "\n";
     std::cout << "Size: " << A.size() << "\n";

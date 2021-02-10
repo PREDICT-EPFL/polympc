@@ -1,135 +1,129 @@
-#include <Eigen/Dense>
-#include <unsupported/Eigen/AutoDiff>
+#include "utils/helpers.hpp"
+#include "solvers/nlproblem.hpp"
+#include "solvers/sqp_base.hpp"
 #include "gtest/gtest.h"
-#define SOLVER_DEBUG
-#define SOLVER_ASSERT(x) EXPECT_TRUE(x)
-#include "solvers/sqp.hpp"
 
-using namespace sqp;
-
-namespace sqp_test_autodiff {
-
-template <typename _Derived, typename _Scalar, int _VAR_SIZE, int _NUM_EQ=0, int _NUM_INEQ=0>
-struct ProblemBase {
-    enum {
-        VAR_SIZE = _VAR_SIZE,
-        NUM_EQ = _NUM_EQ,
-        NUM_INEQ = _NUM_INEQ,
-    };
-
-    using Scalar = double;
-    using var_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
-    using grad_t = Eigen::Matrix<Scalar, VAR_SIZE, 1>;
-    using hessian_t = Eigen::Matrix<Scalar, VAR_SIZE, VAR_SIZE>;
-    using MatX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
-
-    using b_eq_t = Eigen::Matrix<Scalar, NUM_EQ, 1>;
-    using A_eq_t = Eigen::Matrix<Scalar, NUM_EQ, VAR_SIZE>;
-    using b_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, 1>;
-    using A_ineq_t = Eigen::Matrix<Scalar, NUM_INEQ, VAR_SIZE>;
-    using box_t = var_t;
-
-    using ADScalar = Eigen::AutoDiffScalar<grad_t>;
-    using ad_var_t = Eigen::Matrix<ADScalar, VAR_SIZE, 1>;
-    using ad_eq_t = Eigen::Matrix<ADScalar, NUM_EQ, 1>;
-    using ad_ineq_t = Eigen::Matrix<ADScalar, NUM_INEQ, 1>;
-
-    template <typename vec>
-    void AD_seed(vec &x)
-    {
-        for (int i=0; i<x.rows(); i++) {
-            x[i].derivatives().coeffRef(i) = 1;
-        }
-    }
-
-    void cost_linearized(const var_t& x, grad_t &grad, Scalar &cst)
-    {
-        ad_var_t _x = x;
-        ADScalar _cst;
-        AD_seed(_x);
-        /* Static polymorphism using CRTP */
-        static_cast<_Derived*>(this)->cost(_x, _cst);
-        cst = _cst.value();
-        grad = _cst.derivatives();
-    }
-
-    void constraint_linearized(const var_t& x, A_eq_t& A_eq, b_eq_t& b_eq, A_ineq_t& A_ineq, b_ineq_t& b_ineq, box_t& lbx, box_t& ubx)
-    {
-        ad_eq_t ad_eq;
-        ad_ineq_t ad_ineq;
-
-        ad_var_t _x = x;
-        AD_seed(_x);
-        static_cast<_Derived*>(this)->constraint(_x, ad_eq, ad_ineq, lbx, ubx);
-
-        for (int i = 0; i < ad_eq.rows(); i++) {
-            b_eq[i] = ad_eq[i].value();
-            Eigen::Ref<MatX> deriv = ad_eq[i].derivatives().transpose();
-            A_eq.row(i) = deriv;
-        }
-
-        for (int i = 0; i < ad_ineq.rows(); i++) {
-            b_ineq[i] = ad_ineq[i].value();
-            Eigen::Ref<MatX> deriv = ad_ineq[i].derivatives().transpose();
-            A_ineq.row(i) = deriv;
-        }
-    }
-};
-
-
-struct ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock,
-                                double,
-                                /* Nx    */2,
-                                /* Neq   */1,
-                                /* Nineq */1>  {
-    const Scalar a = 1;
-    const Scalar b = 100;
-    Eigen::Matrix<Scalar, 2, 1> SOLUTION = {0.7071067812, 0.707106781};
-
-    template <typename DerivedA, typename DerivedB>
-    void cost(const DerivedA& x, DerivedB &cst)
-    {
-        // (a-x)^2 + b*(y-x^2)^2
-        cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
-    }
-
-    template <typename A, typename B, typename C>
-    void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
-    {
-        // y >= x
-        ineq << x(0) - x(1);
-        // x^2 + y^2 == 1
-        eq << x.squaredNorm() - 1;
-
-        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
-        lbx << -infinity, -infinity;
-        ubx << infinity, infinity;
-    }
-};
-
-template <typename Solver>
-void callback(void *solver_p)
+/** create solver */
+template<typename Problem> class SQPSolver;
+template<typename Problem>
+class SQPSolver : public SQPBase<SQPSolver<Problem>, Problem>
 {
-    Solver& s = *static_cast<Solver*>(solver_p);
+public:
+    using Base = SQPBase<SQPSolver<Problem>, Problem>;
+    using typename Base::scalar_t;
+    using typename Base::nlp_variable_t;
+    using typename Base::nlp_hessian_t;
 
-    Eigen::IOFormat fmt(Eigen::StreamPrecision, 0, ", ", ",", "[", "],");
-    std::cout << s._x.transpose().format(fmt) << std::endl;
-}
+    Eigen::EigenSolver<nlp_hessian_t> es;
 
-#if 0 // suspended, see issue #13
-TEST(SQPTestCase, TestConstrainedRosenbrock) {
-    using Solver = SQP<ConstrainedRosenbrock>;
+    /** change step size selection algorithm */
+    scalar_t step_size_selection_impl(const Eigen::Ref<const nlp_variable_t>& p) noexcept
+    {
+        //std::cout << "taking NEW implementation \n";
+        scalar_t mu, phi_l1, Dp_phi_l1;
+        nlp_variable_t cost_gradient = this->m_h;
+        const scalar_t tau = this->m_settings.tau; // line search step decrease, 0 < tau < settings.tau
+
+        scalar_t constr_l1 = this->constraints_violation(this->m_x);
+
+        mu = this->m_lam_k.template lpNorm<Eigen::Infinity>();
+
+        scalar_t cost_1;
+        this->problem.cost(this->m_x, this->m_p, cost_1);
+
+        phi_l1 = cost_1 + mu * constr_l1;
+        Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
+
+        scalar_t alpha = scalar_t(1.0);
+        scalar_t cost_step;
+        nlp_variable_t x_step;
+        for (int i = 1; i < this->m_settings.line_search_max_iter; i++)
+        {
+            x_step.noalias() = alpha * p;
+            x_step += this->m_x;
+            this->problem.cost(x_step, this->m_p, cost_step);
+
+            scalar_t phi_l1_step = cost_step + mu * this->constraints_violation(x_step);
+
+            if (phi_l1_step <= (phi_l1 + alpha * this->m_settings.eta * Dp_phi_l1))
+            {
+                // accept step
+                return alpha;
+            } else {
+                alpha = tau * alpha;
+            }
+        }
+
+        return alpha;
+    }
+
+    /** implement regularisation for the Hessian: eigenvalue mirroring */
+    EIGEN_STRONG_INLINE void hessian_regularisation_dense_impl(Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
+    {
+        Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>  Deig;
+        es.compute(lag_hessian);
+
+        scalar_t minEigValue = es.eigenvalues().real().minCoeff();
+        if ( minEigValue <= 0)
+        {
+            std::cout << "D before: " << es.eigenvalues().real().transpose() << "\n";
+
+            Deig = es.eigenvalues().real().asDiagonal();
+            for (int i = 0; i < Deig.rows(); i++)
+            {
+                if (Deig(i, i) <= 0) { Deig(i, i) = -1 * Deig(i, i) + 0.1; } //Mirror regularization
+            }
+
+            lag_hessian.noalias() = (es.eigenvectors().real()) * Deig* (es.eigenvectors().real().transpose()); //V*D*V^-1 with V^-1 ~= V'
+            std::cout << "D after: " << Deig.diagonal().transpose() << "\n";
+        }
+    }
+
+};
+
+// Constrained Rosenbrock Function
+POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ ConstrainedRosenbrock, /*NX*/ 2, /*NE*/1, /*NI*/0, /*NP*/0, /*Type*/double);
+class ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock>
+{
+public:
+    const scalar_t a = 1;
+    const scalar_t b = 100;
+    Eigen::Matrix<scalar_t, 2, 1> SOLUTION = {0.7864, 0.6177};
+
+    template<typename T>
+    EIGEN_STRONG_INLINE void cost_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p, T& cost) const noexcept
+    {
+        //Eigen::Array<T,2,1> lox;
+        // (a-x)^2 + b*(y-x^2)^2
+        //cost = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
+        polympc::ignore_unused_var(p);
+        cost = (a - x(0)) * (a - x(0)) + b * (x(1) - x(0)*x(0)) * (x(1) - x(0)*x(0));
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE void equality_constraints_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p,
+                                                       Eigen::Ref<constraint_t<T>> constraint) const noexcept
+    {
+        // x^2 + y^2 == 1
+        constraint << x.squaredNorm() - 1;
+        polympc::ignore_unused_var(p);
+    }
+};
+
+TEST(SQPTestCase, TestConstrainedRosenbrock)
+{
+    // will be using the default
+    using Solver = SQPSolver<ConstrainedRosenbrock>;
     ConstrainedRosenbrock problem;
     Solver solver;
-    Eigen::Vector2d x0, x;
-    Eigen::Vector4d y0;
+    Solver::nlp_variable_t x0, x;
+    Solver::nlp_dual_t y0;
     y0.setZero();
 
-    x0 << 0, 0;
-    solver.settings().max_iter = 1000;
-    solver.settings().line_search_max_iter = 10;
-    // solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem, x0, y0);
+    x0 << 2.01, 1.01;
+    solver.settings().max_iter = 50;
+    solver.settings().line_search_max_iter = 5;
+    solver.solve(x0, y0);
 
     x = solver.primal_solution();
 
@@ -139,44 +133,40 @@ TEST(SQPTestCase, TestConstrainedRosenbrock) {
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
-#endif
 
-struct Rosenbrock : public ProblemBase<Rosenbrock,
-                                       double,
-                                       /* Nx    */2,
-                                       /* Neq   */0,
-                                       /* Nineq */0>  {
-    const Scalar a = 1;
-    const Scalar b = 100;
-    Eigen::Vector2d SOLUTION = {1.0, 1.0};
+// Unconstrained Rosenbrock Function
+POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ Rosenbrock, /*NX*/ 2, /*NE*/0, /*NI*/0, /*NP*/0, /*Type*/double);
+class Rosenbrock : public ProblemBase<Rosenbrock>
+{
+public:
+    const scalar_t a = 1;
+    const scalar_t b = 100;
+    Eigen::Matrix<scalar_t, 2, 1> SOLUTION = {1.0, 1.0};
 
-    template <typename DerivedA, typename DerivedB>
-    void cost(const DerivedA& x, DerivedB &cst)
+    template<typename T>
+    EIGEN_STRONG_INLINE void cost_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p, T& cost) const noexcept
     {
+        //Eigen::Array<T,2,1> lox;
         // (a-x)^2 + b*(y-x^2)^2
-        cst = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
-    }
-
-    template <typename A, typename B, typename C>
-    void constraint(const A& x, B& eq, C& ineq, box_t& lbx, box_t& ubx)
-    {
-        // unconstrained
-        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
-        lbx << -infinity, -infinity;
-        ubx << infinity, infinity;
+        //cost = pow(a - x(0), 2) + b * pow(x(1) - pow(x(0), 2), 2);
+        polympc::ignore_unused_var(p);
+        cost = (a - x(0)) * (a - x(0)) + b * (x(1) - x(0)*x(0)) * (x(1) - x(0)*x(0));
     }
 };
 
 TEST(SQPTestCase, TestRosenbrock) {
-    using Solver = SQP<Rosenbrock>;
+    // will be using the default
+    using Solver = SQPSolver<Rosenbrock>;
     Rosenbrock problem;
     Solver solver;
-    Eigen::Vector2d x;
+    Solver::nlp_variable_t x0, x;
+    Solver::nlp_dual_t y0;
+    y0.setZero();
 
-    solver.settings().max_iter = 1000;
-    // solver.settings().line_search_max_iter = 4;
-    solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem);
+    x0 << 2.01, 1.01;
+    solver.settings().max_iter = 50;
+    solver.settings().line_search_max_iter = 5;
+    solver.solve(x0, y0);
 
     x = solver.primal_solution();
 
@@ -187,6 +177,8 @@ TEST(SQPTestCase, TestRosenbrock) {
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
+// here wait for refactoring of inequality constraints: coming soon
+#if 0
 struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
     var_t SOLUTION = {1, 1};
 
@@ -234,4 +226,4 @@ TEST(SQPTestCase, TestSimpleNLP) {
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
-} // namespace sqp_test_autodiff
+#endif

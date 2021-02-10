@@ -46,6 +46,7 @@ int main()
     Integrand f;
     Unif distrib;
 
+
     /** integrate value */
     float result = leg.integrate<Integrand>();
     Projection<Legendre> proj(f, 1, 6);

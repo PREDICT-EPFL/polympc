@@ -84,7 +84,7 @@ public:
 /** create solver */
 template<typename Problem, typename QPSolver> class MySolver;
 
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::DUAL_SIZE, typename Problem::scalar_t>>
+template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
 class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:

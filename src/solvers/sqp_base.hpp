@@ -52,7 +52,7 @@ struct sqp_info_t {
 
 template<typename Derived, typename Problem, typename QPSolver> class SQPBase;
 
-template<typename Derived, typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::DUAL_SIZE, typename Problem::scalar_t>>
+template<typename Derived, typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
 class SQPBase
 {
 public:
@@ -239,7 +239,7 @@ public:
 
   template<int T = Problem::MATRIXFMT>
   EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
-  hessian_regularisation(Eigen::Ref<nlp_hessian_t> lag_hessian)
+  hessian_regularisation(nlp_hessian_t& lag_hessian)
   {
       static_cast<Derived*>(this)->hessian_regularisation_sparse_impl(lag_hessian);
   }
@@ -490,6 +490,14 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
 
+    //std::cout << " \n QP: \n";
+    //std::cout << "H: \n" << m_H << "\n";
+    //std::cout << "h: " << m_h.transpose() << "\n";
+    //std::cout << "A: " << m_A << "\n";
+    //std::cout << "b: " << -m_b.transpose() << "\n";
+    //std::cout << "lx: " << (m_lbx - m_x).transpose() << " | ux: " << (m_ubx - m_x).transpose() << "\n";
+
+
     /** @badcode: m_x -> x step; m_lam -> lam step */
     qp_status = m_qp_solver.solve(m_H, m_h, m_A, -m_b, -m_b, m_lbx - m_x, m_ubx - m_x);
     //std::cout << "QP status: " << qp_status << " QP iter: " << m_qp_solver.info().iter << "\n";
@@ -500,6 +508,8 @@ void SQPBase<Derived, Problem, QPSolver>::solve_qp(Eigen::Ref<nlp_variable_t> pr
 
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
+
+    //std::cout << "dx: " << prim_step.transpose() << " | dy: " << dual_step.transpose() << "\n";
 }
 
 /** solve method */
@@ -521,6 +531,8 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
     //std::cout << "x:" << m_x.transpose() << "\n";
 
     /** solve once with exact linearisation */
+    //std::cout << "Linerise at: x:" << m_x.transpose() << " | y:" << m_lam.transpose() << "\n";
+
     linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_b);
     /** place for heuristics: regularisation and preconditioning */
     hessian_regularisation(m_H);
@@ -530,15 +542,14 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
     m_qp_solver.settings().reuse_pattern = true;
     m_qp_solver.settings().warm_start    = true; // for other solvers
 
-    //if(is_psd(m_H))
-    //    std::cout << "POSITIVE \n";
-
     m_lam_k = p_lambda;
 
     //std::cout << "x_step: " << p.transpose() << "\n";
 
     p_lambda -= m_lam;
     alpha = step_size_selection(p);
+
+    //alpha = scalar_t(1.0);
 
     //std::cout << "alpha: " << alpha << "\n";
 
@@ -559,15 +570,17 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
         return;
     }
 
+    //std::cout << m_x.transpose() << "\n";
+
     while (m_info.iter < m_settings.max_iter)
     {
         m_info.iter++;
         /** linearise and solve qp here*/
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_b);
 
-        //auto H_dense = Eigen::MatrixXd(m_H);
-        //if(is_psd(H_dense))
-        //    std::cout << "POSITIVE \n";
+        //linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_b);
+        /** place for heuristics: regularisation and preconditioning */
+        //hessian_regularisation(m_H);
 
         solve_qp(p, p_lambda);
 
@@ -576,11 +589,6 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
 
         p_lambda -= m_lam;
         alpha = step_size_selection(p);
-
-        //if(iter > 10)
-        //    alpha = 0.2;
-
-        //std::cout << "alpha: " << alpha << "\n";
 
         // take step
         m_x.noalias()   += alpha * p;
@@ -594,7 +602,6 @@ void SQPBase<Derived, Problem, QPSolver>::solve() noexcept
         if (m_settings.iteration_callback != nullptr)
             m_settings.iteration_callback(this);
 
-        //std::cout << "x:" << m_x.transpose() << "\n";
 
         if (termination_criteria(m_x)) {
             m_info.status.value = sqp_status_t::SOLVED;

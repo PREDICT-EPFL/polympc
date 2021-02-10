@@ -22,7 +22,7 @@ bool is_psd(Mat &h)
     Eigen::EigenSolver<Mat> eigensolver(h);
     for (int i = 0; i < eigensolver.eigenvalues().RowsAtCompileTime; i++) {
         double v = eigensolver.eigenvalues()(i).real();
-        if (v <= 0) {
+        if (v < 0) {
             return false;
         }
     }

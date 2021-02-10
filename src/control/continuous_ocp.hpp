@@ -876,6 +876,8 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
     {
         hes.col(i) = mayer_cost.derivatives()(i).derivatives();
     }
+
+    /** @bug: do we really need this transpose()? */
     hes.transposeInPlace();
 
     /** diagonal  */

@@ -620,7 +620,6 @@ pow(const Eigen::AutoDiffScalar<DerType> &x, const typename internal::traits<typ
   return Eigen::MakeAutoDiffScalar(pow(x.value(),y), x.derivatives() * (y * pow(x.value(),y-1)));
 }
 
-
 template<typename DerTypeA,typename DerTypeB>
 inline const AutoDiffScalar<Matrix<typename internal::traits<typename internal::remove_all<DerTypeA>::type>::Scalar,Dynamic,1> >
 atan2(const AutoDiffScalar<DerTypeA>& a, const AutoDiffScalar<DerTypeB>& b)

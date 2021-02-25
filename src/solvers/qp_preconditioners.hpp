@@ -13,6 +13,93 @@ class GenericDiagonalPreconditioner
 }
 */
 
+namespace polympc {
+
+
+/** empty preconditioner */
+class IdentityPreconditioner
+{
+public:
+    IdentityPreconditioner() = default;
+    ~IdentityPreconditioner() = default;
+
+    template<typename T>
+    using MB = Eigen::Ref<T>;
+
+
+    template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
+    void compute(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    {
+        polympc::ignore_unused_var(H);
+        polympc::ignore_unused_var(h);
+        polympc::ignore_unused_var(A);
+        polympc::ignore_unused_var(Al);
+        polympc::ignore_unused_var(Au);
+        polympc::ignore_unused_var(l);
+        polympc::ignore_unused_var(u);
+    }
+
+    template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
+    void scale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+               const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    {
+        polympc::ignore_unused_var(H);
+        polympc::ignore_unused_var(h);
+        polympc::ignore_unused_var(A);
+        polympc::ignore_unused_var(Al);
+        polympc::ignore_unused_var(Au);
+        polympc::ignore_unused_var(l);
+        polympc::ignore_unused_var(u);
+    }
+
+    template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
+    void unscale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    {
+        polympc::ignore_unused_var(H);
+        polympc::ignore_unused_var(h);
+        polympc::ignore_unused_var(A);
+        polympc::ignore_unused_var(Al);
+        polympc::ignore_unused_var(Au);
+        polympc::ignore_unused_var(l);
+        polympc::ignore_unused_var(u);
+    }
+
+    template<typename Primal, typename Dual>
+    void scale(const Primal& x, const Dual&y) const noexcept
+    {
+        polympc::ignore_unused_var(x);
+        polympc::ignore_unused_var(y);
+    }
+
+    template<typename Primal, typename Dual>
+    void unscale(const Primal& x, const Dual&y) const noexcept
+    {
+        polympc::ignore_unused_var(x);
+        polympc::ignore_unused_var(y);
+    }
+
+    template<typename Hessian>
+    void unscale_hessian(const Hessian& x) const noexcept
+    {
+        polympc::ignore_unused_var(x);
+    }
+
+    template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
+    void update( const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    {
+        polympc::ignore_unused_var(H);
+        polympc::ignore_unused_var(h);
+        polympc::ignore_unused_var(A);
+        polympc::ignore_unused_var(Al);
+        polympc::ignore_unused_var(Au);
+        polympc::ignore_unused_var(l);
+        polympc::ignore_unused_var(u);
+    }
+
+};
 
 /** Ruiz equilibration algorithm */
 template<typename Scalar, int N, int M, int MatrixType = DENSE>
@@ -55,8 +142,8 @@ public:
     template<int T = MatrixType>
     typename std::enable_if<T == DENSE>::type
     compute(Eigen::Ref<hessiant_t> H, Eigen::Ref<gradient_t> h, Eigen::Ref<jacobian_t> A,
-                 Eigen::Ref<constraint_t> Al, Eigen::Ref<constraint_t> Au,
-                 Eigen::Ref<gradient_t> l, Eigen::Ref<gradient_t> u) noexcept
+            Eigen::Ref<constraint_t> Al, Eigen::Ref<constraint_t> Au,
+            Eigen::Ref<gradient_t> l, Eigen::Ref<gradient_t> u) noexcept
     {
         constexpr int max_iter = 4;
         m_c = scalar_t(1);
@@ -309,6 +396,22 @@ public:
         u = u.cwiseProduct(D);
     }
 
+    /** unscale hessian */
+    template<int T = MatrixType>
+    EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
+    unscale_hessian(hessiant_t& H) const noexcept
+    {
+        H = scalar_t(1 / m_c) * (D.cwiseInverse()).asDiagonal() * H * (D.cwiseInverse()).asDiagonal();
+        H.uncompress();
+    }
+
+    template<int T = MatrixType>
+    EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type
+    unscale_hessian(Eigen::Ref<hessiant_t> H) const noexcept
+    {
+        H.noalias() = scalar_t(1 / m_c) * (D.cwiseInverse()).asDiagonal() * H * (D.cwiseInverse()).asDiagonal();
+    }
+
     template<int T = MatrixType>
     typename std::enable_if<T == DENSE>::type
     update(Eigen::Ref<hessiant_t> H, Eigen::Ref<gradient_t> h, Eigen::Ref<jacobian_t> A,
@@ -440,6 +543,7 @@ public:
 };
 
 
+} // end of polympc namespace
 
 
 

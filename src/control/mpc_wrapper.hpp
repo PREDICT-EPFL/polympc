@@ -3,7 +3,6 @@
 
 #include "utils/helpers.hpp"
 #include "polynomials/splines.hpp"
-#include "polymath.h"
 #include <iostream>
 
 /** interface/aggregate class for MPC controllers */

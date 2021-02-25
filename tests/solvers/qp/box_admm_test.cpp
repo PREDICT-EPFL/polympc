@@ -59,7 +59,7 @@ TEST(ADMMSolverTest, box_admmRuizEquilibration)
     boxADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 150;
 
-    RuizEquilibration<Scalar, 2, 1> preconditioner;
+    polympc::RuizEquilibration<Scalar, 2, 1> preconditioner;
     preconditioner.compute(H, h, A, Al, Au, xl, xu);
 
     prob.solve(H, h, A, Al, Au, xl, xu);

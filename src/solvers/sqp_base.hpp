@@ -67,7 +67,7 @@ public:
         m_lbx = nlp_variable_t::Constant(static_cast<scalar_t>(-INF));
         m_ubx = nlp_variable_t::Constant(static_cast<scalar_t>( INF));
         /** @bug: fix initialisation */
-        m_x.setOnes();
+        m_x.setZero();
         m_lam.setZero();
 
         m_qp_solver.settings().warm_start = false;
@@ -336,18 +336,19 @@ typename SQPBase<Derived, Problem, QPSolver, Preconditioner>::scalar_t
 SQPBase<Derived, Problem, QPSolver, Preconditioner>::step_size_selection_impl(const Eigen::Ref<const nlp_variable_t>& p) noexcept
 {
     scalar_t mu, phi_l1, Dp_phi_l1;
-    nlp_variable_t cost_gradient = m_h;
-    const scalar_t tau = m_settings.tau; // line search step decrease, 0 < tau < settings.tau
+    nlp_variable_t cost_gradient = this->m_h;
+    const scalar_t tau = this->m_settings.tau; // line search step decrease, 0 < tau < settings.tau
 
-    scalar_t constr_l1 = constraints_violation(m_x);
+    scalar_t constr_l1 = this->constraints_violation(this->m_x);
 
     // TODO: get mu from merit function model using hessian of Lagrangian
-    mu = abs(cost_gradient.dot(p)) / ((1 - m_settings.rho) * constr_l1);
+    //const scalar_t quad_term = p.dot(this->m_H * p);
+    //const scalar_t qt = quad_term >= 0 ? scalar_t(0.5) * quad_term : 0;
+    //mu = (abs(cost_gradient.dot(p)) ) / ((1 - this->m_settings.rho) * constr_l1);
+    mu = this->m_lam_k.template lpNorm<Eigen::Infinity>();
 
     scalar_t cost_1;
-    problem.cost(m_x, m_p, cost_1);
-
-    //std::cout << "l1: " << constr_l1 << " cost: " << cost_1 << "\n";
+    this->problem.cost(this->m_x, this->m_p, cost_1);
 
     phi_l1 = cost_1 + mu * constr_l1;
     Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
@@ -355,25 +356,18 @@ SQPBase<Derived, Problem, QPSolver, Preconditioner>::step_size_selection_impl(co
     scalar_t alpha = scalar_t(1.0);
     scalar_t cost_step;
     nlp_variable_t x_step;
-    for (int i = 1; i < m_settings.line_search_max_iter; i++)
+    for (int i = 1; i < this->m_settings.line_search_max_iter; i++)
     {
         x_step.noalias() = alpha * p;
-        x_step += m_x;
-        problem.cost(x_step, m_p, cost_step);
+        x_step += this->m_x;
+        this->problem.cost(x_step, this->m_p, cost_step);
 
-        //std::cout << "l1: " << constraints_violation(x_step) << " cost: " << cost_step << "\n";
+        scalar_t phi_l1_step = cost_step + mu * this->constraints_violation(x_step);
 
-        scalar_t phi_l1_step = cost_step + mu * constraints_violation(x_step);
-
-        //std::cout << "phi before: " << phi_l1 << " after: " << phi_l1_step <<  " required diff: " << alpha * m_settings.eta * Dp_phi_l1 << "\n";
-
-        if (phi_l1_step <= (phi_l1 + alpha * m_settings.eta * Dp_phi_l1))
-        {
-            // accept step
+        if (phi_l1_step <= (phi_l1 + alpha * this->m_settings.eta * Dp_phi_l1))
             return alpha;
-        } else {
+        else
             alpha = tau * alpha;
-        }
     }
 
     return alpha;
@@ -548,6 +542,17 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
     m_au =  m_al;
     m_lx.noalias() = m_lbx - m_x;
     m_ux.noalias() = m_ubx - m_x;
+
+    /**
+    std::cout << "H: \n" << m_H << "\n";
+    std::cout << "A: \n" << m_A << "\n";
+    std::cout << "h: " << m_h.transpose() << "\n";
+    std::cout << "al: " << m_al.transpose() << "\n";
+    std::cout << "ul: " << m_au.transpose() << "\n";
+    std::cout << "xl: " << m_lx.transpose() << "\n";
+    std::cout << "xu: " << m_ux.transpose() << "\n";
+    */
+
     m_preconditioner.compute(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
 
     /** solve and unscale the solution */
@@ -608,7 +613,7 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
         //std::cout << "ul: " << m_au.transpose() << "\n";
         //std::cout << "xl: " << m_lx.transpose() << "\n";
         //std::cout << "xu: " << m_ux.transpose() << "\n";
-        m_preconditioner.scale(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
+        m_preconditioner.compute(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
 
         solve_qp(p, p_lambda);
         m_preconditioner.unscale(p, p_lambda);

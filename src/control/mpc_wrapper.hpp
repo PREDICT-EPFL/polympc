@@ -37,19 +37,6 @@ public:
         polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
         sgm_length = (OCP::t_stop - OCP::t_start) / num_segms;
         nodes_per_segm = std::floor(num_nodes / num_segms);
-
-        /**
-        Eigen::Matrix<scalar_t, 2, 6> values; values << 1, 2, 1, 2, 1, 2,  1, 1, 1, 1, 1, 1;
-
-        auto val = polympc::LagrangeSpline::eval(0.5, values, m_basis);
-
-        Eigen::VectorXd lox;
-
-        std::cout << time_nodes.transpose() << "\n";
-        std::cout << m_basis << "\n";
-        std::cout << val.transpose() << "\n";
-        */
-
     }
     ~MPC() = default;
 
@@ -160,8 +147,14 @@ public:
     EIGEN_STRONG_INLINE const typename nlp_solver_t::nlp_settings_t& settings() const noexcept { return m_solver.m_settings; }
     EIGEN_STRONG_INLINE typename nlp_solver_t::nlp_settings_t& settings() noexcept { return m_solver.m_settings; }
 
+    EIGEN_STRONG_INLINE const typename nlp_solver_t::qp_solver_t::settings_t& qp_settings() const noexcept { return m_solver.m_qp_solver.m_settings; }
+    EIGEN_STRONG_INLINE typename nlp_solver_t::qp_solver_t::settings_t& qp_settings() noexcept { return m_solver.m_qp_solver.m_settings; }
+
     EIGEN_STRONG_INLINE const typename nlp_solver_t::nlp_info_t& info() const noexcept { return m_solver.m_info; }
     EIGEN_STRONG_INLINE typename nlp_solver_t::nlp_info_t& info() noexcept { return m_solver.m_info; }
+
+    EIGEN_STRONG_INLINE const nlp_solver_t& solver() const noexcept { return m_solver; }
+    EIGEN_STRONG_INLINE nlp_solver_t& solver() noexcept { return m_solver; }
 
     EIGEN_STRONG_INLINE const OCP& ocp() const noexcept { return m_solver.get_problem(); }
     EIGEN_STRONG_INLINE OCP& ocp() noexcept { return m_solver.get_problem(); }

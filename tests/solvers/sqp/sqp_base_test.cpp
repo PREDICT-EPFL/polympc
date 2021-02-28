@@ -19,7 +19,6 @@
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
-#define test_NUM_EXP    1
 
 /** benchmark the new collocation class */
 using Polynomial = polympc::Chebyshev<test_POLY_ORDER, polympc::GAUSS_LOBATTO, double>;
@@ -49,6 +48,9 @@ public:
         xdot(0) = u(0) * cos(x(2)) * cos(u(1));
         xdot(1) = u(0) * sin(x(2)) * cos(u(1));
         xdot(2) = u(0) * sin(u(1)) / d(0);
+
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(t);
     }
 
     template<typename T>
@@ -56,13 +58,14 @@ public:
                                    const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
                                    const scalar_t &t, T &lagrange) noexcept
     {
-        //Q.diagonal() << 1,1,1;
-        //R.diagonal() << 1,1;
-
         Eigen::Matrix<T,3,3> Qm = Q.toDenseMatrix().template cast<T>();
         Eigen::Matrix<T,2,2> Rm = R.toDenseMatrix().template cast<T>();
 
         lagrange = x.dot(Qm * x) + u.dot(Rm * u);
+
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(d);
     }
 
     template<typename T>
@@ -72,23 +75,28 @@ public:
     {
         Eigen::Matrix<T,3,3> Qm = Q.toDenseMatrix().template cast<T>();
         mayer = x.dot(Qm * x);
+
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(d);
+        polympc::ignore_unused_var(u);
     }
 
     void set_Q_coeff(const scalar_t& coeff)
     {
         Q.diagonal() << coeff, coeff, coeff;
-        std::cout << "Q updated \n";
     }
 };
 
 /** create solver */
-template<typename Problem, typename QPSolver> class MySolver;
+template<typename Problem, typename QPSolver, typename Preconditioner> class MySolver;
 
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
-class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
+template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>,
+         typename Preconditioner = polympc::IdentityPreconditioner>
+class MySolver : public SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>
 {
 public:
-    using Base = SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>;
+    using Base = SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -97,6 +105,7 @@ public:
     EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
     /** change step size selection algorithm */
+    /**
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
     {
         //std::cout << "taking NEW implementation \n";
@@ -149,6 +158,7 @@ public:
 
         return alpha;
     }
+    */
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
     EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
@@ -167,18 +177,19 @@ using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::
                                 RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
 // for advanced users
-//using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
+using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 //using qpmad_solver_t = polympc::QPMAD<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 
-using preconditioner_t = RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
+using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
 
 int main(void)
 {
-    MySolver<RobotOCP, admm_solver> solver;
+    MySolver<RobotOCP, box_admm_solver, preconditioner_t> solver;
     solver.get_problem().set_Q_coeff(1.0);
-    solver.settings().max_iter = 20;
+    solver.settings().max_iter = 10;
     solver.settings().line_search_max_iter = 10;
+    solver.qp_settings().max_iter = 1000;
     solver.parameters()(0) = 2.0;
     Eigen::Matrix<RobotOCP::scalar_t, 3, 1> init_cond; init_cond << 0.5, 0.5, 0.5;
     Eigen::Matrix<RobotOCP::scalar_t, 2, 1> ub; ub <<  1.5,  0.75;
@@ -197,6 +208,7 @@ int main(void)
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";
     std::cout << "Num iterations: " << solver.info().iter << "\n";
+    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
     std::cout << "Size of the solver: " << sizeof (solver) << "\n";
@@ -204,6 +216,7 @@ int main(void)
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
     // warm started iteration
+    /**
     init_cond << 0.3, 0.4, 0.45;
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
@@ -218,6 +231,7 @@ int main(void)
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+    */
 
 
 

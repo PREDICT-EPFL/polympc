@@ -58,7 +58,7 @@ TEST(QPSolverSparseTest, box_admmRuizEquilibration)
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
 
-    RuizEquilibration<scalar, 2, 1, SPARSE> preconditioner;
+    polympc::RuizEquilibration<scalar, 2, 1, SPARSE> preconditioner;
     preconditioner.compute(H, h, A, Al, Au, xl, xu);
 
     prob.solve(H, h, A, Al, Au, xl, xu);

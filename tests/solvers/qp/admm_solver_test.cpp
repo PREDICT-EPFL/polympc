@@ -58,7 +58,7 @@ TEST(QPSolverTest, admmRuizEquilibration)
     ADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 1000;
 
-    RuizEquilibration<Scalar, 2, 1> preconditioner;
+    polympc::RuizEquilibration<Scalar, 2, 1> preconditioner;
     preconditioner.compute(H, h, A, al, au, xl, xu);
 
     prob.solve(H, h, A, al, au, xl, xu);

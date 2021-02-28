@@ -108,11 +108,11 @@ class QPBase
         LOOSE_BOUNDS
     };
 
-    constraint_type constr_type[M]; /**< constraint type classification */
-    constraint_type box_constr_type[N]; /** box constraints parsing */
-
     settings_t m_settings;
     info_t m_info;
+
+    constraint_type box_constr_type[N]; /** box constraints parsing */
+    constraint_type constr_type[M]; /**< constraint type classification */
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     //EIGEN_MAKE_ALIGNED_OPERATOR_NEW

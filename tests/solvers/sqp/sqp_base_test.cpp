@@ -105,6 +105,7 @@ public:
     EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
     /** change step size selection algorithm */
+    /**
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
     {
         //std::cout << "taking NEW implementation \n";
@@ -157,6 +158,7 @@ public:
 
         return alpha;
     }
+    */
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
     EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,

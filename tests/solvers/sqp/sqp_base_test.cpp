@@ -11,11 +11,14 @@
 #include "solvers/box_admm.hpp"
 #include "solvers/admm.hpp"
 #include "solvers/qp_preconditioners.hpp"
+#include "solvers/line_search.hpp"
 
 #ifdef POLYMPC_FOUND_OSQP_EIGEN
 #include "solvers/osqp_interface.hpp"
 #include "solvers/qpmad_interface.hpp"
 #endif
+
+#include "boost/numeric/odeint.hpp"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -27,6 +30,7 @@ using Approximation = polympc::Spline<Polynomial, test_NUM_SEG>;
 POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*ND*/ 1, /*NG*/0, /*TYPE*/ double)
 
 using namespace Eigen;
+using namespace boost::numeric;
 
 class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 {
@@ -104,33 +108,23 @@ public:
     //EIGEN_STRONG_INLINE const typename Base::_Problem& get_problem() const noexcept { return this->problem; }
     EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
-    /** change step size selection algorithm */
-    /**
+    LSFilter<scalar_t> filter;
+
+
+    /** change step size selection algorithm  : filter line search */
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
     {
-        //std::cout << "taking NEW implementation \n";
-        scalar_t mu, phi_l1, Dp_phi_l1;
-        nlp_variable_t cost_gradient = this->m_h;
         const scalar_t tau = this->m_settings.tau; // line search step decrease, 0 < tau < settings.tau
 
+        /** compute constraints at initial point */
         scalar_t constr_l1 = this->constraints_violation(this->m_x);
-
-        // TODO: get mu from merit function model using hessian of Lagrangian
-        //const scalar_t quad_term = p.dot(this->m_H * p);
-        //const scalar_t qt = quad_term >= 0 ? scalar_t(0.5) * quad_term : 0;
-        //mu = (abs(cost_gradient.dot(p)) ) / ((1 - this->m_settings.rho) * constr_l1);
-
-        mu = this->m_lam_k.template lpNorm<Eigen::Infinity>();
-
-        //std::cout << "mu: " << mu << "\n";
-
         scalar_t cost_1;
         this->problem.cost(this->m_x, this->m_p, cost_1);
 
-        //std::cout << "l1: " << constr_l1 << " cost: " << cost_1 << "\n";
+        if(filter.is_acceptable(cost_1, constr_l1))
+            filter.add(cost_1, constr_l1);
 
-        phi_l1 = cost_1 + mu * constr_l1;
-        Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
+        //filter.print();
 
         scalar_t alpha = scalar_t(1.0);
         scalar_t cost_step;
@@ -139,26 +133,27 @@ public:
         {
             x_step.noalias() = alpha * p;
             x_step += this->m_x;
+
             this->problem.cost(x_step, this->m_p, cost_step);
+            scalar_t constr_step = this->constraints_violation(x_step);
 
-            //std::cout << "i: " << i << " l1: " << this->constraints_violation(x_step) << " cost: " << cost_step << "\n";
-
-            scalar_t phi_l1_step = cost_step + mu * this->constraints_violation(x_step);
-
-            //std::cout << "phi before: " << phi_l1 << " after: " << phi_l1_step <<  " required diff: " << alpha * this->m_settings.eta * Dp_phi_l1 << "\n";
-
-            if (phi_l1_step <= (phi_l1 + alpha * this->m_settings.eta * Dp_phi_l1))
+            if(filter.is_acceptable(cost_step, constr_step))
             {
-                // accept step
-                return alpha;
-            } else {
-                alpha = tau * alpha;
-            }
-        }
+                filter.add(cost_step, constr_step);
+                //filter.print();
 
+                //std::cout << "alpha: " << alpha << "\n";
+                return alpha;
+            }
+            else
+            {
+                alpha *= tau;
+            }
+
+        }
+        //std::cout << "alpha: " << alpha << "\n";
         return alpha;
     }
-    */
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
     EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
@@ -183,6 +178,8 @@ using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotO
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
 
+
+
 int main(void)
 {
     MySolver<RobotOCP, box_admm_solver, preconditioner_t> solver;
@@ -191,6 +188,7 @@ int main(void)
     solver.settings().line_search_max_iter = 10;
     solver.qp_settings().max_iter = 1000;
     solver.parameters()(0) = 2.0;
+    solver.filter.beta = 0.1;
     Eigen::Matrix<RobotOCP::scalar_t, 3, 1> init_cond; init_cond << 0.5, 0.5, 0.5;
     Eigen::Matrix<RobotOCP::scalar_t, 2, 1> ub; ub <<  1.5,  0.75;
     Eigen::Matrix<RobotOCP::scalar_t, 2, 1> lb; lb << -1.5, -0.75;
@@ -216,7 +214,6 @@ int main(void)
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
     // warm started iteration
-    /**
     init_cond << 0.3, 0.4, 0.45;
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
@@ -231,7 +228,6 @@ int main(void)
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
 
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
-    */
 
 
 
@@ -311,6 +307,23 @@ int main(void)
     std::cout << "Solvers error: " <<  (admm_primal - b_admm_primal).template lpNorm<Eigen::Infinity>() << "\n";
     std::cout << "Solvers error (dual): " <<  (b_admm_dual - osqp_dual).template lpNorm<Eigen::Infinity>() << "\n";
     std::cout << "Dual residual: " << (admm_dual - osqp_dual).template lpNorm<Eigen::Infinity>() << "\n";
+    */
+
+    /** test filter */
+    /**
+    LSFilter<RobotOCP::scalar_t> filter;
+    filter.add(1, 3);
+    filter.add(3, 2.5);
+    filter.add(4, 2);
+    filter.add(5, 1);
+    filter.print();
+
+    std::cout << "Is (6 , 3) acceptable: " << filter.is_acceptable(6, 3) << "\n";
+    std::cout << "Is (2 , 1) acceptable: " << filter.is_acceptable(2, 1) << "\n";
+
+    filter.add(0.5, 2);
+    //filter.add(0.5, 0.5);
+    filter.print();
     */
 
     return EXIT_SUCCESS;

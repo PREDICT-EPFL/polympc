@@ -15,4 +15,7 @@ endif()
   add_executable(auto_diff_math math_func_test.cpp)
   target_link_libraries(auto_diff_math Eigen3::Eigen)
 
+  add_executable(auto_diff_jacobian auto_diff_jacobian.cpp)
+  target_link_libraries(auto_diff_jacobian Eigen3::Eigen)
+
 endif()

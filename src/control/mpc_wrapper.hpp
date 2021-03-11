@@ -180,7 +180,7 @@ public:
         Eigen::Index idx = (Eigen::Index)std::floor( t / sgm_length);
         idx = std::max(Eigen::Index(0), std::min(idx, (Eigen::Index)num_segms - 1)); // clip idx to stay within the spline bounds
 
-        state_t state = polympc::LagrangeSpline::eval(t, x_reshaped.template block<nx,
+        state_t state = polympc::LagrangeSpline::eval(t - idx * sgm_length, x_reshaped.template block<nx,
                                                       OCP::nodes_t::RowsAtCompileTime>(0, idx * nodes_per_segm), m_basis);
 
         return state;
@@ -206,7 +206,7 @@ public:
         Eigen::Index idx = (Eigen::Index)std::floor( t / sgm_length);
         idx = std::max(Eigen::Index(0), std::min(idx, (Eigen::Index)num_segms - 1)); // clip idx to stay within the spline bounds
 
-        control_t state = polympc::LagrangeSpline::eval(t, u_reshaped.template block<nu,
+        control_t state = polympc::LagrangeSpline::eval(t - idx * sgm_length, u_reshaped.template block<nu,
                                                       OCP::nodes_t::RowsAtCompileTime>(0, idx * nodes_per_segm), m_basis);
 
         return state;

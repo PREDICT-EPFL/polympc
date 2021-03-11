@@ -28,8 +28,8 @@ public:
 
 
     template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
-    void compute(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
-                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    EIGEN_STRONG_INLINE void compute(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                                     const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
     {
         polympc::ignore_unused_var(H);
         polympc::ignore_unused_var(h);
@@ -41,8 +41,8 @@ public:
     }
 
     template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
-    void scale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
-               const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    EIGEN_STRONG_INLINE void scale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                                   const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
     {
         polympc::ignore_unused_var(H);
         polympc::ignore_unused_var(h);
@@ -54,8 +54,8 @@ public:
     }
 
     template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
-    void unscale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
-                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    EIGEN_STRONG_INLINE void unscale(const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                                     const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
     {
         polympc::ignore_unused_var(H);
         polympc::ignore_unused_var(h);
@@ -67,28 +67,28 @@ public:
     }
 
     template<typename Primal, typename Dual>
-    void scale(const Primal& x, const Dual&y) const noexcept
+    EIGEN_STRONG_INLINE void scale(const Primal& x, const Dual&y) const noexcept
     {
         polympc::ignore_unused_var(x);
         polympc::ignore_unused_var(y);
     }
 
     template<typename Primal, typename Dual>
-    void unscale(const Primal& x, const Dual&y) const noexcept
+    EIGEN_STRONG_INLINE void unscale(const Primal& x, const Dual&y) const noexcept
     {
         polympc::ignore_unused_var(x);
         polympc::ignore_unused_var(y);
     }
 
     template<typename Hessian>
-    void unscale_hessian(const Hessian& x) const noexcept
+    EIGEN_STRONG_INLINE void unscale_hessian(const Hessian& x) const noexcept
     {
         polympc::ignore_unused_var(x);
     }
 
     template<typename Hessian, typename Gradient, typename Jacobian, typename Constraint>
-    void update( const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
-                 const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
+    EIGEN_STRONG_INLINE void update( const Hessian& H, const Gradient&h, const Jacobian& A, const Constraint& Al,
+                                     const Constraint& Au, const Gradient& l, const Gradient& u) const noexcept
     {
         polympc::ignore_unused_var(H);
         polympc::ignore_unused_var(h);

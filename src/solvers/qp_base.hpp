@@ -112,6 +112,10 @@ class QPBase
     info_t m_info;
 
     constraint_type box_constr_type[N]; /** box constraints parsing */
+
+    #if _MSC_VER && !__INTEL_COMPILER
+    constraint_type* constr_type;
+    #endif
     constraint_type constr_type[M]; /**< constraint type classification */
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html

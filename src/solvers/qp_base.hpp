@@ -3,6 +3,7 @@
 
 #include "utils/helpers.hpp"
 #include <iostream>
+#include <array>
 
 template <typename Scalar>
 struct qp_solver_settings_t {
@@ -111,12 +112,8 @@ class QPBase
     settings_t m_settings;
     info_t m_info;
 
-    constraint_type box_constr_type[N]; /** box constraints parsing */
-
-    #if _MSC_VER && !__INTEL_COMPILER
-    constraint_type* constr_type;
-    #endif
-    constraint_type constr_type[M]; /**< constraint type classification */
+    std::array<constraint_type, N> box_constr_type; /** box constraints parsing */
+    std::array<constraint_type, M> constr_type; /**< constraint type classification */
 
     // enforce 16 byte alignment https://eigen.tuxfamily.org/dox/group__TopicStructHavingEigenMembers.html
     //EIGEN_MAKE_ALIGNED_OPERATOR_NEW

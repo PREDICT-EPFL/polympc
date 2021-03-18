@@ -154,7 +154,7 @@ public:
                 new_rho = fmax(RHO_MIN, fmin(new_rho, RHO_MAX));
                 this->m_info.rho_estimate = new_rho;
 
-                if (new_rho < rho / this->m_settings.adaptive_rho_tolerance or
+                if (new_rho < rho / this->m_settings.adaptive_rho_tolerance ||
                     new_rho > rho * this->m_settings.adaptive_rho_tolerance)
                 {
                     m_rho_vec_box_prev = m_rho_vec_box;

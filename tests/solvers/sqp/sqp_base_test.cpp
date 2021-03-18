@@ -36,9 +36,7 @@ class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 {
 public:
     ~RobotOCP() = default;
-
-    static constexpr double t_start = 0.0;
-    static constexpr double t_stop  = 2.0;
+    RobotOCP() { set_time_limits(0,2); } // one way to set optimisation horizon
 
     Eigen::DiagonalMatrix<scalar_t, 3> Q{1,1,1};
     Eigen::DiagonalMatrix<scalar_t, 2> R{1,1};
@@ -109,7 +107,6 @@ public:
     EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
     LSFilter<scalar_t> filter;
-
 
     /** change step size selection algorithm  : filter line search */
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
@@ -184,6 +181,7 @@ int main(void)
 {
     MySolver<RobotOCP, box_admm_solver, preconditioner_t> solver;
     solver.get_problem().set_Q_coeff(1.0);
+    solver.get_problem().set_time_limits(0, 2); // another way to set optimisation horizon
     solver.settings().max_iter = 10;
     solver.settings().line_search_max_iter = 10;
     solver.qp_settings().max_iter = 1000;
@@ -208,9 +206,7 @@ int main(void)
     std::cout << "Num iterations: " << solver.info().iter << "\n";
     std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
     std::cout << "Size of the solver: " << sizeof (solver) << "\n";
-
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
     // warm started iteration

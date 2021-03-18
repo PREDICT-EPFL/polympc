@@ -47,7 +47,7 @@ if(OsqpEigen_FOUND)
     add_compile_definitions(POLYMPC_FOUND_OSQP_EIGEN=1)
 endif()
 
-
+#add_definitions(-DEIGEN_DONT_VECTORIZE=1)
 #add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB
 
 

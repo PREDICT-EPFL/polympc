@@ -35,7 +35,7 @@ public:
         time_grid = this->ocp().time_nodes.reverse();
         time_nodes = time_grid.head(time_grid.rows());
         polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
-        sgm_length = (OCP::t_stop - OCP::t_start) / num_segms;
+        sgm_length = (m_solver.get_problem().t_stop - m_solver.get_problem().t_start) / num_segms;
         nodes_per_segm = std::floor(num_nodes / num_segms);
     }
     ~MPC() = default;
@@ -57,6 +57,9 @@ public:
     interpolation_basis_t m_basis;
     scalar_t sgm_length{1.0};
     int nodes_per_segm{1};
+
+    /** set MPC optmisation limits */
+    inline void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept {m_solver.get_problem().set_time_limits(t0, tf);}
 
     /** set initial conditions bounds */
     inline void initial_conditions(const Eigen::Ref<const state_t>& x0) noexcept
@@ -157,7 +160,7 @@ public:
     EIGEN_STRONG_INLINE nlp_solver_t& solver() noexcept { return m_solver; }
 
     EIGEN_STRONG_INLINE const OCP& ocp() const noexcept { return m_solver.get_problem(); }
-    EIGEN_STRONG_INLINE OCP& ocp() noexcept { return m_solver.get_problem(); }
+    EIGEN_STRONG_INLINE OCP& ocp() noexcept { return m_solver.get_problem(); }   
 
     /** get the solution */
     // state

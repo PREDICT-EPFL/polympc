@@ -126,8 +126,9 @@ public:
     ad2_scalar_t m_ad2_cost;
 
     /** do not make constant */
-    const scalar_t t_start = static_cast<OCP*>(this)->t_start;
-    const scalar_t t_stop  = static_cast<OCP*>(this)->t_stop;
+    scalar_t t_start{0};
+    scalar_t t_stop{1};
+    EIGEN_STRONG_INLINE void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept { t_start = t0;  t_stop = tf; }
 
     /** compute collocation parameters */
     const typename Approximation::diff_mat_t  m_D     = Approximation::compute_diff_matrix();

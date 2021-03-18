@@ -24,8 +24,8 @@ class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 public:
     ~RobotOCP() = default;
 
-    static constexpr double t_start = 0.0;
-    static constexpr double t_stop  = 2.0;
+    //static constexpr double t_start = 0.0;
+    //static constexpr double t_stop  = 2.0;
 
     Eigen::DiagonalMatrix<scalar_t, 3> Q{1,1,1};
     Eigen::DiagonalMatrix<scalar_t, 2> R{1,1};
@@ -91,6 +91,8 @@ int main(void)
     RobotOCP::nlp_variable_t cost_gradient, lag_gradient;
     RobotOCP::nlp_hessian_t cost_hessian(static_cast<int>(RobotOCP::VAR_SIZE),  static_cast<int>(RobotOCP::VAR_SIZE));
     RobotOCP::nlp_hessian_t lag_hessian(static_cast<int>(RobotOCP::VAR_SIZE), static_cast<int>(RobotOCP::VAR_SIZE));
+
+    robot_nlp.set_time_limits(0,2);
 
     //robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, eq_jac);
     polympc::time_point start = polympc::get_time();

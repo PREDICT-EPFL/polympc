@@ -3,9 +3,8 @@
 
 #include "utils/helpers.hpp"
 #include "autodiff/AutoDiffScalar.h"
-//#include "sqp_base.hpp"
 
-#include "iostream"
+#include <iostream>
 
 template<int I, int U>
 struct more
@@ -67,7 +66,7 @@ public:
     using variable_t = Eigen::Matrix<T, VAR_SIZE, 1>;
 
     template<typename T>
-    using constraint_t = Eigen::Matrix<T, NUM_EQ, 1>;
+    using constraint_t = Eigen::Matrix<T, NUM_EQ + NUM_INEQ, 1>;
 
     /** parameters */
     template<typename T>

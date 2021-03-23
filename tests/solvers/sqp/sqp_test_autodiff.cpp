@@ -16,47 +16,6 @@ public:
 
     Eigen::EigenSolver<nlp_hessian_t> es;
 
-    /** change step size selection algorithm */
-    scalar_t step_size_selection_impl(const Eigen::Ref<const nlp_variable_t>& p) noexcept
-    {
-        //std::cout << "taking NEW implementation \n";
-        scalar_t mu, phi_l1, Dp_phi_l1;
-        nlp_variable_t cost_gradient = this->m_h;
-        const scalar_t tau = this->m_settings.tau; // line search step decrease, 0 < tau < settings.tau
-
-        scalar_t constr_l1 = this->constraints_violation(this->m_x);
-
-        mu = this->m_lam_k.template lpNorm<Eigen::Infinity>();
-
-        scalar_t cost_1;
-        this->problem.cost(this->m_x, this->m_p, cost_1);
-
-        phi_l1 = cost_1 + mu * constr_l1;
-        Dp_phi_l1 = cost_gradient.dot(p) - mu * constr_l1;
-
-        scalar_t alpha = scalar_t(1.0);
-        scalar_t cost_step;
-        nlp_variable_t x_step;
-        for (int i = 1; i < this->m_settings.line_search_max_iter; i++)
-        {
-            x_step.noalias() = alpha * p;
-            x_step += this->m_x;
-            this->problem.cost(x_step, this->m_p, cost_step);
-
-            scalar_t phi_l1_step = cost_step + mu * this->constraints_violation(x_step);
-
-            if (phi_l1_step <= (phi_l1 + alpha * this->m_settings.eta * Dp_phi_l1))
-            {
-                // accept step
-                return alpha;
-            } else {
-                alpha = tau * alpha;
-            }
-        }
-
-        return alpha;
-    }
-
     /** implement regularisation for the Hessian: eigenvalue mirroring */
     EIGEN_STRONG_INLINE void hessian_regularisation_dense_impl(Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
     {
@@ -66,8 +25,6 @@ public:
         scalar_t minEigValue = es.eigenvalues().real().minCoeff();
         if ( minEigValue <= 0)
         {
-            std::cout << "D before: " << es.eigenvalues().real().transpose() << "\n";
-
             Deig = es.eigenvalues().real().asDiagonal();
             for (int i = 0; i < Deig.rows(); i++)
             {
@@ -75,7 +32,6 @@ public:
             }
 
             lag_hessian.noalias() = (es.eigenvectors().real()) * Deig* (es.eigenvectors().real().transpose()); //V*D*V^-1 with V^-1 ~= V'
-            std::cout << "D after: " << Deig.diagonal().transpose() << "\n";
         }
     }
 

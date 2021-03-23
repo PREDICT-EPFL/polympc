@@ -166,6 +166,11 @@ int main(void)
     std::cout << std::endl;
     */
 
+    MatrixXd tmp; tmp.setRandom(5,5); tmp.setZero(2, 2); tmp.setZero(2,2);
+    Matrix<double, 5, 5> tmp2; tmp2.setRandom(); tmp2.setZero(4, 4);
+
+    std::cout << tmp << "\n";
+
     using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
     mpc.ocp().set_Q_coeff(2.0);

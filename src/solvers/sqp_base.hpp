@@ -387,7 +387,7 @@ SQPBase<Derived, Problem, QPSolver, Preconditioner>::constraints_violation_impl(
     cl1 += c_eq.template lpNorm<1>();
 
     /**
-    // c_ineq <= 0
+    // c_ineq <= 0 need to be redone completely
     cl1 += c_ineq.cwiseMax(0.0).sum();
     */
 

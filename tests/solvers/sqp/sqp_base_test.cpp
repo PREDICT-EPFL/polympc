@@ -18,8 +18,6 @@
 #include "solvers/qpmad_interface.hpp"
 #endif
 
-#include "boost/numeric/odeint.hpp"
-
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
 
@@ -30,7 +28,6 @@ using Approximation = polympc::Spline<Polynomial, test_NUM_SEG>;
 POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*ND*/ 1, /*NG*/0, /*TYPE*/ double)
 
 using namespace Eigen;
-using namespace boost::numeric;
 
 class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 {
@@ -173,8 +170,6 @@ using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotO
 //using qpmad_solver_t = polympc::QPMAD<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
-
-
 
 
 int main(void)

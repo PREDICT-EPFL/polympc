@@ -109,7 +109,7 @@ public:
 
     /** AD variables */
     using derivatives_t = Eigen::Matrix<scalar_t, NX + NU + NP, 1>;
-    using ad_scalar_t = Eigen::AutoDiffScalar<derivatives_t>;
+    using ad_scalar_t   = Eigen::AutoDiffScalar<derivatives_t>;
     using second_derivatives_t = Eigen::Matrix<ad_scalar_t, NX + NU + NP, 1>;
     using ad_state_t   = Eigen::Matrix<ad_scalar_t, NX, 1>;
     using ad_control_t = Eigen::Matrix<ad_scalar_t, NU, 1>;
@@ -142,6 +142,8 @@ public:
     // choose to allocate sparse or dense jacoabian and hessian
     using nlp_eq_jacobian_t = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
                               typename dense_matrix_type_selector<scalar_t, VARX_SIZE, VAR_SIZE>::type>::type;
+    using nlp_jacobian_t    = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
+                              typename dense_matrix_type_selector<scalar_t, VARX_SIZE + NUM_INEQ, VAR_SIZE>::type>::type;
     using nlp_hessian_t     = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
                               typename dense_matrix_type_selector<scalar_t, VAR_SIZE, VAR_SIZE>::type>::type;
     using nlp_cost_t        = scalar_t;

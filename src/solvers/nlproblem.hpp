@@ -79,11 +79,11 @@ public:
 
     /** AD variables */
     using derivatives_t = Eigen::Matrix<scalar_t, VAR_SIZE, 1>;
-    using ad_scalar_t = Eigen::AutoDiffScalar<derivatives_t>;
-    using ad_var_t    = Eigen::Matrix<ad_scalar_t, VAR_SIZE, 1>;
-    using ad2_scalar_t = Eigen::AutoDiffScalar<ad_var_t>;
-    using ad_eq_t     = Eigen::Matrix<ad_scalar_t, NUM_EQ, 1>;
-    using ad_ineq_t   = Eigen::Matrix<ad_scalar_t, NUM_INEQ, 1>;
+    using ad_scalar_t   = Eigen::AutoDiffScalar<derivatives_t>;
+    using ad_var_t      = Eigen::Matrix<ad_scalar_t, VAR_SIZE, 1>;
+    using ad2_scalar_t  = Eigen::AutoDiffScalar<ad_var_t>;
+    using ad_eq_t       = Eigen::Matrix<ad_scalar_t, NUM_EQ, 1>;
+    using ad_ineq_t     = Eigen::Matrix<ad_scalar_t, NUM_INEQ, 1>;
 
     ad_var_t  m_ad_var, m_ad_y;
     ad_eq_t   m_ad_eq;
@@ -378,7 +378,7 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<co
                                                              Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
-    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.template topRows<NUM_EQ>());
+    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), jac_g.bottomRows(NUM_INEQ)); // why???
     //_lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
@@ -396,7 +396,7 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_hessian(const Eigen
                                                                      Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
-    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.template topRows<NUM_EQ>());
+    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), jac_g.bottomRows(NUM_INEQ)); // why???
     //_lagrangian += g.dot(lam.template head<NUM_EQ>());
 

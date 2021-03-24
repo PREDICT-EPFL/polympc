@@ -133,53 +133,54 @@ TEST(SQPTestCase, TestRosenbrock) {
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 
-// here wait for refactoring of inequality constraints: coming soon
-#if 0
-struct SimpleNLP : ProblemBase<SimpleNLP, double, 2, 0, 2> {
-    var_t SOLUTION = {1, 1};
+// Constrained Rosenbrock Function
+POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ SimpleNLP, /*NX*/ 2, /*NE*/0, /*NI*/1, /*NP*/0, /*Type*/double);
+class SimpleNLP : public ProblemBase<SimpleNLP>
+{
+public:
+    const scalar_t a = 1;
+    const scalar_t b = 100;
+    Eigen::Matrix<scalar_t, 2, 1> SOLUTION = {1.0, 1.0};
 
-    template <typename A, typename B>
-    void cost(const A& x, B& cst)
+    template<typename T>
+    EIGEN_STRONG_INLINE void cost_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p, T& cost) const noexcept
     {
-        cst = -x(0) -x(1);
+        cost = -x(0) - x(1);
+        polympc::ignore_unused_var(p);
     }
 
-    template <typename A, typename B, typename C>
-    void constraint(const A& x, B& eq, C& ineq, var_t& lbx, var_t& ubx)
+    template<typename T>
+    EIGEN_STRONG_INLINE void inequality_constraints_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p,
+                                                       Eigen::Ref<constraint_t<T>> constraint) const noexcept
     {
-        const Scalar infinity = std::numeric_limits<Scalar>::infinity();
-        ineq << 1 - x.squaredNorm(),
-                  x.squaredNorm() - 2; // 1 <= x0^2 + x1^2 <= 2
-        lbx << 0, 0; // x0 > 0 and x1 > 0
-        ubx << infinity, infinity;
+        // 1 <= x^2 + y^2 <= 2 -> will set bounds later once the problem is instantiated
+        constraint << x.squaredNorm();
+        polympc::ignore_unused_var(p);
     }
-
 };
 
-TEST(SQPTestCase, TestSimpleNLP) {
-    using Solver = SQP<SimpleNLP>;
+TEST(SQPTestCase, TestSimpleNLP)
+{
+    // will be using the default
+    using Solver = SQPSolver<SimpleNLP>;
     SimpleNLP problem;
     Solver solver;
-
-    // feasible initial point
-    Eigen::Vector2d x;
-    Eigen::Vector2d x0 = {1.2, 0.1};
-    Eigen::Vector4d y0;
+    Solver::nlp_variable_t x0, x;
+    Solver::nlp_dual_t y0;
     y0.setZero();
+    x0 << 1.0, 1.0;
 
-    solver.settings().max_iter = 100;
-    solver.settings().line_search_max_iter = 4;
-    solver.settings().iteration_callback = callback<Solver>;
-    solver.solve(problem, x0, y0);
+    solver.settings().max_iter = 50;
+    solver.settings().line_search_max_iter = 5;
+    solver.lower_bound_g() << 1;
+    solver.upper_bound_g() << 2;
+    solver.solve(x0, y0);
 
     x = solver.primal_solution();
 
     std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "qp_iter " << solver.info().qp_solver_iter << std::endl;
     std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
-
-#endif

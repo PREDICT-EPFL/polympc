@@ -1912,7 +1912,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
                                                                              Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, lag_gradient, lag_hessian);
-    this->equalities_linerised(var, p, g.template head<NUM_EQ>(), m_Je);
+    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji);
 
     // check if we need to allocate memory (first function entry)
@@ -1944,6 +1944,8 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
     Eigen::Matrix<ad2_scalar_t, NX, 1> ad2_xdot;
+    Eigen::Matrix<ad2_scalar_t, NG, 1> ad2_g;
+
     for(int i = 0; i < NP; i++)
         m_ad2_p(i).value().value() = var.template tail<NP>()(i);
 
@@ -1954,57 +1956,68 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
         for(int i = 0; i < NU; i++)
             m_ad2_u(i).value().value() = var.template segment<NU>(k * NU + VARX_SIZE)(i);
 
+        // hessian accumulator
+        hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP>::Zero();
+
+        //dynamics contribution
         dynamics<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, static_cast<ad2_scalar_t>(time_nodes(k)), ad2_xdot);
 
         for(int n = 0; n < NX; n++)
         {
-
+            scalar_t coeff = -lam(n + k * NX) * t_scale;
             for(int i = 0; i < NX + NU + NP; ++i)
             {
-                hes.col(i) = ad2_xdot(n).derivatives()(i).derivatives();
+                hes.col(i).noalias() += coeff * ad2_xdot(n).derivatives()(i).derivatives();
             }
-            hes.transposeInPlace();
-            scalar_t coeff = lam(n + k * NX) * t_scale;
-            hes *= -coeff;
+        }
 
-            // add values by columns when possible
-            for(Eigen::Index j = 0; j < NX; ++j)
-            {
-                std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j] + NX + NU + NP,
-                               hes.col(j).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
-                               std::plus<scalar_t>());
-            }
+        // constraints contribution
+        inequality_constraints<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(k), ad2_g);
+        for(int n = 0; n < NG; n++)
+        {
+            scalar_t coeff = lam(n + k * NG + NUM_EQ);
+            for(int i = 0; i < NX + NU + NP; ++i)
+                hes.col(i).noalias() += coeff * ad2_xdot(n).derivatives()(i).derivatives();
+        }
+        hes.transposeInPlace(); // if 2nd derivative is not continuous
 
-            for(Eigen::Index j = 0; j < NU; ++j)
-            {
-                std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX + NU + NP,
-                               hes.col(j + NX).data(),  lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
-                               std::plus<scalar_t>());
-            }
+        // add values by columns when possible
+        for(Eigen::Index j = 0; j < NX; ++j)
+        {
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j] + NX + NU + NP,
+                           hes.col(j).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
+                           std::plus<scalar_t>());
+        }
 
-            /** dxdp */
-            for(Eigen::Index j = 0; j < NP; ++j)
-            {
-                std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + NX,
-                               hes.col(j + NX + NU).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                               std::plus<scalar_t>());
+        for(Eigen::Index j = 0; j < NU; ++j)
+        {
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX + NU + NP,
+                           hes.col(j + NX).data(),  lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
+                           std::plus<scalar_t>());
+        }
 
-                /** dudp */
-                std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + NU,
-                               hes.col(j + NX + NU).data() + NX,
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
-                               std::plus<scalar_t>());
-                /** dp^2 */
-                std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                               hes.col(j + NX + NU).data() + NX + NU,
-                               lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                               std::plus<scalar_t>());
-            }
+        /** dxdp */
+        for(Eigen::Index j = 0; j < NP; ++j)
+        {
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + NX,
+                           hes.col(j + NX + NU).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+                           std::plus<scalar_t>());
+
+            /** dudp */
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + NU,
+                           hes.col(j + NX + NU).data() + NX,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
+                           std::plus<scalar_t>());
+            /** dp^2 */
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
+                           hes.col(j + NX + NU).data() + NX + NU,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
+                           std::plus<scalar_t>());
         }
 
     }

@@ -16,9 +16,9 @@ if(BUILD_TESTS OR SQP_TESTS)
   add_executable(sqp_base_test sqp_base_test.cpp)
   target_link_libraries(sqp_base_test Eigen3::Eigen)
 
-  #if(OsqpEigen_FOUND)
-  #    target_link_libraries(sqp_base_test OsqpEigen::OsqpEigen)
-  #endif()
+  if(OsqpEigen_FOUND)
+      target_link_libraries(sqp_base_test OsqpEigen::OsqpEigen)
+  endif()
 
 
 endif()

@@ -502,7 +502,7 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     qp_status = m_qp_solver.solve(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
     //std::cout << "QP status: " << qp_status << " QP iter: " << m_qp_solver.info().iter << "\n";
 
-    eigen_assert(qp_status == status_t::SOLVED);
+    //eigen_assert(qp_status == status_t::SOLVED);
 
     m_info.qp_solver_iter += m_qp_solver.info().iter;
 

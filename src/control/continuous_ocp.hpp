@@ -171,7 +171,7 @@ public:
     EIGEN_STRONG_INLINE void inequality_constraints(const state_t<T> &x, const control_t<T> &u, const parameter_t<T> &p,
                                                     const static_parameter_t &d, const scalar_t &t, Eigen::Ref<constraint_t<T>> g) const noexcept
     {
-        static_cast<OCP*>(this)->inequality_constraints_impl(x,u,p,d,t,g);
+        static_cast<const OCP*>(this)->inequality_constraints_impl(x,u,p,d,t,g);
     }
     template<typename T>
     EIGEN_STRONG_INLINE void inequality_constraints(const state_t<T> &x, const control_t<T> &u, const parameter_t<T> &p,
@@ -472,12 +472,19 @@ public:
     void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                              const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient) noexcept;
 
-    void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
-                             Eigen::Ref<nlp_variable_t> cost_gradient,
-                             Eigen::Ref<nlp_constraints_t> g,
-                             typename std::conditional<MatrixFormat == DENSE,
-                             Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type jac_g) noexcept;
+    template<int T = MatrixFormat>
+    typename std::enable_if<T == DENSE>::type
+    lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                        const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                        Eigen::Ref<nlp_variable_t> cost_gradient,
+                        Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) const noexcept;
+
+    template<int T = MatrixFormat>
+    typename std::enable_if<T == SPARSE>::type
+    lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                        const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                        Eigen::Ref<nlp_variable_t> cost_gradient,
+                        Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept;
 
     /** lagrangian hessian */
     void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
@@ -1730,18 +1737,58 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const 
 }
 
 template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                          const Eigen::Ref<const static_parameter_t>& p,
-                                                                          const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                                          Eigen::Ref<nlp_variable_t> lag_gradient,
-                                                                          Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                          Eigen::Ref<nlp_constraints_t> g,
-                                                                          typename std::conditional<MatrixFormat == DENSE,
-                                                                          Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type jac_g) noexcept
+template<int T>
+typename std::enable_if<T == DENSE>::type
+ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                     const Eigen::Ref<const static_parameter_t>& p,
+                                                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                     Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                     Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                     Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) const noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), jac_g.bottomRows(NUM_INEQ)); // why???
+    //_lagrangian += g.dot(lam.template head<NUM_EQ>());
+    /** @badcode: replace with block products ???*/
+    lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ + NUM_INEQ>();
+    lag_gradient += cost_gradient;
+    lag_gradient += lam.template tail<NUM_BOX>();
+}
+
+template<typename OCP, typename Approximation, int MatrixFormat>
+template<int T>
+typename std::enable_if<T == SPARSE>::type
+ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                     const Eigen::Ref<const static_parameter_t>& p,
+                                                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                     Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                     Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                     Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept
+{
+    this->cost_gradient(var, p, _lagrangian, cost_gradient);
+    this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
+    this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji); // why???
+
+    // check if we need to allocate memory (first function entry)
+    if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
+    {
+        jac_g.resize(NUM_EQ + NUM_INEQ, VARP_SIZE);
+        jac_g.reserve(m_jac_inner_nnz + m_ineq_jac_inner_nnz);
+        block_insert_sparse(jac_g, 0, 0, m_Je);
+        block_insert_sparse(jac_g, NUM_EQ, 0, m_Ji);
+    }
+    else
+    {
+        // copy Je and Ji blocks to jac_g
+        for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
+        {
+            std::copy_n(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jac_g.valuePtr() + jac_g.outerIndexPtr()[k]);
+            std::copy_n(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
+                        jac_g.valuePtr() + jac_g.outerIndexPtr()[k] + m_Je.innerNonZeroPtr()[k]);
+        }
+    }
+
     //_lagrangian += g.dot(lam.template head<NUM_EQ>());
     /** @badcode: replace with block products ???*/
     lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ + NUM_INEQ>();
@@ -1913,7 +1960,8 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
 {
     this->cost_gradient_hessian(var, p, _lagrangian, lag_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
-    this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji);
+    nlp_ineq_constraints_t tmp = g.template tail<NUM_INEQ>();
+    this->inequalities_linearised(var, p, tmp, m_Ji);
 
     // check if we need to allocate memory (first function entry)
     if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )

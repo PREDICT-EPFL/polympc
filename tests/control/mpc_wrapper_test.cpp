@@ -104,9 +104,73 @@ using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::
 
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
+// segment experiment
+/**
+class Lox
+{
+public:
+    Lox()
+    {
+        vector = vec_t::LinSpaced(10,0,9);
+        std::cout << vector.transpose() << "\n";
+    }
+    using vec_t = Eigen::Matrix<double, 10, 1>;
+    using segment_t = Eigen::Matrix<double, 5, 1>;
+    vec_t vector;
+
+    inline vec_t get_vector() const noexcept
+    {
+        std::cout << "vector: " << vector.transpose() << "\n";
+        return vector;
+    }
+
+    inline segment_t get_segment() const noexcept
+    {
+        std::cout << "segment: " << vector.template head<5>().transpose() << "\n";
+        return vector.template head<5>();
+    }
+
+    inline void get_segment(segment_t& seg) const noexcept
+    {
+        seg = vector.template segment<5>(0);
+    }
+
+    inline double* get_segemnt_ptr() noexcept
+    {
+        return vector.template head<5>().data();
+    }
+
+};
+*/
+
+
+
+
 
 int main(void)
 {
+    /**
+    Lox var;
+    auto tmp = var.get_segment();
+    Lox::segment_t tmp2;
+    var.get_segment(tmp2);
+
+    double *vector  = var.get_vector().data();
+    double *seg = var.get_segemnt();
+
+    for (int i =0; i <  5; ++i)
+        std::cout << seg[i] << " ";
+    std::cout << std::endl;
+    for (int i =0; i <  5; ++i)
+        std::cout << vector[i] << " ";
+    std::cout << std::endl;
+    */
+
+    MatrixXd tmp; tmp.setRandom(5,5); tmp.setZero(2, 2); tmp.setZero(2,2);
+    Matrix<double, 5, 5> tmp2; tmp2.setRandom(); tmp2.setZero(4, 4);
+
+    std::cout << tmp << "\n";
+
     using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
     mpc.ocp().set_Q_coeff(2.0);
@@ -135,6 +199,15 @@ int main(void)
 
     std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
     std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
+
+    auto segment = mpc.solution_x();
+    mpc_t::scalar_t *lox;
+    lox = mpc.solution_x().data(); //segment.data(); //mpc.solver().primal_solution().template head<10>().data();
+
+    std::cout << "lox: \n";
+    for(int i = 0; i < 10; ++i)
+        std::cout << lox[i] << " ";
+    std::cout << std::endl;
 
     // warm started iteration
     x0 << 0.3, 0.4, 0.5;

@@ -176,12 +176,17 @@ public:
     // state
     inline traj_state_t solution_x() const noexcept
     {
-        return m_solver.primal_solution().template head<varx_size>();
+        traj_state_t tmp = m_solver.primal_solution().template head<varx_size>();
+        return tmp;
+    }
+    inline scalar_t* solution() noexcept
+    {
+        return m_solver.primal_solution().template head<varx_size>().data();
     }
     inline Eigen::Matrix<scalar_t, nx, num_nodes> solution_x_reshaped() const noexcept
     {
         traj_state_t opt_x = m_solver.primal_solution().template head<varx_size>();
-        return Eigen::Map<Eigen::Matrix<scalar_t, nx, num_nodes>>(opt_x.data(), nx, num_nodes).rowwise().reverse();;
+        return Eigen::Map<Eigen::Matrix<scalar_t, nx, num_nodes>>(opt_x.data(), nx, num_nodes).rowwise().reverse();
     }
     inline state_t solution_x_at(const int &k) const noexcept
     {

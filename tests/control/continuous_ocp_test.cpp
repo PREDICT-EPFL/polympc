@@ -82,8 +82,12 @@ int main(void)
 
     RobotOCP robot_nlp;
     RobotOCP::nlp_variable_t var = RobotOCP::nlp_variable_t::Ones();
+    RobotOCP::nlp_eq_constraints_t eq_constr;
+    RobotOCP::nlp_ineq_constraints_t ineq_constr;
     RobotOCP::nlp_constraints_t constr;
     RobotOCP::nlp_eq_jacobian_t eq_jac(static_cast<int>(RobotOCP::VARX_SIZE), static_cast<int>(RobotOCP::VAR_SIZE));
+    RobotOCP::nlp_ineq_jacobian_t ineq_jac(static_cast<int>(RobotOCP::NUM_INEQ), static_cast<int>(RobotOCP::VAR_SIZE));
+    RobotOCP::nlp_jacobian_t jac(static_cast<int>(RobotOCP::NUM_INEQ + RobotOCP::NUM_EQ), static_cast<int>(RobotOCP::VAR_SIZE));
     RobotOCP::nlp_cost_t cost = 0;
     RobotOCP::nlp_cost_t lagrangian = 0;                     /** suppres warn */  polympc::ignore_unused_var(lagrangian);
     RobotOCP::nlp_dual_t lam = RobotOCP::nlp_dual_t::Ones(); /** suppres warn */   polympc::ignore_unused_var(lam);
@@ -98,13 +102,18 @@ int main(void)
     polympc::time_point start = polympc::get_time();
     for(int i = 0; i < test_NUM_EXP; ++i)
     {
-        //robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, eq_jac);
-        //robot_nlp.lagrangian_gradient(var, p, lam, lagrangian, lag_gradient, constr, eq_jac);
-        robot_nlp.cost_gradient_hessian(var, p, cost, cost_gradient, cost_hessian);
+        //robot_nlp.lagrangian(var, p, lam, lagrangian);
+        //robot_nlp.lagrangian_gradient(var, p, lam, lagrangian, cost_gradient, lag_gradient, constr, jac);
+        //robot_nlp.lagrangian_gradient(var, p, lam, lagrangian, cost_gradient, lag_gradient, constr, jac);
+        robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, jac);
+        //robot_nlp.lagrangian_gradient_hessian(var, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, constr, jac);
+        //robot_nlp.cost_gradient_hessian(var, p, cost, cost_gradient, cost_hessian);
         //robot_nlp.cost_gradient(var, p, cost, cost_gradient);
         //robot_nlp.cost(var, p, cost);
-        //robot_nlp.equalities_linearised(var, p, constr, eq_jac);
-        //robot_nlp.equalities(var, p, constr);
+        //robot_nlp.equalities(var, p, eq_constr);
+        //robot_nlp.inequalities(var, p, ineq_constr);
+        //robot_nlp.equalities_linearised(var, p, eq_constr, eq_jac);
+        //robot_nlp.inequalities_linearised(var, p, ineq_constr, ineq_jac);
     }
     polympc::time_point stop = polympc::get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
@@ -113,18 +122,23 @@ int main(void)
               << static_cast<double>(duration.count()) / test_NUM_EXP << " [microseconds]" << "\n";
 
     Eigen::IOFormat fmt(3);
-    Eigen::SparseMatrix<double> SpMat = 0.5 * cost_gradient.asDiagonal() * cost_hessian * cost_gradient.asDiagonal();
-    //std::cout << "Constraint \n" << constr.transpose() << "\n";
+    //Eigen::SparseMatrix<double> SpMat = 0.5 * cost_gradient.asDiagonal() * cost_hessian * cost_gradient.asDiagonal();
+    std::cout << "Equality Constraint \n" << eq_constr.transpose() << "\n";
+    std::cout << "Inequality Constraint \n" << ineq_constr.transpose() << "\n";
     //std::cout << eq_jac.template rightCols<29>().format(fmt) << "\n";
     std::cout << "Size of NLP:" << sizeof (robot_nlp) << "\n";
     //std::cout << eq_jac << "\n";//.format(fmt) << "\n";
-    std::cout << "Hessian: \n" << SpMat << "\n"; // .template leftCols<30>().format(fmt) << "\n";
-    //std::cout << "Lagrangian: " << lagrangian << "\n";
-    //std::cout << "Constraint: " << constr.transpose() << "\n";
+    std::cout << "Inequality Jacoabian \n" << ineq_jac << "\n";
+    //std::cout << "Hessian: \n" << cost_hessian << "\n"; // .template leftCols<30>().format(fmt) << "\n";
+    std::cout << "Lagrangian: " << lagrangian << "\n";
+    std::cout << "Lagrangian Gradient: \n" << lag_gradient.transpose() << "\n";
+    std::cout << "Cost Gradient: \n" << cost_gradient.transpose() << "\n";
+    std::cout << "Constraint: " << constr.transpose() << "\n";
+    std::cout << "Constraints Jacobian \n" << jac.leftCols(18) << "\n";
     //std::cout << "Number of nonzeros: " << lag_hessian.nonZeros() << " | size: " << lag_hessian.size() << "\n";
-    std::cout << "Cost: " << cost << "\n";
-    std::cout << "Cost gradient: " << cost_gradient.transpose().format(fmt) << "\n";
-    //std::cout << "Hessian: \n" << lag_hessian.template rightCols<25>().format(fmt) << "\n";
+    //std::cout << "Cost: " << cost << "\n";
+    //std::cout << "Cost gradient: " << cost_gradient.transpose().format(fmt) << "\n";
+    std::cout << "Hessian: \n" << lag_hessian.leftCols(18) << "\n";
 
     // Hessian update
     //RobotOCP::nlp_variable_t s,y;

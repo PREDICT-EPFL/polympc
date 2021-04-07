@@ -63,10 +63,11 @@ public:
     SQPBase()
     {
         /** set default constraints */
-        /** @badcode: change to Constant */
         m_lbx = nlp_variable_t::Constant(static_cast<scalar_t>(-INF));
         m_ubx = nlp_variable_t::Constant(static_cast<scalar_t>( INF));
-        /** @bug: fix initialisation */
+        m_lbg = nlp_ineq_constraints_t::Constant(static_cast<scalar_t>(-INF));
+        m_ubg = nlp_ineq_constraints_t::Constant(static_cast<scalar_t>( INF));
+
         m_x.setZero();
         m_lam.setZero();
 
@@ -99,7 +100,10 @@ public:
   /** get main function from the derived class */
   using nlp_variable_t    = typename Problem::nlp_variable_t;
   using nlp_constraints_t = typename Problem::nlp_constraints_t;
+  using nlp_eq_constraints_t   = typename Problem::nlp_eq_constraints_t;
+  using nlp_ineq_constraints_t = typename Problem::nlp_ineq_constraints_t;
   using nlp_eq_jacobian_t = typename Problem::nlp_eq_jacobian_t;
+  using nlp_jacobian_t    = typename Problem::nlp_jacobian_t;
   using nlp_hessian_t     = typename Problem::nlp_hessian_t;
   using nlp_cost_t        = typename Problem::scalar_t;
   using nlp_dual_t        = typename Problem::nlp_dual_t;
@@ -113,18 +117,19 @@ public:
   /** instantiate the problem */
   Problem problem;
 
-  nlp_hessian_t     m_H;  // Hessian of Lagrangian
-  nlp_variable_t    m_h;  // Gradient of the cost function
-  nlp_variable_t    m_x;  // variable primal
+  nlp_hessian_t     m_H;            // Hessian of Lagrangian
+  nlp_variable_t    m_h;            // Gradient of the cost function
+  nlp_variable_t    m_x;            // variable primal
   nlp_dual_t        m_lam, m_lam_k; // dual variable
-  nlp_eq_jacobian_t m_A;   // equality constraints Jacobian
-  nlp_constraints_t m_al, m_au;   // equality constraints evaluated
+  nlp_jacobian_t    m_A;            // equality constraints Jacobian
+  nlp_constraints_t m_al, m_au;     // equality/inequality constraints evaluated
   parameter_t       m_p = parameter_t::Zero(); // problem parameters
   scalar_t          m_cost;
   nlp_settings_t    m_settings;
   sqp_info_t        m_info;
   nlp_variable_t    m_lbx, m_ubx;
   nlp_variable_t    m_lx, m_ux; // internal lower and upper bound for x
+  nlp_ineq_constraints_t m_lbg, m_ubg;
 
   /** QP solver */
   qp_solver_t m_qp_solver;
@@ -162,6 +167,12 @@ public:
   EIGEN_STRONG_INLINE const nlp_variable_t& upper_bound_x() const noexcept { return m_ubx; }
   EIGEN_STRONG_INLINE nlp_variable_t& upper_bound_x() noexcept { return m_ubx; }
 
+  EIGEN_STRONG_INLINE const nlp_ineq_constraints_t& lower_bound_g() const noexcept { return m_lbg; }
+  EIGEN_STRONG_INLINE nlp_ineq_constraints_t& lower_bound_g() noexcept { return m_lbg; }
+
+  EIGEN_STRONG_INLINE const nlp_ineq_constraints_t& upper_bound_g() const noexcept { return m_ubg; }
+  EIGEN_STRONG_INLINE nlp_ineq_constraints_t& upper_bound_g() noexcept { return m_ubg; }
+
   EIGEN_STRONG_INLINE const parameter_t& parameters() const noexcept { return m_p; }
   EIGEN_STRONG_INLINE parameter_t& parameters() noexcept { return m_p; }
 
@@ -197,9 +208,9 @@ public:
   linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                  const Eigen::Ref<const nlp_dual_t>& lam,
                                  Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
-                                 nlp_eq_jacobian_t& Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
+                                 nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
   {
-      static_cast<Derived*>(this)->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, Ae, be);
+      static_cast<Derived*>(this)->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
   }
 
   template<int T = Problem::MATRIXFMT>
@@ -207,19 +218,19 @@ public:
   linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                  const Eigen::Ref<const nlp_dual_t>& lam,
                                  Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                 Eigen::Ref<nlp_eq_jacobian_t> Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
+                                 Eigen::Ref<nlp_jacobian_t> A, Eigen::Ref<nlp_constraints_t> b) noexcept
   {
-      static_cast<Derived*>(this)->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, Ae, be);
+      static_cast<Derived*>(this)->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, A, b);
   }
 
   /** update linearisation: option for faster linearisation update*/
   EIGEN_STRONG_INLINE void update_linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                             Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                            typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_eq_jacobian_t>, nlp_eq_jacobian_t&>::type Ae,
-                            Eigen::Ref<nlp_constraints_t> be) noexcept
+                            typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
+                            Eigen::Ref<nlp_constraints_t> b) noexcept
   {
-      static_cast<Derived*>(this)->update_linearisation_impl(x, p, x_step, lam, cost_grad, lag_hessian, Ae, be);
+      static_cast<Derived*>(this)->update_linearisation_impl(x, p, x_step, lam, cost_grad, lag_hessian, A, b);
   }
 
   /** Hessian update: room for creativity: L-BFGS, BFGS (default), sparse BFGS, SR1 */
@@ -272,10 +283,10 @@ public:
   linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                               const Eigen::Ref<const nlp_dual_t>& lam,
                                               Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                              Eigen::Ref<nlp_eq_jacobian_t> Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
+                                              Eigen::Ref<nlp_jacobian_t> A, Eigen::Ref<nlp_constraints_t> b) noexcept
   {
       scalar_t _lag(0.0);
-      problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, be, Ae);
+      problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, b, A);
   }
 
   // sparse version
@@ -283,18 +294,18 @@ public:
   linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                             const Eigen::Ref<const nlp_dual_t>& lam,
                             Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
-                            nlp_eq_jacobian_t& Ae, Eigen::Ref<nlp_constraints_t> be) noexcept
+                            nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
   {
       scalar_t _lag;
-      problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, be, Ae);
+      problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, b, A);
   }
 
   /** default linearisation update uses damped BFGS algorithm */
   EIGEN_STRONG_INLINE void update_linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                  const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                  Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                 typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_eq_jacobian_t>, nlp_eq_jacobian_t&>::type Ae,
-                                 Eigen::Ref<nlp_constraints_t> be) noexcept;
+                                 typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
+                                 Eigen::Ref<nlp_constraints_t> b) noexcept;
 
   /** default Hessain update -> dense damped BFGS */
   EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
@@ -378,18 +389,18 @@ typename SQPBase<Derived, Problem, QPSolver, Preconditioner>::scalar_t
 SQPBase<Derived, Problem, QPSolver, Preconditioner>::constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
     scalar_t cl1 = EPSILON;
-    nlp_constraints_t c_eq;
-    //constr_ineq_t c_ineq;
 
-    problem.equalities(x, m_p, c_eq);
+    // c(x) = 0
+    nlp_eq_constraints_t c;
+    problem.equalities(x, m_p, c);
+    cl1 += c.template lpNorm<1>();
 
-    // c_eq = 0
-    cl1 += c_eq.template lpNorm<1>();
+    // l <= g(x) <= u
+    nlp_ineq_constraints_t g;
+    problem.inequalities(x, m_p, g);
+    cl1 += (m_lbg - g).cwiseMax(0.0).sum();
+    cl1 += (g - m_ubg).cwiseMax(0.0).sum();
 
-    /**
-    // c_ineq <= 0
-    cl1 += c_ineq.cwiseMax(0.0).sum();
-    */
 
     // l <= x <= u
     cl1 += (m_lbx - x).cwiseMax(0.0).sum();
@@ -403,21 +414,23 @@ typename SQPBase<Derived, Problem, QPSolver, Preconditioner>::scalar_t
 SQPBase<Derived, Problem, QPSolver, Preconditioner>::max_constraints_violation_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
 {
     scalar_t c = scalar_t(0);
-    nlp_constraints_t c_eq;
-    //constr_ineq_t c_ineq;
-
-    problem.equalities(x, m_p, c_eq);
 
     // c_eq = 0
-    if (NUM_EQ > 0) {
+    if (NUM_EQ > 0)
+    {
+        nlp_eq_constraints_t c_eq;
+        problem.equalities(x, m_p, c_eq);
         c = c_eq.template lpNorm<Eigen::Infinity>();
     }
 
-    // c_ineq <= 0
-    /**
-    if (NUM_INEQ > 0) {
-        c = fmax(c, c_ineq.maxCoeff());;
-    }*/
+    // lbg <= g <= ubg
+    if (NUM_INEQ > 0)
+    {
+        nlp_ineq_constraints_t g;
+        problem.inequalities(x, m_p, g);
+        c = fmax( c, (m_lbg - g).maxCoeff() );
+        c = fmax( c, (g - m_ubg).maxCoeff() );
+    }
 
     // l <= x <= u
     c = fmax(c, (m_lbx - x).maxCoeff());
@@ -444,12 +457,12 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::update_linearisation_i
                                                           const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                                           Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
                                                           typename std::conditional<Problem::MATRIXFMT == DENSE,
-                                                          Eigen::Ref<nlp_eq_jacobian_t>, nlp_eq_jacobian_t&>::type Ae,
-                                                          Eigen::Ref<nlp_constraints_t> be) noexcept
+                                                          Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
+                                                          Eigen::Ref<nlp_constraints_t> b) noexcept
 {
     scalar_t _lag;
     nlp_variable_t _lag_grad;
-    problem.lagrangian_gradient(x, p, lam, _lag, _lag_grad, cost_grad, be, Ae);
+    problem.lagrangian_gradient(x, p, lam, _lag, _lag_grad, cost_grad, b, A);
 
     /** @badcode: redo with gradient step:  BFGS update */
     //std::cout << "optimality: " << _lag_grad.template lpNorm<Eigen::Infinity>() << "\n";
@@ -490,14 +503,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
 
-    //std::cout << " \n QP: \n";
-    //std::cout << "H: \n" << m_H << "\n";
-    //std::cout << "h: " << m_h.transpose() << "\n";
-    //std::cout << "A: " << m_A << "\n";
-    //std::cout << "b: " << -m_b.transpose() << "\n";
-    //std::cout << "lx: " << (m_lbx - m_x).transpose() << " | ux: " << (m_ubx - m_x).transpose() << "\n";
-
-
     /** @badcode: m_x -> x step; m_lam -> lam step */
     qp_status = m_qp_solver.solve(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
     //std::cout << "QP status: " << qp_status << " QP iter: " << m_qp_solver.info().iter << "\n";
@@ -509,7 +514,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
 
-    //std::cout << "dx: " << prim_step.transpose() << " | dy: " << dual_step.transpose() << "\n";
 }
 
 /** solve method */
@@ -538,8 +542,11 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
     hessian_regularisation(m_H);
 
     /** prepare and scale the QP */
+    /** @bug: just to note */
     m_al = -m_al;
     m_au =  m_al;
+    m_al.template tail<NUM_INEQ>() += m_lbg;
+    m_au.template tail<NUM_INEQ>() += m_ubg;
     m_lx.noalias() = m_lbx - m_x;
     m_ux.noalias() = m_ubx - m_x;
 
@@ -606,6 +613,8 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
         /** prepare and scale the QP */
         m_al = -m_al;
         m_au =  m_al;
+        m_al.template tail<NUM_INEQ>() += m_lbg;
+        m_au.template tail<NUM_INEQ>() += m_ubg;
         m_lx.noalias() = m_lbx - m_x;
         m_ux.noalias() = m_ubx - m_x;
 
@@ -637,7 +646,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
 
         if (m_settings.iteration_callback != nullptr)
             m_settings.iteration_callback(this);
-
 
         if (termination_criteria(m_x)) {
             m_info.status.value = sqp_status_t::SOLVED;

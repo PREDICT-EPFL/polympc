@@ -135,7 +135,19 @@ public:
     /** do not make constant */
     scalar_t t_start{0};
     scalar_t t_stop{1};
-    EIGEN_STRONG_INLINE void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept { t_start = t0;  t_stop = tf; }
+    EIGEN_STRONG_INLINE void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept
+    {
+        t_start = t0;
+        t_stop = tf;
+
+        /** update time nodes */
+        const scalar_t t_length = (t_stop - t_start) / (NUM_SEGMENTS);
+        const scalar_t t_shift  = t_length / 2;
+        for(Eigen::Index i = 0; i < NUM_SEGMENTS; ++i)
+            time_nodes.template segment<POLY_ORDER + 1>(i * POLY_ORDER) =  (t_length/2) * m_nodes.reverse() +
+                    (t_start + t_shift + i * t_length) * Approximation::nodes_t::Ones();
+        time_nodes.reverseInPlace();
+    }
 
     /** compute collocation parameters */
     const typename Approximation::diff_mat_t  m_D     = Approximation::compute_diff_matrix();

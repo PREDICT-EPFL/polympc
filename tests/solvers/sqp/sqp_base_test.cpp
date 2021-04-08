@@ -166,7 +166,7 @@ using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::
                                 RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
 // for advanced users
-using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
+//using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 //using qpmad_solver_t = polympc::QPMAD<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;
 
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;

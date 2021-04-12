@@ -50,6 +50,7 @@ public:
     using traj_state_t   = Eigen::Matrix<scalar_t, varx_size, 1>;
     using traj_control_t = Eigen::Matrix<scalar_t, varu_size, 1>;
     using dual_var_t     = Eigen::Matrix<scalar_t, dual_size, 1>;
+    using constraints_t  = Eigen::Matrix<scalar_t, OCP::NUM_INEQ, 1>;
 
     /** data for interpolation */
     typename OCP::time_t  time_grid;
@@ -107,6 +108,21 @@ public:
         m_solver.upper_bound_x().template head<varx_size>() = xub;
     }
 
+    inline void x_final_lower_bound(const Eigen::Ref<const state_t>& xlb) noexcept
+    {
+        m_solver.lower_bound_x().template head<nx>() = xlb;
+    }
+    inline void x_final_upper_bound(const Eigen::Ref<const state_t>& xub) noexcept
+    {
+        m_solver.upper_bound_x().template head<nx>() = xub;
+    }
+    inline void final_state_bounds(const Eigen::Ref<const state_t>& xlb,
+                                   const Eigen::Ref<const state_t>& xub) noexcept
+    {
+        m_solver.lower_bound_x().template head<nx>() = xlb;
+        m_solver.upper_bound_x().template head<nx>() = xub;
+    }
+
     // control
     inline void u_lower_bound(const Eigen::Ref<const control_t>& lb) noexcept
     {
@@ -127,6 +143,14 @@ public:
     {
         m_solver.lower_bound_x().template segment<varu_size>(varx_size) = lb.replicate(num_nodes, 1);
         m_solver.upper_bound_x().template segment<varu_size>(varx_size) = ub.replicate(num_nodes, 1);
+    }
+
+    // constraints
+    inline void constraints_bounds(const Eigen::Ref<const constraints_t>& lbg,
+                                   const Eigen::Ref<const constraints_t>& ubg) noexcept
+    {
+        m_solver.lower_bound_g() = lbg;
+        m_solver.upper_bound_g() = ubg;
     }
 
     /** set parameters bounds*/

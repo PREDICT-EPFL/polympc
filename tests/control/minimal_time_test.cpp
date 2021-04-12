@@ -102,6 +102,22 @@ public:
         }
     }
 
+    EIGEN_STRONG_INLINE void hessian_regularisation_sparse_impl(nlp_hessian_t& lag_hessian) noexcept
+    {
+        const int n = this->m_H.rows(); //132=m_H.toDense().rows()
+        /**Regularize by the estimation of the minimum negative eigen value*/
+        scalar_t aii, ri;
+        for (int i = 0; i < n; i++)
+        {
+            aii = lag_hessian.coeffRef(i, i);
+            ri = (lag_hessian.col(i).cwiseAbs()).sum() - abs(aii); // The hessian is symmetric, Gershgorin discs from rows or columns are equal
+
+            if (aii - ri <= 0)
+                lag_hessian.coeffRef(i, i) += (ri - aii) + 0.001;//All Gershgorin discs are in the positive half
+        }
+    }
+
+
 };
 
 
@@ -119,9 +135,9 @@ int main(void)
     mpc_t::control_t ubu; ubu <<  1.5,  0.75; // upper bound on control
     mpc_t::parameter_t lbp; lbp << 0;         // lower bound on time
     mpc_t::parameter_t ubp; ubp << 10;        // upper bound on time
-    mpc_t::parameter_t p0; p0 << 1.0;         // very important to set initial time estimate
-    mpc_t::state_t lbx_f; lbx_f << 0, 0, 0;   // lower bound on final position
-    mpc_t::state_t ubx_f = lbx_f;             // upper bound  =  lower bound
+    mpc_t::parameter_t p0; p0 << 0.5;         // very important to set initial time estimate
+    mpc_t::state_t lbx_f; lbx_f << -0.05, -0.05, -0.05;   // lower bound on final position
+    mpc_t::state_t ubx_f = -lbx_f;                         // upper bound  =  lower bound
 
     mpc.set_static_parameters(p);
     mpc.control_bounds(lbu, ubu);

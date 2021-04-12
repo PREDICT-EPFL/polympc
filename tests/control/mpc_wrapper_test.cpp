@@ -73,7 +73,8 @@ public:
 /** create solver */
 template<typename Problem, typename QPSolver> class MySolver;
 
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::DUAL_SIZE, typename Problem::scalar_t>>
+template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
+                                               typename Problem::scalar_t, Problem::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>>
 class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
@@ -81,9 +82,6 @@ public:
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
-
-    //EIGEN_STRONG_INLINE const typename Base::_Problem& get_problem() const noexcept { return this->problem; }
-    EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/

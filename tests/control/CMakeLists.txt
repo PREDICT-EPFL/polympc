@@ -28,4 +28,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(mpc_test mpc_wrapper_test.cpp)
   target_link_libraries(mpc_test Eigen3::Eigen)
 
+  add_executable(minimal_time_test minimal_time_test.cpp)
+  target_link_libraries(minimal_time_test Eigen3::Eigen)
+
 endif()

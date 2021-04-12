@@ -175,6 +175,7 @@ int main(void)
     mpc.settings().max_iter = 20;
     mpc.settings().line_search_max_iter = 10;
     mpc.set_time_limits(0, 2);
+
     // problem data
     mpc_t::static_param p; p << 2.0;          // robot wheel base
     mpc_t::state_t x0; x0 << 0.5, 0.5, 0.5;   // initial condition

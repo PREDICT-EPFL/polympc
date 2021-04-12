@@ -33,7 +33,8 @@ public:
     {
         // initialise time nodes and Lagrange interpolator
         time_grid = this->ocp().time_nodes.reverse();
-        time_nodes = time_grid.head(time_grid.rows());
+        time_nodes = time_grid.template head<OCP::nodes_t::RowsAtCompileTime>();
+
         polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
         sgm_length = (m_solver.get_problem().t_stop - m_solver.get_problem().t_start) / num_segms;
         nodes_per_segm = std::floor(num_nodes / num_segms);
@@ -59,7 +60,16 @@ public:
     int nodes_per_segm{1};
 
     /** set MPC optmisation limits */
-    inline void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept {m_solver.get_problem().set_time_limits(t0, tf);}
+    inline void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept
+    {
+        m_solver.get_problem().set_time_limits(t0, tf);
+
+        // update time grid and Lagrange interpolator
+        time_grid = this->ocp().time_nodes.reverse();
+        time_nodes = time_grid.template head<OCP::nodes_t::RowsAtCompileTime>();
+        polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
+        sgm_length = (tf - t0) / num_segms;
+    }
 
     /** set initial conditions bounds */
     inline void initial_conditions(const Eigen::Ref<const state_t>& x0) noexcept

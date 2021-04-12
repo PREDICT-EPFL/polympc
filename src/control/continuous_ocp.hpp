@@ -72,8 +72,8 @@ public:
         NUM_SEGMENTS = Approximation::NUM_SEGMENTS,
         VARX_SIZE  = NX * NUM_NODES,
         VARU_SIZE  = NU * NUM_NODES,
-        VARP_SIZE  = NP * NUM_NODES,
-        VARD_SIZE  = ND * NUM_NODES,
+        VARP_SIZE  = NP,
+        VARD_SIZE  = ND,
 
         /** NLP dimensions */
         VAR_SIZE  = VARX_SIZE + VARU_SIZE + VARP_SIZE,
@@ -249,6 +249,18 @@ public:
                               const scalar_t &t, T &lagrange) noexcept
     {
         static_cast<OCP*>(this)->lagrange_term_impl(x,u,p,d,t,lagrange);
+    }
+    template<typename T>
+    EIGEN_STRONG_INLINE void lagrange_term_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
+                                                const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
+                                                const scalar_t &t, T &lagrange) const noexcept
+    {
+        polympc::ignore_unused_var(x);
+        polympc::ignore_unused_var(u);
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(d);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(lagrange);
     }
 
     /** seed edrivatives */

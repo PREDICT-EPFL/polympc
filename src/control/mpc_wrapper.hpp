@@ -179,6 +179,10 @@ public:
     {
         m_solver.m_lam = lam_guess;
     }
+    inline void p_guess(const Eigen::Ref<const parameter_t>& p_guess) noexcept
+    {
+        m_solver.m_x.template tail<np>() = p_guess;
+    }
 
     /** get and set solver settings | info | problem */
     EIGEN_STRONG_INLINE const typename nlp_solver_t::nlp_settings_t& settings() const noexcept { return m_solver.m_settings; }

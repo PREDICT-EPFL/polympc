@@ -86,6 +86,22 @@ public:
     {
         this->problem.hessian_update_impl(hessian, x_step, grad_step);
     }
+
+    EIGEN_STRONG_INLINE void hessian_regularisation_dense_impl(Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
+    {
+        const int n = this->m_H.rows();
+        /**Regularize by the estimation of the minimum negative eigen value--does not work with inexact Hessian update(matrix is already PSD)*/
+        scalar_t aii, ri;
+        for (int i = 0; i < n; i++)
+        {
+            aii = lag_hessian(i,i);
+            ri  = (lag_hessian.col(i).cwiseAbs()).sum() - abs(aii); // The hessian is symmetric, Gershgorin discs from rows or columns are equal
+
+            if (aii - ri <= 0) {lag_hessian(i,i) += (ri - aii) + scalar_t(0.01);} //All Greshgorin discs are in the positive half
+
+        }
+    }
+
 };
 
 
@@ -93,16 +109,17 @@ int main(void)
 {
     using mpc_t = MPC<ParkingOCP, Solver>;
     mpc_t mpc;
-    mpc.settings().max_iter = 20;
-    mpc.settings().line_search_max_iter = 10;
+    mpc.settings().max_iter = 30;
+    mpc.settings().line_search_max_iter = 5;
 
     // problem data
-    mpc_t::static_param p; p << 2.0;          // robot wheel base
-    mpc_t::state_t x0; x0 << 0.5, 0.5, 0.5;   // initial condition
+    mpc_t::static_param p; p << 1.0;          // robot wheel base
+    mpc_t::state_t x0; x0 << 1.5, 0.5, 0.5;   // initial condition
     mpc_t::control_t lbu; lbu << -1.5, -0.75; // lower bound on control
     mpc_t::control_t ubu; ubu <<  1.5,  0.75; // upper bound on control
     mpc_t::parameter_t lbp; lbp << 0;         // lower bound on time
     mpc_t::parameter_t ubp; ubp << 10;        // upper bound on time
+    mpc_t::parameter_t p0; p0 << 1.0;         // very important to set initial time estimate
     mpc_t::state_t lbx_f; lbx_f << 0, 0, 0;   // lower bound on final position
     mpc_t::state_t ubx_f = lbx_f;             // upper bound  =  lower bound
 
@@ -110,8 +127,10 @@ int main(void)
     mpc.control_bounds(lbu, ubu);
     mpc.parameters_bounds(lbp, ubp);
     mpc.final_state_bounds(lbx_f, ubx_f);
-    mpc.initial_conditions(x0);
+    mpc.p_guess(p0);
+    mpc.x_guess(x0.replicate(11,1));
 
+    mpc.initial_conditions(x0);
     polympc::time_point start = polympc::get_time();
     mpc.solve();
     polympc::time_point stop = polympc::get_time();
@@ -121,6 +140,8 @@ int main(void)
     std::cout << "Num iterations: " << mpc.info().iter << "\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
     std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
+    std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
+    std::cout << "Solution P: \n" << mpc.solution_p() << "\n";
 
     return EXIT_SUCCESS;
 }

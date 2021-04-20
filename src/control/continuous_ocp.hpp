@@ -350,6 +350,8 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type estimate_hes_inner_nnz() noexcept
     {
         m_hes_inner_nnz = Eigen::VectorXi::Constant(VAR_SIZE, NX + NU + NP);
+        if(NP > 0)
+            m_hes_inner_nnz. template tail<NP>().setConstant(VAR_SIZE);
     }
 
     //estimate number of non-zeros in inequality constraints Jacoabian
@@ -623,6 +625,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::seed_derivatives()
 
     for(int i = 0; i < NX; i++)
     {
+        m_ad_y(i).derivatives()  = derivatives_t::Zero();
         m_ad_x(i).derivatives()  = derivatives_t::Unit(deriv_num, deriv_idx);
         m_ad2_x(i).derivatives() = derivatives_t::Unit(deriv_num, deriv_idx);
         m_ad2_x(i).value().derivatives() = derivatives_t::Unit(deriv_num, deriv_idx);
@@ -654,6 +657,11 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::seed_derivatives()
         }
         deriv_idx++;
     }
+    for(int idx = 0; idx < deriv_num; idx++)
+    {
+        m_ad2_cost.derivatives()(idx).derivatives()  = derivatives_t::Zero();
+    }
+    m_ad2_cost.value().derivatives() = derivatives_t::Zero();
 }
 
 
@@ -812,7 +820,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
     jacobian.reserve(m_jac_inner_nnz);
     /** compute jacoabian of dynamics */
-    Eigen::Matrix<scalar_t, NX, NX + NU + NP> jac;
+    Eigen::Matrix<scalar_t, NX, NX + NU + NP> jac = Eigen::Matrix<scalar_t, NX, NX + NU + NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
 
     /** @badcode: redo with Reshaped expression later*/
@@ -839,9 +847,9 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
             constraint. template segment<NX>(k)(i) = -t_scale * m_ad_y(i).value();
             jac.row(i) = m_ad_y(i).derivatives();
         }
+
         constraint. template segment<NX>(k) += DX.transpose().col(t);
         /** finish the computation of the constraint */
-
 
         /** insert block jacobian */
         for(int j = 0; j < NX; ++j)
@@ -873,7 +881,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
 {
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
     /** compute jacoabian of dynamics */
-    Eigen::Matrix<scalar_t, NX, NX + NU + NP> jac;
+    Eigen::Matrix<scalar_t, NX, NX + NU + NP> jac = Eigen::Matrix<scalar_t, NX, NX + NU + NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
 
     /** @badcode: redo with Reshaped expression later*/
@@ -914,12 +922,12 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
             std::copy_n(jac.col(j).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[k + j] + nnz_count);
 
         /** copy control sensitivities */
+        //for(int j = 0; j < NU; ++j)
+        //    std::copy_n(jac.col(j + NX).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + n + VARX_SIZE]);
         std::copy_n(jac.template block<NX, NU>(0, NX).data(), NX * NU, jacobian.valuePtr() + jacobian.outerIndexPtr()[n + VARX_SIZE]);
 
-
-        /** @bug: iterate over NP columns */
         for(int j = 0; j < NP; ++j)
-            std::copy_n(jac.col(j + NX + NU).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + VARX_SIZE + VARU_SIZE]);
+            std::copy_n(jac.col(j + NX + NU).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + VARX_SIZE + VARU_SIZE] + t * NX);
 
         ++nnz_count;
 
@@ -1228,7 +1236,6 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
     /** dudp */
     cost_hessian.template block<NU, NP>(VARX_SIZE, VARX_SIZE + VARU_SIZE) += hes.template block<NU, NP>(NX, NX + NU);
     cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE) += hes.template block<NP, NU>(NX + NU, NX);
-
 }
 
 template<typename OCP, typename Approximation, int MatrixFormat>
@@ -1257,6 +1264,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
     cost_hessian.reserve(m_hes_inner_nnz);
 
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
+    Eigen::Matrix<scalar_t, NP, NP> hes_pp = Eigen::Matrix<scalar_t, NP, NP>::Zero();
 
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
     int t = 0;
@@ -1295,6 +1303,8 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
             hes.transposeInPlace();
             scalar_t coeff =  t_scale * m_quad_weights(k);
             hes *= coeff;
+
+            hes_pp += hes.template bottomRightCorner<NP, NP>();
 
             /** complex condition to glus segments */
             if(((k + shift) != 0) && ((k + shift) != (NUM_NODES-1)) && ((k + shift) % POLY_ORDER) == 0 && (s > 0))
@@ -1350,6 +1360,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
                                    std::plus<scalar_t>());
                 }
                 /** dp^2 */
+                /**
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
                     std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
@@ -1357,7 +1368,8 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
                                    hes.col(j + NX + NU).data() + NX + NU,
                                    cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
                                    std::plus<scalar_t>());
-                }
+                }*/
+
                 /** dpdx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
@@ -1421,13 +1433,6 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
                         cost_hessian.insert((k + shift) * NU + VARX_SIZE + r, VARX_SIZE + VARU_SIZE + j) = hes(r + NX, j + NX + NU);
                 }
 
-                /** dp^2 */
-                for(Eigen::Index j = 0; j < NP; ++j)
-                {
-                    for(Eigen::Index r = 0; r < NP; ++r)
-                        cost_hessian.insert(VARX_SIZE + VARU_SIZE + r, VARX_SIZE + VARU_SIZE + j) = hes(r + NX + NU, j + NX + NU);
-                }
-
                 /** dpdx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
@@ -1448,6 +1453,12 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
         }
     }
 
+    // Inser the last block
+    /** dp^2 */
+    for(Eigen::Index j = 0; j < NP; ++j)
+        for(Eigen::Index r = 0; r < NP; ++r)
+            cost_hessian.insert(VARX_SIZE + VARU_SIZE + r, VARX_SIZE + VARU_SIZE + j) = hes_pp(r, j);
+
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
     for(int i = 0; i < NX; i++)
@@ -1457,7 +1468,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
 
     mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(0), mayer_cost);
     cost += mayer_cost.value().value();
-    cost_gradient. template head<NX>().noalias() +=  mayer_cost.value().derivatives(). template head<NX>();
+    cost_gradient. template head<NX>().noalias() += mayer_cost.value().derivatives(). template head<NX>();
     cost_gradient. template segment<NU>(VARX_SIZE).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
     cost_gradient. template tail<NP>().noalias() += mayer_cost.value().derivatives(). template tail<NP>();
 
@@ -1555,6 +1566,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
     cost_gradient.setZero();
 
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
+    Eigen::Matrix<scalar_t, NP, NP> hes_pp = Eigen::Matrix<scalar_t, NP, NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
     int t = 0;
 
@@ -1592,6 +1604,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
             hes.transposeInPlace();
             scalar_t coeff =  t_scale * m_quad_weights(k);
             hes *= coeff;
+            hes_pp += hes.template bottomRightCorner<NP, NP>();
 
             /** complex condition to glue segments */
             if(((k + shift) != 0) && ((k + shift) != (NUM_NODES-1)) && ((k + shift) % POLY_ORDER) == 0 && (s > 0))
@@ -1647,6 +1660,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
                                    std::plus<scalar_t>());
                 }
                 /** dp^2 */
+                /**
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
                     std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
@@ -1654,7 +1668,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
                                    hes.col(j + NX + NU).data() + NX + NU,
                                    cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
                                    std::plus<scalar_t>());
-                }
+                } */
                 /** dpdx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
@@ -1689,8 +1703,6 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
                                 cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + (k + shift) * NX);
                     std::copy_n(hes.col(j + NX + NU).data() + NX, NU,
                                 cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + (k + shift) * NU);
-                    std::copy_n(hes.col(j + NX + NU).data() + NX + NP, NP,
-                                cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE);
                 }
 
             }
@@ -1698,6 +1710,11 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
             ++t;
         }
     }
+
+    // copy pp portion
+    for(Eigen::Index j = 0; j < NP; ++j)
+        std::copy_n(hes_pp.col(j).data(), NP,
+                    cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE);
 
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
@@ -1928,7 +1945,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessia
         {
             scalar_t coeff = lam(n + k * NG + NUM_EQ);
             for(int i = 0; i < NX + NU + NP; ++i)
-                hes.col(i).noalias() += coeff * ad2_xdot(n).derivatives()(i).derivatives();
+                hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
         hes.transposeInPlace(); // if 2nd derivative is not continuous
 
@@ -2004,7 +2021,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
         {
             scalar_t coeff = lam(n + k * NG + NUM_EQ);
             for(int i = 0; i < NX + NU + NP; ++i)
-                hes.col(i).noalias() += coeff * ad2_xdot(n).derivatives()(i).derivatives();
+                hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
         hes.transposeInPlace(); // if 2nd derivative is not continuous
 
@@ -2035,7 +2052,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
-    this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji); // why???
+    this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji);
 
     // check if we need to allocate memory (first function entry)
     if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
@@ -2101,7 +2118,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
         {
             scalar_t coeff = lam(n + k * NG + NUM_EQ);
             for(int i = 0; i < NX + NU + NP; ++i)
-                hes.col(i).noalias() += coeff * ad2_xdot(n).derivatives()(i).derivatives();
+                hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
         hes.transposeInPlace(); // if 2nd derivative is not continuous
 
@@ -2154,6 +2171,9 @@ typename std::enable_if<T == SPARSE>::type
 ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
                                                                      const Eigen::Ref<const nlp_variable_t> y) const noexcept
 {
+    //std::cout << "s: " << s.transpose() << "\n";
+    //std::cout << "y: " << y.transpose() << "\n";
+
     const nlp_variable_t v = hessian * s;
     const scalar_t scaling = s.dot(v);
     const scalar_t scaling_inv = scalar_t(1) / scaling;
@@ -2262,13 +2282,14 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<
                     std::plus<scalar_t>());
         }
 
-        hes_ap.transposeInPlace();
+        Eigen::Matrix<scalar_t, np_size, 1> tmp;
         for(Eigen::Index j = 0; j < VARX_SIZE + VARU_SIZE; ++j)
         {
+            tmp = hes_ap.row(j);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU,
-                    hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU + NP,
-                    hes_ap.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU,
-                    std::plus<scalar_t>());
+                           hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU + NP,
+                           tmp.data(), hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU,
+                           std::plus<scalar_t>());
         }
     }
 }

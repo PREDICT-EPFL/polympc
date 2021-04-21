@@ -99,8 +99,6 @@ public:
             compute_kkt_rhs(h, rhs);
             x_tilde_nu = linear_solver.solve(rhs);
 
-            //std::cout << "x_tilde_nu: " << x_tilde_nu.transpose() << "\n";
-
             m_x_tilde = x_tilde_nu.template head<N>();
             m_z_tilde = m_z_prev + m_rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<M>() - this->m_y.template head<M>());
 
@@ -166,11 +164,13 @@ public:
             }
 
             /**
-            std::cout << "iter: " << iter << " primal: " << this->m_x.transpose() << "  ";
-            std::cout << "dual: "   << this->m_y.transpose() << " | "
-                      << " residuals: " << this->info().res_prim << " : " << this->info().res_dual << " | "
+            std::cout << "iter: " << iter << "\n" << "primal: " << this->m_x.transpose() << " \n ";
+            std::cout << "dual: "   << this->m_y.transpose() << " \n "
+                      << " residuals: " << this->info().res_prim << " : " << this->info().res_dual << " \n "
                       << " rho: " << m_rho_vec.transpose() << " " << m_rho_vec_box.transpose() << "\n";
+            std::cout << " -------------------------------------------------------------------------- \n";
             */
+
         }
 
         if (iter > this->m_settings.max_iter)
@@ -414,6 +414,10 @@ public:
         rd_norm = this->m_info.res_dual / (m_max_Hx_ATy_h_norm + this->DIV_BY_ZERO_REGUL);
 
         scalar_t rho_new = rho0 * sqrt(rp_norm / (rd_norm + this->DIV_BY_ZERO_REGUL));
+
+        //std::cout << "sqrt: " << sqrt(rp_norm / (rd_norm + this->DIV_BY_ZERO_REGUL)) << "\n";
+        //std::cout << "rho0: " << rho0 << " rp_norm: " << rp_norm << " rd_norm: " << rd_norm << " rho_new: " << rho_new << "\n";
+
         return rho_new;
     }
 

@@ -482,26 +482,19 @@ bool SQPBase<Derived, Problem, QPSolver, Preconditioner>::termination_criteria_i
 template<typename Derived, typename Problem, typename QPSolver, typename Preconditioner>
 void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nlp_variable_t> prim_step, Eigen::Ref<nlp_dual_t> dual_step) noexcept
 {
-    /**
-    enum {
-        EQ_IDX = 0,
-        INEQ_IDX = NUM_EQ,
-        BOX_IDX = NUM_INEQ + NUM_EQ,
-    };
-    const scalar_t UNBOUNDED = std::numeric_limits<scalar_t>::max();
-
-    // Inequality constraints
-    // from          A.x + b <= 0
-    // to    -INF <= A.x     <= -b
-
-    _qp.u.template segment<NUM_INEQ>(INEQ_IDX) = -b_ineq;
-    _qp.l.template segment<NUM_INEQ>(INEQ_IDX).setConstant(-UNBOUNDED);
-    _qp.A.template block<NUM_INEQ, VAR_SIZE>(INEQ_IDX, 0) = A_ineq;
-    */
-
     // solve the QP
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
+
+    /**
+    std::cout << "H: \n" << m_H << "\n";
+    std::cout << "A: \n" << m_A.template rightCols<29>() << "\n";
+    std::cout << "h: " << m_h.transpose() << "\n";
+    std::cout << "al: " << m_al.transpose() << "\n";
+    std::cout << "ul: " << m_au.transpose() << "\n";
+    std::cout << "xl: " << m_lx.transpose() << "\n";
+    std::cout << "xu: " << m_ux.transpose() << "\n";
+    */
 
     /** @badcode: m_x -> x step; m_lam -> lam step */
     qp_status = m_qp_solver.solve(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
@@ -513,6 +506,9 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
 
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
+
+    //std::cout << "p_prim: " << prim_step.transpose() << "\n";
+    //std::cout << "p_dual: " << dual_step.transpose() << "\n";
 
 }
 
@@ -538,6 +534,7 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
     //std::cout << "Linerise at: x:" << m_x.transpose() << " | y:" << m_lam.transpose() << "\n";
 
     linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_al);
+    //std::cout << "H: \n" << m_H << "\n";
     /** place for heuristics: regularisation and preconditioning */
     hessian_regularisation(m_H);
 
@@ -599,9 +596,11 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
         //std::cout << "dx:  " << m_step_prev.transpose() << "\n";
         //std::cout << "lam: " << m_lam.transpose() << "\n";
 
+        //std::cout << "Hessian before: \n" << m_H << "\n";
+
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_al);
 
-        //std::cout << "H: \n" << m_H << "\n";
+        //std::cout << "Hessian after: \n" << m_H << "\n";
         //std::cout << "A: \n" << m_A << "\n";
         //std::cout << "h: " << m_h.transpose() << "\n";
 

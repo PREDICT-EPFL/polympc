@@ -395,7 +395,7 @@ public:
 
     EIGEN_STRONG_INLINE void rho_vec_update(const scalar_t& rho0) noexcept
     {
-        for (int i = 0; i < qp_dual_t::RowsAtCompileTime; i++)
+        for (int i = 0; i < qp_dual_a_t::RowsAtCompileTime; i++)
         {
             switch (this->constr_type[i])
             {

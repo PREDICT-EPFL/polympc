@@ -23,7 +23,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ ParkingOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 1, /
 
 using namespace Eigen;
 
-class ParkingOCP : public ContinuousOCP<ParkingOCP, Approximation, DENSE>
+class ParkingOCP : public ContinuousOCP<ParkingOCP, Approximation, SPARSE>
 {
 public:
     ~ParkingOCP() = default;
@@ -125,7 +125,7 @@ int main(void)
 {
     using mpc_t = MPC<ParkingOCP, Solver>;
     mpc_t mpc;
-    mpc.settings().max_iter = 30;
+    mpc.settings().max_iter = 2;
     mpc.settings().line_search_max_iter = 5;
 
     // problem data
@@ -137,7 +137,7 @@ int main(void)
     mpc_t::parameter_t ubp; ubp << 10;        // upper bound on time
     mpc_t::parameter_t p0; p0 << 0.5;         // very important to set initial time estimate
     mpc_t::state_t lbx_f; lbx_f << -0.05, -0.05, -0.05;   // lower bound on final position
-    mpc_t::state_t ubx_f = -lbx_f;                         // upper bound  =  lower bound
+    mpc_t::state_t ubx_f = -lbx_f;                        // upper bound  =  lower bound
 
     mpc.set_static_parameters(p);
     mpc.control_bounds(lbu, ubu);
@@ -158,6 +158,7 @@ int main(void)
     std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
     std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
     std::cout << "Solution P: \n" << mpc.solution_p() << "\n";
+    std::cout << "Solution Y: \n" << mpc.solver().dual_solution().transpose() << "\n";
 
     return EXIT_SUCCESS;
 }

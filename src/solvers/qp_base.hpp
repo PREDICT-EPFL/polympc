@@ -62,6 +62,23 @@ struct qp_solver_info_t {
     Scalar res_dual = 1;        /**< Dual residual */
 };
 
+template<typename Scalar>
+struct regulariser{
+    static constexpr Scalar value = std::numeric_limits<Scalar>::epsilon();
+};
+// partial specialisation
+template<>
+struct regulariser<double>{
+    static constexpr double value = 10e-10;
+};
+template<>
+struct regulariser<float>{
+    static constexpr double value = 10e-5;
+};
+
+
+
+
 /**-----------------------------------------------------------------------------------*/
 /** (Almost) Interface class for generic QP solvers
  * N - state dimension
@@ -97,7 +114,7 @@ class QPBase
 
     static constexpr scalar_t LOOSE_BOUNDS_THRESH = 1e+10;
     static constexpr scalar_t EQ_TOL = 1e-4;
-    static constexpr scalar_t DIV_BY_ZERO_REGUL = std::numeric_limits<scalar_t>::epsilon();
+    static constexpr scalar_t DIV_BY_ZERO_REGUL = regulariser<Scalar>::value; //std::numeric_limits<scalar_t>::epsilon();
 
     // Solver state variables
     qp_var_t  m_x;

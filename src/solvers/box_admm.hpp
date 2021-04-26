@@ -3,11 +3,14 @@
 
 #include "qp_base.hpp"
 
+#include "eigen3/unsupported/Eigen/SparseExtra"
+
 template<int N, int M, typename Scalar = double, int MatrixType = DENSE,
          template <typename, int, typename... Args> class LinearSolver = linear_solver_traits<DENSE>::default_solver,
          int LinearSolver_UpLo = Eigen::Lower>
 class boxADMM : public QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>, N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>
 {
+public:
     using Base = QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>, N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>;
     using qp_var_t        = typename Base::qp_var_t;
     using qp_dual_t       = typename Base::qp_dual_t;
@@ -19,7 +22,6 @@ class boxADMM : public QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, Li
     using kkt_vec_t       = typename Base::kkt_vec_t;
     using linear_solver_t = typename Base::linear_solver_t;
 
-public:
     /** constructor */
     boxADMM() : Base()
     {
@@ -86,6 +88,19 @@ public:
         construct_kkt_matrix(H, A);
         factorise_kkt_matrix();
 
+        if(MatrixType == SPARSE)
+        {
+            Eigen::saveMarket(m_K, "K_sparse.mm");
+            Eigen::saveMarket(H, "H_sparse.mm");
+            Eigen::saveMarket(A, "A_sparse.mm");
+        }
+        else
+        {
+            Eigen::saveMarket(m_K, "K_dense.mm");
+            Eigen::saveMarket(H, "H_dense.mm");
+            Eigen::saveMarket(A, "A_dense.mm");
+        }
+
         this->m_info.status = UNSOLVED;
 
         //std::cout << "KKT: \n" << m_K << "\n";
@@ -98,6 +113,18 @@ public:
             /** update x_tilde z_tilde */
             compute_kkt_rhs(h, rhs);
             x_tilde_nu = linear_solver.solve(rhs);
+
+            /**
+            if((iter == 1))
+            {
+                //Eigen::saveMarket(m_K, "m_K.mm");
+                //Eigen::saveMarketVector(rhs, "rhs.mm" );
+                //Eigen::saveMarketVector(x_tilde_nu, "x_sol.mm");
+
+                std::cout << "rhs: \n" << rhs.transpose() << "\n";
+                std::cout << "x_tilde: \n" << x_tilde_nu.transpose() << "\n";
+            }
+            */
 
             m_x_tilde = x_tilde_nu.template head<N>();
             m_z_tilde = m_z_prev + m_rho_inv_vec.cwiseProduct(x_tilde_nu.template tail<M>() - this->m_y.template head<M>());
@@ -170,6 +197,8 @@ public:
                       << " rho: " << m_rho_vec.transpose() << " " << m_rho_vec_box.transpose() << "\n";
             std::cout << " -------------------------------------------------------------------------- \n";
             */
+
+
 
         }
 

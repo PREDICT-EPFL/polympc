@@ -78,6 +78,10 @@ public:
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
+    using typename Base::nlp_jacobian_t;
+    using typename Base::nlp_dual_t;
+    using typename Base::parameter_t;
+    using typename Base::nlp_constraints_t;
 
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
@@ -113,8 +117,32 @@ public:
             ri = (lag_hessian.col(i).cwiseAbs()).sum() - abs(aii); // The hessian is symmetric, Gershgorin discs from rows or columns are equal
 
             if (aii - ri <= 0)
-                lag_hessian.coeffRef(i, i) += (ri - aii) + 0.001;//All Gershgorin discs are in the positive half
+                lag_hessian.coeffRef(i, i) += (ri - aii) + 0.01;//All Gershgorin discs are in the positive half 0.001
         }
+    }
+
+
+    /** for this problem it turned out that exact linearisation not only converges faster but also with a lower computation cost per iteration *
+     *
+     * So we tell the solver to use the exact linearisation here to update the Hessian
+     *
+     */
+    EIGEN_STRONG_INLINE void update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                             Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                                             Eigen::Ref<nlp_jacobian_t> A,Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        this->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, A, b);
+        polympc::ignore_unused_var(x_step);
+    }
+
+    EIGEN_STRONG_INLINE void update_linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                             Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
+                                                             nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        this->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
+        polympc::ignore_unused_var(x_step);
     }
 
 
@@ -125,8 +153,8 @@ int main(void)
 {
     using mpc_t = MPC<ParkingOCP, Solver>;
     mpc_t mpc;
-    mpc.settings().max_iter = 2;
-    mpc.settings().line_search_max_iter = 5;
+    mpc.settings().max_iter = 10;
+    mpc.settings().line_search_max_iter = 10;
 
     // problem data
     mpc_t::static_param p; p << 1.0;          // robot wheel base
@@ -147,6 +175,7 @@ int main(void)
     mpc.x_guess(x0.replicate(11,1));
 
     mpc.initial_conditions(x0);
+
     polympc::time_point start = polympc::get_time();
     mpc.solve();
     polympc::time_point stop = polympc::get_time();

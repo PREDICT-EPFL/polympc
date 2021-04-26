@@ -2142,16 +2142,16 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
         /** dxdp */
         for(Eigen::Index j = 0; j < NP; ++j)
         {
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + NX,
-                           hes.col(j + NX + NU).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX + NX,
+                           hes.col(j + NX + NU).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX,
                            std::plus<scalar_t>());
 
             /** dudp */
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + NU,
+            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU + NU,
                            hes.col(j + NX + NU).data() + NX,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
+                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU,
                            std::plus<scalar_t>());
             /** dp^2 */
             std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,

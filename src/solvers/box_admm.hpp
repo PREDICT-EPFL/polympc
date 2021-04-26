@@ -8,6 +8,7 @@ template<int N, int M, typename Scalar = double, int MatrixType = DENSE,
          int LinearSolver_UpLo = Eigen::Lower>
 class boxADMM : public QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>, N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>
 {
+public:
     using Base = QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>, N, M, Scalar, MatrixType, LinearSolver, LinearSolver_UpLo>;
     using qp_var_t        = typename Base::qp_var_t;
     using qp_dual_t       = typename Base::qp_dual_t;
@@ -19,7 +20,6 @@ class boxADMM : public QPBase<boxADMM<N, M, Scalar, MatrixType, LinearSolver, Li
     using kkt_vec_t       = typename Base::kkt_vec_t;
     using linear_solver_t = typename Base::linear_solver_t;
 
-public:
     /** constructor */
     boxADMM() : Base()
     {

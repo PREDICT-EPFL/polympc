@@ -31,4 +31,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(minimal_time_test minimal_time_test.cpp)
   target_link_libraries(minimal_time_test Eigen3::Eigen)
 
+  add_executable(mint_compare mint_compare.cpp)
+  target_link_libraries(mint_compare Eigen3::Eigen)
+
 endif()

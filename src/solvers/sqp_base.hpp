@@ -223,15 +223,27 @@ public:
       static_cast<Derived*>(this)->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, A, b);
   }
 
+
   /** update linearisation: option for faster linearisation update*/
-  EIGEN_STRONG_INLINE void update_linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
-                            const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
-                            Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                            typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
-                            Eigen::Ref<nlp_constraints_t> b) noexcept
-  {
-      static_cast<Derived*>(this)->update_linearisation_impl(x, p, x_step, lam, cost_grad, lag_hessian, A, b);
-  }
+  template<int T = Problem::MATRIXFMT>
+  EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type
+  update_linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                       const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                       Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
+                       Eigen::Ref<nlp_jacobian_t> A, Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        static_cast<Derived*>(this)->update_linearisation_dense_impl(x, p, x_step, lam, cost_grad, lag_hessian, A, b);
+    }
+
+  template<int T = Problem::MATRIXFMT>
+  EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
+  update_linearisation(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                       const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                       Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
+                       nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        static_cast<Derived*>(this)->update_linearisation_sparse_impl(x, p, x_step, lam, cost_grad, lag_hessian, A, b);
+    }
 
   /** Hessian update: room for creativity: L-BFGS, BFGS (default), sparse BFGS, SR1 */
   EIGEN_STRONG_INLINE void hessian_update(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
@@ -287,6 +299,7 @@ public:
   {
       scalar_t _lag(0.0);
       problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, b, A);
+      hessian_regularisation(m_H);
   }
 
   // sparse version
@@ -298,14 +311,19 @@ public:
   {
       scalar_t _lag;
       problem.lagrangian_gradient_hessian(x,p,lam, _lag, m_lag_gradient, lag_hessian, cost_grad, b, A);
+      hessian_regularisation(m_H);
   }
 
   /** default linearisation update uses damped BFGS algorithm */
-  EIGEN_STRONG_INLINE void update_linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+  EIGEN_STRONG_INLINE void update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                  const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                  Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                 typename std::conditional<Problem::MATRIXFMT == DENSE, Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
-                                 Eigen::Ref<nlp_constraints_t> b) noexcept;
+                                 Eigen::Ref<nlp_jacobian_t> A, Eigen::Ref<nlp_constraints_t> b) noexcept;
+
+  EIGEN_STRONG_INLINE void update_linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                                                            const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                            Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
+                                                            nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept;
 
   /** default Hessain update -> dense damped BFGS */
   EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
@@ -453,12 +471,28 @@ void SQPBase<Derived, Problem, QPSolver>::linearisation_impl(const Eigen::Ref<co
 */
 
 template<typename Derived, typename Problem, typename QPSolver, typename Preconditioner>
-void SQPBase<Derived, Problem, QPSolver, Preconditioner>::update_linearisation_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+void SQPBase<Derived, Problem, QPSolver, Preconditioner>::update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x,
+                                                                                          const Eigen::Ref<const parameter_t>& p,
                                                           const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                                           Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                                          typename std::conditional<Problem::MATRIXFMT == DENSE,
-                                                          Eigen::Ref<nlp_jacobian_t>, nlp_jacobian_t&>::type A,
-                                                          Eigen::Ref<nlp_constraints_t> b) noexcept
+                                                          Eigen::Ref<nlp_jacobian_t> A, Eigen::Ref<nlp_constraints_t> b) noexcept
+{
+    scalar_t _lag;
+    nlp_variable_t _lag_grad;
+    problem.lagrangian_gradient(x, p, lam, _lag, _lag_grad, cost_grad, b, A);
+
+    /** @badcode: redo with gradient step:  BFGS update */
+    //std::cout << "optimality: " << _lag_grad.template lpNorm<Eigen::Infinity>() << "\n";
+    hessian_update(lag_hessian, x_step, (_lag_grad - m_lag_gradient));
+    m_lag_gradient = _lag_grad;
+}
+
+template<typename Derived, typename Problem, typename QPSolver, typename Preconditioner>
+void SQPBase<Derived, Problem, QPSolver, Preconditioner>::update_linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x,
+                                                                                           const Eigen::Ref<const parameter_t>& p,
+                                                          const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                          Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
+                                                          nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
 {
     scalar_t _lag;
     nlp_variable_t _lag_grad;
@@ -507,9 +541,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
 
-    //std::cout << "p_prim: " << prim_step.transpose() << "\n";
-    //std::cout << "p_dual: " << dual_step.transpose() << "\n";
-
 }
 
 /** solve method */
@@ -528,15 +559,8 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
     m_info.qp_solver_iter = 0;
     m_info.iter = 1;
 
-    //std::cout << "x:" << m_x.transpose() << "\n";
-
-    /** solve once with exact linearisation */
-    //std::cout << "Linerise at: x:" << m_x.transpose() << " | y:" << m_lam.transpose() << "\n";
-
     linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_al);
-    //std::cout << "H: \n" << m_H << "\n";
     /** place for heuristics: regularisation and preconditioning */
-    hessian_regularisation(m_H);
 
     /** prepare and scale the QP */
     /** @bug: just to note */
@@ -599,15 +623,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
         //std::cout << "Hessian before: \n" << m_H << "\n";
 
         update_linearisation(m_x, m_p, m_step_prev, m_lam, m_h, m_H, m_A, m_al);
-
-        //std::cout << "Hessian after: \n" << m_H << "\n";
-        //std::cout << "A: \n" << m_A << "\n";
-        //std::cout << "h: " << m_h.transpose() << "\n";
-
-        //std::cout << "H: \n" << m_H << "\n";
-
-        //linearisation(m_x, m_p, m_lam, m_h, m_H, m_A, m_al);
-        //hessian_regularisation(m_H);
 
         /** prepare and scale the QP */
         m_al = -m_al;

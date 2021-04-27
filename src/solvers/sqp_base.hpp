@@ -541,6 +541,9 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
 
+    //std::cout << "p: \n" << prim_step.transpose() << "\n";
+    //std::cout << "l: \n" << dual_step.transpose() << "\n";
+
 }
 
 /** solve method */
@@ -597,6 +600,9 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
 
     p_lambda -= m_lam;
     alpha = step_size_selection(p);
+
+    //std::cout << "alpha: " << alpha << "\n";
+
 
     // take step
     m_x.noalias()   += alpha * p;

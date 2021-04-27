@@ -13,12 +13,14 @@ class MPC
 private:
     using nlp_solver_t = Solver<OCP, Args...>;
     nlp_solver_t m_solver;
+public:
 
     /** dynamic system properties */
     static constexpr int nx = OCP::NX;
     static constexpr int nu = OCP::NU;
     static constexpr int np = OCP::NP;
     static constexpr int nd = OCP::ND;
+    static constexpr int ng = OCP::NG;
 
     /** optimisation properties */
     static constexpr int var_size  = OCP::VAR_SIZE;
@@ -27,6 +29,7 @@ private:
     static constexpr int dual_size = OCP::DUAL_SIZE;
     static constexpr int num_nodes = OCP::NUM_NODES;
     static constexpr int num_segms = OCP::NUM_SEGMENTS;
+    static constexpr int num_ineq  = OCP::NUM_INEQ;
 
 public:
     MPC()
@@ -46,11 +49,12 @@ public:
     using control_t    = typename dense_matrix_type_selector<scalar_t, nu, 1>::type;
     using parameter_t  = typename dense_matrix_type_selector<scalar_t, np, 1>::type;
     using static_param = typename dense_matrix_type_selector<scalar_t, nd, 1>::type;
+    using constraint_t = typename dense_matrix_type_selector<scalar_t, ng, 1>::type;
 
     using traj_state_t   = Eigen::Matrix<scalar_t, varx_size, 1>;
     using traj_control_t = Eigen::Matrix<scalar_t, varu_size, 1>;
     using dual_var_t     = Eigen::Matrix<scalar_t, dual_size, 1>;
-    using constraints_t  = Eigen::Matrix<scalar_t, OCP::NUM_INEQ, 1>;
+    using constraints_t  = Eigen::Matrix<scalar_t, num_ineq,  1>;
 
     /** data for interpolation */
     typename OCP::time_t  time_grid;
@@ -145,12 +149,19 @@ public:
         m_solver.upper_bound_x().template segment<varu_size>(varx_size) = ub.replicate(num_nodes, 1);
     }
 
-    // constraints
-    inline void constraints_bounds(const Eigen::Ref<const constraints_t>& lbg,
+    // generic inequality constraints
+    inline void constraints_trajectory_bounds(const Eigen::Ref<const constraints_t>& lbg,
                                    const Eigen::Ref<const constraints_t>& ubg) noexcept
     {
         m_solver.lower_bound_g() = lbg;
         m_solver.upper_bound_g() = ubg;
+    }
+
+    inline void constraints_bounds(const Eigen::Ref<const constraint_t>& lbg,
+                                   const Eigen::Ref<const constraint_t>& ubg) noexcept
+    {
+        m_solver.lower_bound_g() = lbg.replicate(num_nodes, 1);
+        m_solver.upper_bound_g() = ubg.replicate(num_nodes, 1);
     }
 
     /** set parameters bounds*/

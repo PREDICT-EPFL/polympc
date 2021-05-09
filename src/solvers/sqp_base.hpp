@@ -124,7 +124,7 @@ public:
   nlp_jacobian_t    m_A;            // equality constraints Jacobian
   nlp_constraints_t m_al, m_au;     // equality/inequality constraints evaluated
   parameter_t       m_p = parameter_t::Zero(); // problem parameters
-  scalar_t          m_cost;
+  scalar_t          m_cost{0};
   nlp_settings_t    m_settings;
   sqp_info_t        m_info;
   nlp_variable_t    m_lbx, m_ubx;
@@ -140,6 +140,7 @@ public:
   nlp_variable_t m_step_prev;
   scalar_t m_primal_norm;
   scalar_t m_dual_norm;
+  scalar_t m_max_violation{0};
 
 
   static constexpr scalar_t EPSILON = std::numeric_limits<scalar_t>::epsilon();
@@ -178,6 +179,11 @@ public:
 
   EIGEN_STRONG_INLINE const typename qp_solver_t::settings_t& qp_settings() const noexcept { return m_qp_solver.m_settings; }
   EIGEN_STRONG_INLINE typename qp_solver_t::settings_t& qp_settings() noexcept { return m_qp_solver.m_settings; }
+
+  EIGEN_STRONG_INLINE const scalar_t primal_norm() const noexcept {return m_primal_norm;}
+  EIGEN_STRONG_INLINE const scalar_t dual_norm()   const noexcept {return m_dual_norm;}
+  EIGEN_STRONG_INLINE const scalar_t constr_violation() const noexcept {return  m_max_violation;}
+  EIGEN_STRONG_INLINE const scalar_t cost() const noexcept {return m_cost;}
 
 
   /** step size selection: line search / filter / trust resion */
@@ -253,9 +259,9 @@ public:
   }
 
   /** termination criteria */
-  EIGEN_STRONG_INLINE bool termination_criteria(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
+  EIGEN_STRONG_INLINE bool termination_criteria(const Eigen::Ref<const nlp_variable_t>& x) noexcept
   {
-      return static_cast<const Derived*>(this)->termination_criteria_impl(x);
+      return static_cast<Derived*>(this)->termination_criteria_impl(x);
   }
 
   /** Hessian regularisation if necessary: default behavior: do nothing*/
@@ -332,7 +338,7 @@ public:
         BFGS_update(hessian, x_step, grad_step);
   }
 
-  EIGEN_STRONG_INLINE bool termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept;
+  EIGEN_STRONG_INLINE bool termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) noexcept;
 
   bool _is_posdef(const Eigen::Ref<const nlp_hessian_t>& H) const noexcept
   {
@@ -390,6 +396,7 @@ SQPBase<Derived, Problem, QPSolver, Preconditioner>::step_size_selection_impl(co
         x_step.noalias() = alpha * p;
         x_step += this->m_x;
         this->problem.cost(x_step, this->m_p, cost_step);
+        m_cost = cost_step; //log cost
 
         scalar_t phi_l1_step = cost_step + mu * this->constraints_violation(x_step);
 
@@ -505,11 +512,11 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::update_linearisation_s
 }
 
 template<typename Derived, typename Problem, typename QPSolver, typename Preconditioner>
-bool SQPBase<Derived, Problem, QPSolver, Preconditioner>::termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) const noexcept
+bool SQPBase<Derived, Problem, QPSolver, Preconditioner>::termination_criteria_impl(const Eigen::Ref<const nlp_variable_t>& x) noexcept
 {
-    //std::cout << "residuals: " << m_primal_norm << " " << m_dual_norm << " " << max_constraints_violation(x) << "\n";
+    m_max_violation = max_constraints_violation(x);
     return (m_primal_norm <= m_settings.eps_prim) && (m_dual_norm <= m_settings.eps_dual) &&
-            (max_constraints_violation(x) <= m_settings.eps_prim) ? true : false;
+            (m_max_violation <= m_settings.eps_prim) ? true : false;
 }
 
 

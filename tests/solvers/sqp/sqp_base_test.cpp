@@ -118,6 +118,8 @@ public:
         if(filter.is_acceptable(cost_1, constr_l1))
             filter.add(cost_1, constr_l1);
 
+        //check for exit right here?
+
         //filter.print();
 
         scalar_t alpha = scalar_t(1.0);
@@ -130,6 +132,7 @@ public:
 
             this->problem.cost(x_step, this->m_p, cost_step);
             scalar_t constr_step = this->constraints_violation(x_step);
+            this->m_cost = cost_step;
 
             if(filter.is_acceptable(cost_step, constr_step))
             {
@@ -199,6 +202,8 @@ int main(void)
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";
     std::cout << "Num iterations: " << solver.info().iter << "\n";
+    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
     std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
     std::cout << "Size of the solver: " << sizeof (solver) << "\n";
@@ -216,8 +221,10 @@ int main(void)
 
     std::cout << "Solve status: " << solver.info().status.value << "\n";
     std::cout << "Num iterations: " << solver.info().iter << "\n";
+    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
+    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
 

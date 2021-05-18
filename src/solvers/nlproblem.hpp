@@ -170,24 +170,63 @@ public:
     }
 
     /**  NLP interface functions */
+    /** @brief:
+     *
+     */
     EIGEN_STRONG_INLINE void cost_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                           scalar_t &_cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept;
+                                           scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient) noexcept
+    {
+        static_cast<Derived*>(this)->cost_gradient_impl(var, p, _cost, _cost_gradient);
+    }
+    // default implementation
+    EIGEN_STRONG_INLINE void cost_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient) noexcept;
+
 
     EIGEN_STRONG_INLINE void cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                   scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient, Eigen::Ref<nlp_hessian_t> hessian) noexcept;
+                                                   scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient, Eigen::Ref<nlp_hessian_t> hessian) noexcept
+    {
+        static_cast<Derived*>(this)->cost_gradient_hessian_impl(var, p, _cost, _cost_gradient, hessian);
+    }
+    // default
+    EIGEN_STRONG_INLINE void cost_gradient_hessian_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                      scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient, Eigen::Ref<nlp_hessian_t> hessian) noexcept;
 
+    /** @brief
+     *
+     */
     EIGEN_STRONG_INLINE void equalities(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                              Eigen::Ref<nlp_eq_constraints_t> equalities) const noexcept;
+                                              Eigen::Ref<nlp_eq_constraints_t> _equalities) const noexcept
+    {
+        static_cast<const Derived*>(this)->equalities_impl(var, p, _equalities);
+    }
+    // default
+    EIGEN_STRONG_INLINE void equalities_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                             Eigen::Ref<nlp_eq_constraints_t> _equalities) const noexcept;
 
     EIGEN_STRONG_INLINE void inequalities(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                Eigen::Ref<nlp_ineq_constraints_t> _inequalities) const noexcept;
+                                                Eigen::Ref<nlp_ineq_constraints_t> _inequalities) const noexcept
+    {
+        static_cast<const Derived*>(this)->inequalities_impl(var, p, _inequalities);
+    }
+    // default
+    EIGEN_STRONG_INLINE void inequalities_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                               Eigen::Ref<nlp_ineq_constraints_t> _inequalities) const noexcept;
 
     /** linearisation of equalities */
+    EIGEN_STRONG_INLINE void equalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
+                                                   const Eigen::Ref<const static_parameter_t>& p,
+                                                   Eigen::Ref<nlp_eq_constraints_t> equalities,
+                                                   Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
+    {
+        static_cast<Derived*>(this)->equalities_linearised_impl(var, p, equalities, jacobian);
+    }
+    // default
     template<int NE = NUM_EQ>
-    EIGEN_STRONG_INLINE typename std::enable_if< NE < 1 >::type equalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                                      const Eigen::Ref<const static_parameter_t>& p,
-                                                                                      Eigen::Ref<nlp_eq_constraints_t> equalities,
-                                                                                      Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
+    EIGEN_STRONG_INLINE typename std::enable_if< NE < 1 >::type equalities_linearised_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                           const Eigen::Ref<const static_parameter_t>& p,
+                                                                                           Eigen::Ref<nlp_eq_constraints_t> equalities,
+                                                                                           Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
     {
         /** @badcode : remove setting to zero? */
         jacobian   = nlp_eq_jacobian_t::Zero(NUM_EQ, VAR_SIZE);
@@ -198,10 +237,10 @@ public:
     }
 
     template<int NE = NUM_EQ>
-    EIGEN_STRONG_INLINE typename std::enable_if< NE >= 1 >::type equalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                                       const Eigen::Ref<const static_parameter_t>& p,
-                                                                                       Eigen::Ref<nlp_eq_constraints_t> equalities,
-                                                                                       Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
+    EIGEN_STRONG_INLINE typename std::enable_if< NE >= 1 >::type equalities_linearised_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                            const Eigen::Ref<const static_parameter_t>& p,
+                                                                                            Eigen::Ref<nlp_eq_constraints_t> equalities,
+                                                                                            Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
     {
         jacobian   = nlp_eq_jacobian_t::Zero(NUM_EQ, VAR_SIZE);
         equalities = nlp_eq_constraints_t::Zero(NUM_EQ);
@@ -218,11 +257,19 @@ public:
     }
 
     /** linearisation of inequalities */
+    EIGEN_STRONG_INLINE void inequalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
+                                                     const Eigen::Ref<const static_parameter_t>& p,
+                                                     Eigen::Ref<nlp_ineq_constraints_t> inequalities,
+                                                     Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
+    {
+        static_cast<Derived*>(this)->inequalities_linearised_impl(var, p, inequalities, jacobian);
+    }
+
     template<int NI = NUM_INEQ>
-    EIGEN_STRONG_INLINE typename std::enable_if< NI < 1 >::type inequalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                                        const Eigen::Ref<const static_parameter_t>& p,
-                                                                                        Eigen::Ref<nlp_ineq_constraints_t> inequalities,
-                                                                                        Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
+    EIGEN_STRONG_INLINE typename std::enable_if< NI < 1 >::type inequalities_linearised_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                             const Eigen::Ref<const static_parameter_t>& p,
+                                                                                             Eigen::Ref<nlp_ineq_constraints_t> inequalities,
+                                                                                             Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
     {
         /** @badcode : remove setting to zero? */
         //jacobian   = nlp_eq_jacobian_t::Zero(NUM_INEQ, VAR_SIZE);
@@ -233,10 +280,10 @@ public:
     }
 
     template<int NI = NUM_INEQ>
-    EIGEN_STRONG_INLINE typename std::enable_if< NI >= 1 >::type inequalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                                         const Eigen::Ref<const static_parameter_t>& p,
-                                                                                         Eigen::Ref<nlp_ineq_constraints_t> inequalities,
-                                                                                         Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
+    EIGEN_STRONG_INLINE typename std::enable_if< NI >= 1 >::type inequalities_linearised_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                              const Eigen::Ref<const static_parameter_t>& p,
+                                                                                              Eigen::Ref<nlp_ineq_constraints_t> inequalities,
+                                                                                              Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
     {
         //jacobian   = nlp_ineq_jacobian_t::Zero(NUM_INEQ, VAR_SIZE);
         //inequalities = nlp_ineq_constraints_t::Zero(NUM_INEQ);
@@ -252,26 +299,66 @@ public:
         }
     }
 
-    void dummy_function(Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept {std::cout << "dummy \n";}
-
+    /** @brief:
+     *
+     */
     EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                        const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) const noexcept;
+                                        const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) const noexcept
+    {
+        static_cast<const Derived*>(this)->lagrangian_impl(var, p, lam, _lagrangian);
+    }
+    // default
+    EIGEN_STRONG_INLINE void lagrangian_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) const noexcept;
 
+
+    /** @brief:
+     *
+     */
     EIGEN_STRONG_INLINE void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                                  const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                 Eigen::Ref<nlp_variable_t> _lag_gradient) noexcept;
+                                                 Eigen::Ref<nlp_variable_t> _lag_gradient) noexcept
+    {
+        static_cast<Derived*>(this)->lagrangian_gradient_impl(var, p, lam, _lagrangian, _lag_gradient);
+    }
+    // default
+    EIGEN_STRONG_INLINE void lagrangian_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                      const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                      Eigen::Ref<nlp_variable_t> _lag_gradient) noexcept;
 
     EIGEN_STRONG_INLINE void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
                                                  const Eigen::Ref<const static_parameter_t>& p,
                                                  const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                  Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept;
+                                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+    {
+        static_cast<Derived*>(this)->lagrangian_gradient_impl(var, p, lam, _lagrangian, lag_gradient, cost_gradient, g, jac_g);
+    }
+    // default
+    EIGEN_STRONG_INLINE void lagrangian_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                      const Eigen::Ref<const static_parameter_t>& p,
+                                                      const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                      Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                      Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept;
 
+
+    /** @brief:
+     *
+     */
     EIGEN_STRONG_INLINE void lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var, const Eigen::Ref<const static_parameter_t> &p,
                                                          const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
                                                          Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_hessian_t> lag_hessian,
                                                          Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                         Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept;
+                                                         Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+    {
+        static_cast<Derived*>(this)->lagrangian_gradient_hessian_impl(var, p, lam, _lagrangian, lag_gradient, lag_hessian, cost_gradient, g, jac_g);
+    }
+    //default
+    EIGEN_STRONG_INLINE void lagrangian_gradient_hessian_impl(const Eigen::Ref<const nlp_variable_t> &var, const Eigen::Ref<const static_parameter_t> &p,
+                                                              const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
+                                                              Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                                              Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                              Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept;
 
 
 };
@@ -297,8 +384,8 @@ void ProblemBase<Derived, MatrixFormat>::seed_derivatives()
 
 // compute cost gradient
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::cost_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                       scalar_t &_cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
+void ProblemBase<Derived, MatrixFormat>::cost_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                            scalar_t &_cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
 {
     _cost = scalar_t(0);
     cost_gradient = nlp_variable_t::Zero(VAR_SIZE);
@@ -312,10 +399,10 @@ void ProblemBase<Derived, MatrixFormat>::cost_gradient(const Eigen::Ref<const nl
 
 //compute cost, gradient and hessian
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                               const Eigen::Ref<const static_parameter_t>& p,
-                                                               scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient,
-                                                               Eigen::Ref<nlp_hessian_t> hessian) noexcept
+void ProblemBase<Derived, MatrixFormat>::cost_gradient_hessian_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                    const Eigen::Ref<const static_parameter_t>& p,
+                                                                    scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient,
+                                                                    Eigen::Ref<nlp_hessian_t> hessian) noexcept
 {
     _cost = scalar_t(0);
     _cost_gradient = nlp_variable_t::Zero(VAR_SIZE);
@@ -336,8 +423,8 @@ void ProblemBase<Derived, MatrixFormat>::cost_gradient_hessian(const Eigen::Ref<
 }
 
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) const noexcept
+void ProblemBase<Derived, MatrixFormat>::lagrangian_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                         const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) const noexcept
 {
     /** create temporary */
     nlp_eq_constraints_t c;
@@ -351,10 +438,10 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian(const Eigen::Ref<const nlp_v
 }
 
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
-                                                             const Eigen::Ref<const static_parameter_t>& p,
-                                                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                             Eigen::Ref<nlp_variable_t> _lag_gradient) noexcept
+void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                  const Eigen::Ref<const static_parameter_t>& p,
+                                                                  const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                  Eigen::Ref<nlp_variable_t> _lag_gradient) noexcept
 {
     nlp_eq_constraints_t c;
     nlp_ineq_constraints_t g;
@@ -371,11 +458,11 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<co
 }
 
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
-                                                             const Eigen::Ref<const static_parameter_t>& p,
-                                                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                             Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                             Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_impl(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                  const Eigen::Ref<const static_parameter_t>& p,
+                                                                  const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                  Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                  Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
@@ -388,12 +475,12 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<co
 }
 
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                     const Eigen::Ref<const static_parameter_t> &p,
-                                                                     const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
-                                                                     Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                                                     Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                     Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_hessian_impl(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                          const Eigen::Ref<const static_parameter_t> &p,
+                                                                          const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
+                                                                          Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                                                          Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                          Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
@@ -446,16 +533,16 @@ void ProblemBase<Derived, MatrixFormat>::lagrangian_gradient_hessian(const Eigen
 
 // evaluate equality constraints
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::equalities(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                    Eigen::Ref<nlp_eq_constraints_t> _equalities) const noexcept
+void ProblemBase<Derived, MatrixFormat>::equalities_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                         Eigen::Ref<nlp_eq_constraints_t> _equalities) const noexcept
 {
     equality_constraints<scalar_t>(var, p, _equalities);
 }
 
 // evaluate inequality constraints
 template<typename Derived, int MatrixFormat>
-void ProblemBase<Derived, MatrixFormat>::inequalities(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                            Eigen::Ref<nlp_ineq_constraints_t> _inequalities) const noexcept
+void ProblemBase<Derived, MatrixFormat>::inequalities_impl(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                           Eigen::Ref<nlp_ineq_constraints_t> _inequalities) const noexcept
 {
     inequality_constraints<scalar_t>(var, p, _inequalities);
 }

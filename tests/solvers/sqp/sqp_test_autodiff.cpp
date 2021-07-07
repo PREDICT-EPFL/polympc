@@ -184,3 +184,67 @@ TEST(SQPTestCase, TestSimpleNLP)
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
+
+
+
+/** HS071 problem as in Ipopt tutorial */
+POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ HS071, /*NX*/ 4, /*NE*/1, /*NI*/1, /*NP*/0, /*Type*/double);
+class HS071 : public ProblemBase<HS071>
+{
+public:
+    Eigen::Matrix<scalar_t, 4, 1> SOLUTION = {1.00000000, 4.74299963, 3.82114998, 1.37940829};
+
+    template<typename T>
+    EIGEN_STRONG_INLINE void cost_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p, T& cost) const noexcept
+    {
+        cost = x(0)*x(3)*(x(0) + x(1) + x(2)) + x(2);
+        polympc::ignore_unused_var(p);
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE void inequality_constraints_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p,
+                                                         Eigen::Ref<ineq_constraint_t<T>> constraint) const noexcept
+    {
+        // 25 <= x^2 + y^2 <= Inf -> will set bounds later once the problem is instantiated
+        constraint << x(0)*x(1)*x(2)*x(3);
+        polympc::ignore_unused_var(p);
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE void equality_constraints_impl(const Eigen::Ref<const variable_t<T>>& x, const Eigen::Ref<const static_parameter_t>& p,
+                                                       Eigen::Ref<eq_constraint_t<T>> constraint) const noexcept
+    {
+        // x(0)^2 + x(1)^2 + x(2)^2 + x(3)^2 == 40
+        constraint << x.squaredNorm() - 40;
+        polympc::ignore_unused_var(p);
+    }
+};
+
+TEST(SQPTestCase, TestHS071)
+{
+    // will be using the default
+    using Solver = SQPSolver<HS071>;
+    HS071 problem;
+    Solver solver;
+    Solver::nlp_variable_t x0, x;
+    Solver::nlp_dual_t y0;
+    y0.setZero();
+    x0 << 1.0, 5.0, 5.0, 1.0;
+
+    solver.settings().max_iter = 50;
+    solver.settings().line_search_max_iter = 5;
+    solver.lower_bound_g() << 25;
+    solver.upper_bound_g() << std::numeric_limits<Solver::scalar_t>::infinity();
+    solver.lower_bound_x() << 1.0, 1.0, 1.0, 1.0;
+    solver.upper_bound_x() << 5.0, 5.0, 5.0, 5.0;
+    solver.solve(x0, y0);
+
+    x = solver.primal_solution();
+
+    std::cout << "iter " << solver.info().iter << std::endl;
+    std::cout << "Solution " << x.transpose() << std::endl;
+
+    EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
+}
+

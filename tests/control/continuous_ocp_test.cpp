@@ -134,7 +134,7 @@ int main(void)
     std::cout << "Lagrangian Gradient: \n" << lag_gradient.transpose() << "\n";
     std::cout << "Cost Gradient: \n" << cost_gradient.transpose() << "\n";
     std::cout << "Constraint: " << constr.transpose() << "\n";
-    std::cout << "Constraints Jacobian \n" << jac.leftCols(18) << "\n";
+    std::cout << "Constraints Jacobian \n" << jac << "\n";
     //std::cout << "Number of nonzeros: " << lag_hessian.nonZeros() << " | size: " << lag_hessian.size() << "\n";
     //std::cout << "Cost: " << cost << "\n";
     //std::cout << "Cost gradient: " << cost_gradient.transpose().format(fmt) << "\n";

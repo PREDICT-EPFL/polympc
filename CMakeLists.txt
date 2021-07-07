@@ -4,12 +4,20 @@ project(polympc VERSION 0.0.2)
 ## is used, also find other catkin packages
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
+set( ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig" )
 
 
 find_package(CASADI)
 find_package(QPMAD)
+find_package(Ipopt)
 find_package(OsqpEigen)
 find_package(Eigen3 REQUIRED NO_MODULE)
+
+if(Ipopt_FOUND)
+    message("Found Ipopt [x]")
+else()
+    message("Ipopt is not found, the corresponding interface and examples will not be built")
+endif()
 
 if(${CASADI_FOUND})
     message("Found CasADi [x]")
@@ -57,7 +65,7 @@ endif()
 #endif()
 
 
-include_directories(src src/examples ${CASADI_INCLUDE_DIR} )
+include_directories(src src/examples ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
 
 add_subdirectory(src cmake)
 add_subdirectory(examples)
@@ -70,3 +78,4 @@ add_subdirectory(tests/polynomials)
 add_subdirectory(tests/autodiff)
 add_subdirectory(tests/solvers/qp)
 add_subdirectory(tests/solvers/sqp)
+add_subdirectory(tests/solvers/ipopt)

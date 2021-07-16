@@ -182,6 +182,10 @@ public:
     {
         m_solver.m_x.template head<varx_size>() = x_guess;
     }
+    inline void x_guess_reshaped(const Eigen::Ref<const Eigen::Matrix<scalar_t, nx, num_nodes>>& x_guess_mat) noexcept
+    {
+        m_solver.m_x.template head<varx_size>() = Eigen::Map<const traj_state_t>(x_guess_mat.rowwise().reverse().eval().data(), nx*num_nodes);
+    }
     inline void u_guess(const Eigen::Ref<const traj_control_t>& u_guess) noexcept
     {
         m_solver.m_x.template segment<varu_size>(varx_size) = u_guess;

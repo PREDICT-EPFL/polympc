@@ -8,7 +8,14 @@
 #include "utils/helpers.hpp"
 
 #include "IpIpoptApplication.hpp"
+#include "IpSolveStatistics.hpp"
 #include "IpTNLP.hpp"
+
+/** Ipopt info */
+struct ipopt_info_t {
+    int iter;
+    Ipopt::ApplicationReturnStatus status;
+};
 
 
 template<typename Problem>
@@ -189,7 +196,7 @@ public:
     }
 
     virtual bool get_nlp_info(Ipopt::Index& n, Ipopt::Index& m, Ipopt::Index& nnz_jac_g,
-                      Ipopt::Index& nnz_h_lag, IndexStyleEnum& index_style) override
+                              Ipopt::Index& nnz_h_lag, IndexStyleEnum& index_style) override
     {
         n = num_variables;
         m = num_constraints;
@@ -201,7 +208,7 @@ public:
     }
 
     virtual bool get_bounds_info(Ipopt::Index n, Ipopt::Number* x_l, Ipopt::Number* x_u,
-                         Ipopt::Index m, Ipopt::Number* g_l, Ipopt::Number* g_u) override
+                                 Ipopt::Index m, Ipopt::Number* g_l, Ipopt::Number* g_u) override
     {
         // n and m are whatever we set in get_nlp_info
         eigen_assert(n == num_variables);
@@ -342,7 +349,6 @@ public:
 };
 
 
-
 template<typename Problem>
 class IpoptInterface
 {
@@ -352,11 +358,11 @@ public:
 private:
     Ipopt::SmartPtr<Ipopt::IpoptApplication> m_app;
     Ipopt::SmartPtr<IpProblem> m_problem;
+    ipopt_info_t m_info;
 
 public:
     IpoptInterface()
     {
-        std::cout << "construct IpoptInterface \n";
         m_app = IpoptApplicationFactory();
         m_problem = new IpProblem();
 
@@ -382,9 +388,21 @@ public:
     using nlp_dual_t  = typename IpProblem::nlp_dual_t;
     using parameter_t = typename IpProblem::parameter_t;
     using nlp_settings_t = Ipopt::OptionsList;
+    using scalar_t = typename IpProblem::scalar_t;
+
+private:
+    scalar_t m_primal_norm{0}, m_dual_norm{0}, m_cost{0}, m_max_violation{0};
+
+public:
 
     EIGEN_STRONG_INLINE const nlp_settings_t& settings() const noexcept { return *(m_app->Options()); }
     EIGEN_STRONG_INLINE nlp_settings_t& settings() noexcept { return *(m_app->Options()); }
+
+    EIGEN_STRONG_INLINE const Problem& get_problem() const noexcept { return *(m_problem); }
+    EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return *(m_problem); }
+
+    EIGEN_STRONG_INLINE const ipopt_info_t& info() const noexcept { return m_info; }
+    EIGEN_STRONG_INLINE ipopt_info_t& info() noexcept { return m_info; }
 
     EIGEN_STRONG_INLINE const nlp_variable_t& primal_solution() const noexcept { return m_problem->m_x; }
     EIGEN_STRONG_INLINE nlp_variable_t& primal_solution() noexcept { return m_problem->m_x; }
@@ -407,6 +425,11 @@ public:
     EIGEN_STRONG_INLINE const parameter_t& parameters() const noexcept { return m_problem->m_p; }
     EIGEN_STRONG_INLINE parameter_t& parameters() noexcept { return m_problem->m_p; }
 
+    EIGEN_STRONG_INLINE const scalar_t primal_norm() const noexcept {return m_primal_norm; }
+    EIGEN_STRONG_INLINE const scalar_t dual_norm()   const noexcept {return m_dual_norm;}
+    EIGEN_STRONG_INLINE const scalar_t constr_violation() const noexcept {return  m_max_violation;}
+    EIGEN_STRONG_INLINE const scalar_t cost() const noexcept {return m_cost;}
+
     void solve()
     {
         // try to solve the problem
@@ -421,6 +444,12 @@ public:
         {
             std::cout << std::endl << std::endl << "*** The problem FAILED!" << std::endl;
         }
+
+        m_info.status = status;
+        m_info.iter = (int) m_app->Statistics()->IterationCount();
+        Ipopt::Number complementarity, kkt_error;
+        m_app->Statistics()->Infeasibilities(m_dual_norm, m_max_violation, complementarity, kkt_error);
+        m_cost = (scalar_t) m_app->Statistics()->FinalObjective();
     }
 
     /** solve the NLP with initial guess*/

@@ -626,12 +626,24 @@ public:
                                      Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept;
 
 
+    /** dense implementation */
     template<int T = MatrixFormat>
     typename std::enable_if<T == DENSE>::type
     lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                 const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                 Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept;
+                                Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+    {
+        lagrangian_gradient_hessian(var, p, lam, _lagrangian, lag_gradient, lag_hessian, cost_gradient, g, jac_g, scalar_t(1.0));
+    }
+
+
+    template<int T = MatrixFormat>
+    typename std::enable_if<T == DENSE>::type
+    lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g, const scalar_t& cost_scale) noexcept;
 
     /** sparse implementation */
     template<int T = MatrixFormat>
@@ -639,7 +651,17 @@ public:
     lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                 const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                 nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept;
+                                Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept
+    {
+        lagrangian_gradient_hessian(var, p, lam, _lagrangian, lag_gradient, lag_hessian, cost_gradient, g, jac_g, scalar_t(1.0));
+    }
+
+    template<int T = MatrixFormat>
+    typename std::enable_if<T == SPARSE>::type
+    lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g,  const scalar_t& cost_scale) noexcept;
 
     /** Symmetric Rank 1 update preserving the sparsity pattern */
     template<int T = MatrixFormat>
@@ -2070,7 +2092,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
                                                                              const Eigen::Ref<const static_parameter_t> &p,
                                  const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                  Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g, const scalar_t& cost_scale) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
@@ -2082,6 +2104,9 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
     lag_gradient += lam.template tail<NUM_BOX>();
 
     /** hessian part */
+    if(cost_scale != scalar_t(1.0))
+        lag_hessian.noalias() = cost_scale * lag_hessian;
+
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
     Eigen::Matrix<ad2_scalar_t, NX, 1> ad2_xdot;
@@ -2145,7 +2170,8 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
                                                                              const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                              Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                              nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                             Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g) noexcept
+                                                                             Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g,
+                                                                             const scalar_t& cost_scale) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
@@ -2179,6 +2205,9 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
     lag_gradient += lam.template tail<NUM_BOX>();
 
     /** hessian part */
+    if(cost_scale != scalar_t(1.0))
+        lag_hessian = cost_scale * lag_hessian;
+
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
     Eigen::Matrix<ad2_scalar_t, NX, 1> ad2_xdot;

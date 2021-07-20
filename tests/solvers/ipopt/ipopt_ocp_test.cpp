@@ -20,7 +20,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, DENSE>
+class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 {
 public:
     ~RobotOCP() = default;
@@ -84,6 +84,7 @@ int main(void)
     //solver.get_problem().set_Q_coeff(1.0);
     //solver.get_problem().set_time_limits(0, 2); // another way to set optimisation horizon
     solver.settings().SetIntegerValue("max_iter", 10);
+    //solver.settings().SetIntegerValue("print_level", 5);
     solver.parameters()(0) = 2.0;
     Eigen::Matrix<RobotOCP::scalar_t, 3, 1> init_cond; init_cond << 0.5, 0.5, 0.5;
     Eigen::Matrix<RobotOCP::scalar_t, 2, 1> ub; ub <<  1.5,  0.75;
@@ -109,6 +110,7 @@ int main(void)
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
     // warm started iteration
+    /**
     init_cond << 0.3, 0.4, 0.45;
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
@@ -124,6 +126,7 @@ int main(void)
               << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
     std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
     std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+    */
 
     return EXIT_SUCCESS;
 }

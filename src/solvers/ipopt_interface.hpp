@@ -39,6 +39,9 @@ public:
         {
             m_H.resize(Problem::VAR_SIZE, Problem::VAR_SIZE);
             m_A.resize(Problem::NUM_EQ + Problem::NUM_INEQ, Problem::VAR_SIZE);
+
+            /** run sensitivity computation once to obtain sparsity patterns */
+            problem.lagrangian_gradient_hessian(m_x, m_p, m_lam, m_cost, m_h, m_H, m_dlag, m_g, m_A);
         }
     }
     virtual ~IpoptAdapter() = default;
@@ -78,7 +81,7 @@ public:
     // data
     template<typename MatrixType, int T = Problem::MATRIXFMT>
     EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
-    get_data(Eigen::SparseMatrixBase<MatrixType> &mat, scalar_t* data, const bool symmetric = false) const noexcept
+    get_data(MatrixType &mat, scalar_t* data, const bool symmetric = false) const noexcept
     {
         if(symmetric)
         {
@@ -129,7 +132,7 @@ public:
     // sparsity
     template<typename MatrixType, int T = Problem::MATRIXFMT>
     EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
-    get_sparsity(const Eigen::SparseMatrixBase<const MatrixType> &mat, Ipopt::Index* irow, Ipopt::Index* jcol, bool symmetric = false) const noexcept
+    get_sparsity(const MatrixType &mat, Ipopt::Index* irow, Ipopt::Index* jcol, bool symmetric = false) const noexcept
     {
         eigen_assert(irow != nullptr);
         eigen_assert(jcol != nullptr);
@@ -203,6 +206,12 @@ public:
         nnz_jac_g = problem.nnz_jacobian();
         nnz_h_lag = problem.nnz_lag_hessian();
         index_style = Ipopt::TNLP::C_STYLE;
+
+        /**
+        std::cout << "nlp_info: " << "\n";
+        std::cout << "nnz_jac: "  << nnz_jac_g << "\n"
+                  << "nnz_hes: "  << nnz_h_lag << "\n";
+                  */
 
         return true;
     }
@@ -300,6 +309,14 @@ public:
         {
             // Copy the pre-computed jacobian structure into the Ipopt variables
             get_sparsity<nlp_jacobian_t>(m_A, iRow, jCol);
+
+            /**
+            std::cout << "Jacobian sparsity: \n";
+            for(int i = 0; i < nele_jac; ++i)
+            {
+                std::cout << "i : " << i << " [ " << iRow[i] << " , " << jCol[i] << " ] \n";
+            }
+            */
         }
         else
         {
@@ -320,6 +337,14 @@ public:
         {
             // Copy the pre-computed hessian structure into the Ipopt variables
             get_sparsity<nlp_hessian_t>(m_H, iRow, jCol, true); // uses the symmetric version
+
+            /**
+            std::cout << "Hessian sparsity: \n";
+            for(int i = 0; i < nele_hess; ++i)
+            {
+                std::cout << "i : " << i << " [ " << iRow[i] << " , " << jCol[i] << " ] \n";
+            }
+            */
         }
         else
         {

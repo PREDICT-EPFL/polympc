@@ -17,6 +17,7 @@ if(Ipopt_FOUND)
     message("Found Ipopt [x]")
 else()
     message("Ipopt is not found, the corresponding interface and examples will not be built")
+    set(Ipopt_INCLUDE_DIRS "")
 endif()
 
 if(${CASADI_FOUND})

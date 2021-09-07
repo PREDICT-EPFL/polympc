@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-if(BUILD_TESTS OR SQP_TESTS)
+if(BUILD_TESTS AND Ipopt_FOUND)
 
   enable_testing()
 

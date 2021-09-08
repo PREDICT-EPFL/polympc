@@ -74,6 +74,7 @@ int main(void)
         std::cout << "Spline eval: " << ads2_spline.value().value() << "\n";
     }
 
+    /** @bug: does not compile on Windows
     {
         Eigen::Matrix<double, 3, 1> x,y;
         using adscalar_t = Eigen::AutoDiffScalar<Eigen::Matrix<double, 3, 1>>;
@@ -99,7 +100,7 @@ int main(void)
         std::cout << "ddz:" << "\n";
         for (Eigen::Index i  = 0; i < 3; ++i)
             std::cout << zad2.derivatives()(i).derivatives().transpose() << "\n";
-    }
+    } */
 
     return EXIT_SUCCESS;
 }

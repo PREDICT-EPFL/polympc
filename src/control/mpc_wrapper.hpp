@@ -211,6 +211,11 @@ public:
     EIGEN_STRONG_INLINE const OCP& ocp() const noexcept { return m_solver.get_problem(); }
     EIGEN_STRONG_INLINE OCP& ocp() noexcept { return m_solver.get_problem(); }   
 
+    inline const scalar_t primal_norm() const noexcept {return m_solver.primal_norm();}
+    inline const scalar_t dual_norm()   const noexcept {return m_solver.dual_norm();}
+    inline const scalar_t constr_violation() const noexcept {return  m_solver.constr_violation();}
+    inline const scalar_t cost() const noexcept {return m_solver.cost();}
+
     /** get the solution */
     // state
     inline traj_state_t solution_x() const noexcept

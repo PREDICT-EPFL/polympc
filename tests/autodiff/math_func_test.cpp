@@ -1,7 +1,7 @@
 #include "Eigen/Core"
 //#include "autodiff/AutoDiffScalar.h"
 #include "polynomials/splines.hpp"
-#include "autodiff/rbf_kernel.hpp"
+//#include "autodiff/rbf_kernel.hpp"
 #include <iostream>
 #include <chrono>
 #include <iomanip>

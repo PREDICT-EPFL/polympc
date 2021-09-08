@@ -3,6 +3,7 @@
 //
 // Copyright (C) 2008-2017 Gael Guennebaud <gael.guennebaud@inria.fr>
 // Copyright (C) 2014 yoco <peter.xiau@gmail.com>
+// Copyright (C) 2020 Petr Listov <petr.listov@epfl.ch>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed

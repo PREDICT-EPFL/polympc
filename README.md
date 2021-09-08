@@ -6,8 +6,9 @@ PolyMPC: An Efficient and Extensible Tool for Real-Time Nonlinear Model Predicti
 
 ## Dependencies
 
- - CasADi (version v3.2.0 and higher) : https://github.com/casadi
+ - CasADi (optional) (version v3.2.0 and higher) : https://github.com/casadi
  - Eigen3 : https://eigen.tuxfamily.org/
+ - GTest
 
 ## Build
 

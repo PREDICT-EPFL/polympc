@@ -135,7 +135,8 @@ public:
 
     EIGEN_STRONG_INLINE void cost(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
     {
-        this->cost<scalar_t>(var,p,cost);
+        //this->cost<scalar_t>(var,p,cost);
+        static_cast<const Derived*>(this)->cost_impl(var, p, cost);
     }
 
     // default empty implementation

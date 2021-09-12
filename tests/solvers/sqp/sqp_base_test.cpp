@@ -29,7 +29,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, DENSE>
 {
 public:
     ~RobotOCP() = default;

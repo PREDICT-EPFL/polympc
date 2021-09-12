@@ -41,7 +41,7 @@ if(BUILD_EXAMPLES AND (DEFINED ${CASADI_FOUND}))
     add_executable(cstr_control_test cstr_control_test.cpp)
     target_link_libraries(cstr_control_test polymath Eigen3::Eigen)
 
-    add_executable(lqr_test lqr_test.cpp)
-    target_link_libraries(lqr_test polymath Eigen3::Eigen)
+    #add_executable(lqr_test lqr_test.cpp)
+    #target_link_libraries(lqr_test polymath Eigen3::Eigen)
 
 endif()

@@ -37,4 +37,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(constraints_test nonlinear_constraints_test.cpp)
   target_link_libraries(constraints_test Eigen3::Eigen)
 
+  add_executable(lqr_test lqr_test.cpp)
+  target_link_libraries(lqr_test Eigen3::Eigen)
+
 endif()

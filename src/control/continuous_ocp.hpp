@@ -1365,6 +1365,8 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
                                                                        scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                        nlp_hessian_t& cost_hessian) noexcept
 {
+    std::cout << "actual_hes_nnz: " << cost_hessian.nonZeros() << " estimated_hes_nnz: " << m_hes_inner_nnz.sum() << "\n";
+
     if(cost_hessian.nonZeros() != m_hes_inner_nnz.sum())
         _cost_grad_hess_sparse(var, p, cost, cost_gradient, cost_hessian);
     else
@@ -1377,6 +1379,8 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
                                                                              scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                              nlp_hessian_t& cost_hessian) noexcept
 {
+    std::cout << "compute sparse cost hessian \n";
+
     eigen_assert(cost_hessian.outerSize() == VAR_SIZE);
     cost = scalar_t(0);
     cost_gradient.setZero();
@@ -1572,7 +1576,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
         }
     }
 
-    // Inser the last block
+    // Insert the last block
     /** dp^2 */
     for(Eigen::Index j = 0; j < NP; ++j)
         for(Eigen::Index r = 0; r < NP; ++r)
@@ -1680,6 +1684,8 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
                                                                                     scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                     nlp_hessian_t& cost_hessian) noexcept
 {
+    std::cout << "updating cost hessian \n";
+
     eigen_assert(cost_hessian.outerSize() == VAR_SIZE);
     cost = scalar_t(0);
     cost_gradient.setZero();
@@ -1729,6 +1735,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
             if(((k + shift) != 0) && ((k + shift) != (NUM_NODES-1)) && ((k + shift) % POLY_ORDER) == 0 && (s > 0))
             {
                 // add values
+                std::cout << "add: s: " << s << " k: " << k << " shift: " << shift << " H: \n" << hes << "\n";
                 /** dx^2 */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
@@ -1808,6 +1815,8 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
                 }
             } else
             {
+                std::cout << "copy: s: " << s << " k: " << k << " shift: " << shift << " H: \n" << hes << "\n";
+
                 /** copy content by columns where possible*/
                 for (Eigen::Index j = 0; j < NX; ++j)
                     std::copy_n(hes.col(j).data(), NX + NU + NP, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j]);
@@ -2094,14 +2103,24 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
                                  Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
                                  Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g, const scalar_t& cost_scale) noexcept
 {
+    std::cout << "using exact dense hessian \n";
+
+    std::cout << "var: " << var.transpose() << "\n";
+
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), jac_g.bottomRows(NUM_INEQ));
     //_lagrangian += c.dot(lam.template head<NUM_EQ>()); // do not compute at all??
+
+    std::cout << "cost: " << _lagrangian << "\n";
+    std::cout << "cost_grad: " << cost_gradient.transpose() << "\n";
+
     /** @badcode: replace with block products ???*/
     lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ + NUM_INEQ>();
     lag_gradient += cost_gradient;
     lag_gradient += lam.template tail<NUM_BOX>();
+
+    std::cout << "Hes \n" << lag_hessian.sparseView() << "\n";
 
     /** hessian part */
     if(cost_scale != scalar_t(1.0))
@@ -2173,9 +2192,19 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
                                                                              Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g,
                                                                              const scalar_t& cost_scale) noexcept
 {
+    std::cout << "using exact sparse hessian \n";
+
+    std::cout << "var: " << var.transpose() << "\n";
+
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
+
+    std::cout << "cost: " << _lagrangian << "\n";
+    std::cout << "cost_grad: " << cost_gradient.transpose() << "\n";
+
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji);
+
+    std::cout << "Hes: \n" << lag_hessian << "\n";
 
     // check if we need to allocate memory (first function entry)
     if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )

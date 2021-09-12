@@ -31,7 +31,7 @@ public:
     template<int MatrixFMT = MatrixType>
     EIGEN_STRONG_INLINE typename std::enable_if<MatrixFMT == DENSE>::type allocate_kkt_matrix() noexcept
     {
-        if(m_K.RowsAtCompileTime == Eigen::Dynamic) m_K = kkt_mat_t::Zero(2 * N + M, 2 * N + M);
+        m_K = kkt_mat_t::Zero(2 * N + M, 2 * N + M);
     }
 
     /** no pre-allocate needed for sparse KKT system */

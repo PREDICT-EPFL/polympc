@@ -527,8 +527,8 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     //typename qp_solver_t::status_t qp_status;
     status_t qp_status;
 
+    //std::cout << "H: \n" << Eigen::MatrixXd(m_H) << "\n";
     /**
-    std::cout << "H: \n" << m_H << "\n";
     std::cout << "A: \n" << m_A.template rightCols<29>() << "\n";
     std::cout << "h: " << m_h.transpose() << "\n";
     std::cout << "al: " << m_al.transpose() << "\n";
@@ -548,6 +548,7 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve_qp(Eigen::Ref<nl
     prim_step = m_qp_solver.primal_solution();
     dual_step = m_qp_solver.dual_solution();
 
+    //std::cout << "iter: " << this->info().iter << "\n";
     //std::cout << "p: \n" << prim_step.transpose() << "\n";
     //std::cout << "l: \n" << dual_step.transpose() << "\n";
 

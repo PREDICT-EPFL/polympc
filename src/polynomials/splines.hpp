@@ -120,7 +120,8 @@ public:
                      const Eigen::MatrixBase<DerBasis>& basis) -> Eigen::Matrix<typename DerVal::Scalar, DerVal::RowsAtCompileTime, 1>
     {
         typename DerVal::PlainObject interpolant = values * basis;
-        Eigen::Matrix<typename DerVal::Scalar, DerVal::RowsAtCompileTime, 1> res;
+        using result_t = Eigen::Matrix<typename DerVal::Scalar, DerVal::RowsAtCompileTime, 1>;
+        result_t res = result_t::Zero(values.rows(), 1);
         for(int i = 0; i < interpolant.rows(); i++)
             res(i) = Eigen::poly_eval(interpolant.row(i), arg);
 

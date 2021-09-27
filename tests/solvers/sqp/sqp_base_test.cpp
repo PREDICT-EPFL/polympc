@@ -19,7 +19,7 @@
 #endif
 
 #define test_POLY_ORDER 5
-#define test_NUM_SEG    2
+#define test_NUM_SEG    3
 
 /** benchmark the new collocation class */
 using Polynomial = polympc::Chebyshev<test_POLY_ORDER, polympc::GAUSS_LOBATTO, double>;
@@ -29,7 +29,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, DENSE>
+class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
 {
 public:
     ~RobotOCP() = default;

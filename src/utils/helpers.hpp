@@ -14,11 +14,11 @@
 #include "Eigen/Sparse"
 #include <chrono>
 
-enum
+enum MEMORY
 {
     DENSE  = 0,
     SPARSE = 1
-} MEMORY;
+};
 
 template<typename Scalar, int Rows, int Cols>
 struct dense_matrix_type_selector

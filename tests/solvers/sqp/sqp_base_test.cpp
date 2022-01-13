@@ -28,7 +28,7 @@
 #endif
 
 #define test_POLY_ORDER 5
-#define test_NUM_SEG    2
+#define test_NUM_SEG    3
 
 /** benchmark the new collocation class */
 using Polynomial = polympc::Chebyshev<test_POLY_ORDER, polympc::GAUSS_LOBATTO, double>;

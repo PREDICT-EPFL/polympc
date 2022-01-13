@@ -35,6 +35,9 @@ public:
         /** intialise some variables */
         m_rho_vec     = qp_dual_a_t::Constant(this->m_settings.rho);
         m_rho_inv_vec = qp_dual_a_t::Constant(scalar_t(1/this->m_settings.rho));
+
+        /** initialise the KKT matrix */
+        allocate_kkt_matrix();
     }
     ~boxADMM() = default;
     /** ADMM specific */
@@ -63,6 +66,17 @@ public:
     kkt_mat_t m_K;
     linear_solver_t linear_solver;  
     Eigen::VectorXi _kkt_mat_nnz;
+
+    template<int MatrixFMT = MatrixType>
+    EIGEN_STRONG_INLINE typename std::enable_if<MatrixFMT == DENSE>::type allocate_kkt_matrix() noexcept
+    {
+        m_K = kkt_mat_t::Zero(N + M, N + M);
+    }
+
+    /** no pre-allocate needed for sparse KKT system */
+    template<int MatrixFMT = MatrixType>
+    EIGEN_STRONG_INLINE typename std::enable_if<MatrixFMT == SPARSE>::type allocate_kkt_matrix() const noexcept
+    {}
 
     status_t solve_impl(const Eigen::Ref<const qp_hessian_t>& H, const Eigen::Ref<const qp_var_t>& h, const Eigen::Ref<const qp_constraint_t>& A,
                         const Eigen::Ref<const qp_dual_a_t>& Alb, const Eigen::Ref<const qp_dual_a_t>& Aub,

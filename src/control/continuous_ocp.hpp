@@ -1299,7 +1299,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
             {
                 hes.col(i) = m_ad2_cost.derivatives()(i).derivatives();
             }
-            hes.transposeInPlace();
+            //hes.transposeInPlace();
             scalar_t coeff =  t_scale * m_quad_weights(k);
 
             cost_hessian.template block<NX, NX>((k + shift) * NX, (k + shift) * NX).noalias() +=
@@ -1346,7 +1346,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
     }
 
     /** @bug: do we really need this transpose()? */
-    hes.transposeInPlace();
+    //hes.transposeInPlace();
 
     /** diagonal  */
     cost_hessian.template topLeftCorner<NX, NX>() += hes.template topLeftCorner<NX, NX>();
@@ -1428,14 +1428,14 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
             {
                 hes.col(i) = m_ad2_cost.derivatives()(i).derivatives();
             }
-            hes.transposeInPlace();
+            //hes.transposeInPlace();
             scalar_t coeff =  t_scale * m_quad_weights(k);
             hes *= coeff;
 
             hes_pp += hes.template bottomRightCorner<NP, NP>();
 
-            /** complex condition to glus segments */
-            if(((k + shift) != 0) && ((k + shift) != (NUM_NODES-1)) && ((k + shift) % POLY_ORDER) == 0 && (s > 0))
+            /** complex logic to glue segments */
+            if((s > 0) && (t == 0))
             {
                 // add values
                 /** dx^2 */
@@ -1581,7 +1581,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
         }
     }
 
-    // Inser the last block
+    // Insert the last block
     /** dp^2 */
     for(Eigen::Index j = 0; j < NP; ++j)
         for(Eigen::Index r = 0; r < NP; ++r)
@@ -1604,7 +1604,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
     {
         hes.col(i) = mayer_cost.derivatives()(i).derivatives();
     }
-    hes.transposeInPlace();
+    //hes.transposeInPlace();
 
     // add values
     /** dx^2 */
@@ -1729,13 +1729,13 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
             {
                 hes.col(i) = m_ad2_cost.derivatives()(i).derivatives();
             }
-            hes.transposeInPlace();
+            //hes.transposeInPlace();
             scalar_t coeff =  t_scale * m_quad_weights(k);
             hes *= coeff;
             hes_pp += hes.template bottomRightCorner<NP, NP>();
 
             /** complex condition to glue segments */
-            if(((k + shift) != 0) && ((k + shift) != (NUM_NODES-1)) && ((k + shift) % POLY_ORDER) == 0 && (s > 0))
+            if((s > 0) && (t == 0))
             {
                 // add values
                 /** dx^2 */
@@ -1861,7 +1861,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
     {
         hes.col(i) = mayer_cost.derivatives()(i).derivatives();
     }
-    hes.transposeInPlace();
+    //hes.transposeInPlace();
 
     // add values by columns when possible
     for(Eigen::Index j = 0; j < NX; ++j)
@@ -2075,7 +2075,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessia
             for(int i = 0; i < NX + NU + NP; ++i)
                 hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
-        hes.transposeInPlace(); // if 2nd derivative is not continuous
+        //hes.transposeInPlace(); // if 2nd derivative is not continuous
 
         /** append Lagrangian Hessian */
         lag_hessian.template block<NX, NX>(k * NX, k * NX) += hes.template topLeftCorner<NX, NX>();
@@ -2107,6 +2107,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), jac_g.bottomRows(NUM_INEQ));
     //_lagrangian += c.dot(lam.template head<NUM_EQ>()); // do not compute at all??
+
     /** @badcode: replace with block products ???*/
     lag_gradient.noalias() = jac_g.transpose() * lam.template head<NUM_EQ + NUM_INEQ>();
     lag_gradient += cost_gradient;
@@ -2154,7 +2155,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
             for(int i = 0; i < NX + NU + NP; ++i)
                 hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
-        hes.transposeInPlace(); // if 2nd derivative is not continuous
+        //hes.transposeInPlace(); // if 2nd derivative is not continuous
 
         /** append Lagrangian Hessian */
         lag_hessian.template block<NX, NX>(k * NX, k * NX) += hes.template topLeftCorner<NX, NX>();
@@ -2255,7 +2256,7 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
             for(int i = 0; i < NX + NU + NP; ++i)
                 hes.col(i).noalias() += coeff * ad2_g(n).derivatives()(i).derivatives();
         }
-        hes.transposeInPlace(); // if 2nd derivative is not continuous
+        //hes.transposeInPlace(); // if 2nd derivative is not continuous
 
         // add values by columns when possible
         for(Eigen::Index j = 0; j < NX; ++j)

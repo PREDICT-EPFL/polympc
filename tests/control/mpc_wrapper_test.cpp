@@ -23,7 +23,7 @@
 #include "solvers/qp_preconditioners.hpp"
 
 #define test_POLY_ORDER 5
-#define test_NUM_SEG    2
+#define test_NUM_SEG    3
 #define test_NUM_EXP    1
 
 /** benchmark the new collocation class */
@@ -91,6 +91,10 @@ public:
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
+    using typename Base::nlp_jacobian_t;
+    using typename Base::nlp_constraints_t;
+    using typename Base::parameter_t;
+    using typename Base::nlp_dual_t;
 
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
@@ -99,6 +103,26 @@ public:
     {
         this->problem.hessian_update_impl(hessian, x_step, grad_step);
     }
+
+    /**
+    EIGEN_STRONG_INLINE void update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                             Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
+                                                             Eigen::Ref<nlp_jacobian_t> A,Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        this->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, A, b);
+        polympc::ignore_unused_var(x_step);
+    }
+
+    EIGEN_STRONG_INLINE void update_linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
+                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
+                                                             Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
+                                                             nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
+    {
+        this->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
+        polympc::ignore_unused_var(x_step);
+    }
+    */
 };
 
 
@@ -117,7 +141,7 @@ int main(void)
     using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
     mpc.ocp().set_Q_coeff(2.0);
-    mpc.settings().max_iter = 20;
+    mpc.settings().max_iter = 10;
     mpc.settings().line_search_max_iter = 10;
     mpc.set_time_limits(0, 2);
 
@@ -142,15 +166,6 @@ int main(void)
 
     std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
     std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
-
-    auto segment = mpc.solution_x();
-    mpc_t::scalar_t *lox;
-    lox = mpc.solution_x().data(); //segment.data(); //mpc.solver().primal_solution().template head<10>().data();
-
-    std::cout << "lox: \n";
-    for(int i = 0; i < 10; ++i)
-        std::cout << lox[i] << " ";
-    std::cout << std::endl;
 
     // warm started iteration
     x0 << 0.3, 0.4, 0.5;

@@ -89,13 +89,13 @@ public:
 
 
     /** change Hessian update algorithm to the one provided by ContinuousOCP*/
-    /**
     EIGEN_STRONG_INLINE void hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t>& x_step,
                                                  const Eigen::Ref<const nlp_variable_t>& grad_step) noexcept
     {
         this->problem.hessian_update_impl(hessian, x_step, grad_step);
-    } */
+    }
 
+    /**
     EIGEN_STRONG_INLINE void update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
                                                              const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
                                                              Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
@@ -113,6 +113,7 @@ public:
         this->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
         polympc::ignore_unused_var(x_step);
     }
+    */
 };
 
 
@@ -131,7 +132,7 @@ int main(void)
     using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
     mpc.ocp().set_Q_coeff(2.0);
-    mpc.settings().max_iter = 2;
+    mpc.settings().max_iter = 10;
     mpc.settings().line_search_max_iter = 10;
     mpc.set_time_limits(0, 2);
 
@@ -157,7 +158,6 @@ int main(void)
     std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
     std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
 
-    /**
     // warm started iteration
     x0 << 0.3, 0.4, 0.5;
     mpc.initial_conditions(x0, x0);
@@ -196,7 +196,6 @@ int main(void)
     //  sample control at time 't'
     std::cout << "u(0.0): " << mpc.solution_u_at(0.0).transpose() << "\n";
     std::cout << "u(0.5): " << mpc.solution_u_at(0.5).transpose() << "\n";
-    */
 
     return EXIT_SUCCESS;
 }

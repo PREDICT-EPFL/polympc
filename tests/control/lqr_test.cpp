@@ -1,6 +1,5 @@
 #include "utils/helpers.hpp"
 #include "control/lqr.hpp"
-#include "gtest/gtest.h"
 
 int main(void)
 {

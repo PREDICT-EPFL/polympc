@@ -11,7 +11,7 @@
 #include "control/simple_robot_model.hpp"
 #include "solvers/box_admm.hpp"
 
-#include "eigen3/unsupported/Eigen/SparseExtra"
+#include "unsupported/Eigen/SparseExtra"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2

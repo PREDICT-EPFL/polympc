@@ -6,7 +6,7 @@ else()
 	include_directories(include ${Eigen3_INCLUDE_DIR})
 endif()
 
-if(BUILD_EXAMPLES AND (DEFINED ${CASADI_FOUND}))
+if(BUILD_EXAMPLES AND ${CASADI_FOUND})
 
     add_library(kite kite.cpp kite.h)
     target_link_libraries(kite polymath ${CASADI_LIBRARIES} Eigen3::Eigen)

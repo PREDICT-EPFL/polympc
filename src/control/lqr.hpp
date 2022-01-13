@@ -2,7 +2,7 @@
 #define LQR_HPP
 
 #include "utils/helpers.hpp"
-#include "eigen3/unsupported/Eigen/Polynomials"
+#include "unsupported/Eigen/Polynomials"
 #include "iostream"
 
 

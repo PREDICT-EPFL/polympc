@@ -73,8 +73,8 @@ public:
 
         switch (status)
         {
-            case qpmad::Solver::OK : {this->m_info.status = status_t::SOLVED; return status_t::SOLVED;}
-            case qpmad::Solver::MAXIMAL_NUMBER_OF_ITERATIONS : {this->m_info.status = status_t::MAX_ITER_EXCEEDED; return status_t::MAX_ITER_EXCEEDED;}
+            case solver_t::ReturnStatus::OK : {this->m_info.status = status_t::SOLVED; return status_t::SOLVED;}
+            case solver_t::ReturnStatus::MAXIMAL_NUMBER_OF_ITERATIONS : {this->m_info.status = status_t::MAX_ITER_EXCEEDED; return status_t::MAX_ITER_EXCEEDED;}
             default: return status_t::UNSOLVED;
         }
     }

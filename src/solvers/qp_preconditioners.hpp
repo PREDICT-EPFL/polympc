@@ -257,11 +257,11 @@ public:
             scaling_norm = std::max(m_D.maxCoeff(), m_E.maxCoeff());
 
             // avoid singularities
-            if (m_D.minCoeff() < _tolerance)
-                for (int k = 0; k < N; ++k) {if (m_D(k) < _tolerance) m_D(k) = scalar_t(1.0);}
+            if (m_D.minCoeff() < _approx_zero)
+                for (int k = 0; k < N; ++k) {if (m_D(k) < _approx_zero) m_D(k) = scalar_t(1.0);}
 
-            if (m_E.minCoeff() < _tolerance)
-                for (int k = 0; k < M; ++k) {if (m_E(k) < _tolerance) m_E(k) = scalar_t(1.0);}
+            if (m_E.minCoeff() < _approx_zero)
+                for (int k = 0; k < M; ++k) {if (m_E(k) < _approx_zero) m_E(k) = scalar_t(1.0);}
 
             // compute diagonal scaling factors
             m_D = m_D.cwiseSqrt().cwiseInverse();

@@ -58,7 +58,7 @@ namespace polympc
     EIGEN_STRONG_INLINE void ignore_unused_var(const T& ) noexcept {}
 
     typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-    static time_point get_time()
+    static EIGEN_STRONG_INLINE time_point get_time()
     {
         /** OS dependent */
     #ifdef __APPLE__

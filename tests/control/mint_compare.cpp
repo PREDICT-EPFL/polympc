@@ -162,9 +162,9 @@ int main(void)
     ParkingOCP::nlp_eq_jacobian_t eq_jac(static_cast<int>(ParkingOCP::VARX_SIZE), static_cast<int>(ParkingOCP::VAR_SIZE));
     ParkingOCP::nlp_ineq_jacobian_t ineq_jac(static_cast<int>(ParkingOCP::NUM_INEQ), static_cast<int>(ParkingOCP::VAR_SIZE));
     ParkingOCP::nlp_jacobian_t jac(static_cast<int>(ParkingOCP::NUM_INEQ + ParkingOCP::NUM_EQ), static_cast<int>(ParkingOCP::VAR_SIZE));
-    ParkingOCP::nlp_cost_t cost = 0;
-    ParkingOCP::nlp_cost_t lagrangian = 0;                     /** suppres warn */  //polympc::ignore_unused_var(lagrangian);
-    ParkingOCP::nlp_dual_t lam = ParkingOCP::nlp_dual_t::Zero(); /** suppres warn */  // polympc::ignore_unused_var(lam);
+    ParkingOCP::nlp_cost_t cost = 0;                                                      polympc::ignore_unused_var(cost);
+    ParkingOCP::nlp_cost_t lagrangian = 0;                     /** suppress warning */    //polympc::ignore_unused_var(lagrangian);
+    ParkingOCP::nlp_dual_t lam = ParkingOCP::nlp_dual_t::Zero(); /** suppress warning */  // polympc::ignore_unused_var(lam);
     ParkingOCP::static_parameter_t p; p(0) = 2.0;
     ParkingOCP::nlp_variable_t cost_gradient, lag_gradient;
     ParkingOCP::nlp_hessian_t cost_hessian(static_cast<int>(ParkingOCP::VAR_SIZE),  static_cast<int>(ParkingOCP::VAR_SIZE));
@@ -184,9 +184,9 @@ int main(void)
     ParkingOCPSparse::nlp_eq_jacobian_t seq_jac(static_cast<int>(ParkingOCP::VARX_SIZE), static_cast<int>(ParkingOCP::VAR_SIZE));
     ParkingOCPSparse::nlp_ineq_jacobian_t sineq_jac(static_cast<int>(ParkingOCP::NUM_INEQ), static_cast<int>(ParkingOCP::VAR_SIZE));
     ParkingOCPSparse::nlp_jacobian_t sjac(static_cast<int>(ParkingOCP::NUM_INEQ + ParkingOCP::NUM_EQ), static_cast<int>(ParkingOCP::VAR_SIZE));
-    ParkingOCPSparse::nlp_cost_t scost = 0;
-    ParkingOCPSparse::nlp_cost_t slagrangian = 0;                     /** suppres warn */  //polympc::ignore_unused_var(lagrangian);
-    ParkingOCPSparse::nlp_dual_t slam = lam;                          /** suppres warn */   //polympc::ignore_unused_var(lam);
+    ParkingOCPSparse::nlp_cost_t scost = 0;                           /** suppress warning */    polympc::ignore_unused_var(scost);
+    ParkingOCPSparse::nlp_cost_t slagrangian = 0;                     /** suppress warning */  //polympc::ignore_unused_var(lagrangian);
+    ParkingOCPSparse::nlp_dual_t slam = lam;                          /** suppress warning */   //polympc::ignore_unused_var(lam);
     ParkingOCPSparse::static_parameter_t sp; sp(0) = 2.0;
     ParkingOCPSparse::nlp_variable_t scost_gradient, slag_gradient;
     ParkingOCPSparse::nlp_hessian_t scost_hessian(static_cast<int>(ParkingOCP::VAR_SIZE),  static_cast<int>(ParkingOCP::VAR_SIZE));

@@ -23,3 +23,5 @@ References
 
 .. [Goldfarb1983] Goldfarb, Donald and Ashok U. Idnani. “A numerically stable dual method for solving strictly
    convex quadratic programs.” Mathematical Programming 27 (1983): 1-33.
+
+.. [Nocedal2006] J. Nocedal and S. J. Wright, Numerical Optimization, 2nd ed. New York, NY, USA: Springer, 2006.

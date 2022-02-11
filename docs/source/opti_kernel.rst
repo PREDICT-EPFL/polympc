@@ -15,6 +15,8 @@ of the available algorithms for numerical optimisation.
    :maxdepth: 1
 
    qp
+   nlp
+
 
 
 

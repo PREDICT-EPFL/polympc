@@ -25,3 +25,20 @@ References
    convex quadratic programs.” Mathematical Programming 27 (1983): 1-33.
 
 .. [Nocedal2006] J. Nocedal and S. J. Wright, Numerical Optimization, 2nd ed. New York, NY, USA: Springer, 2006.
+
+.. [Ruiz2001] D. Ruiz, “A scaling algorithmto equilibrate both rows and columns norms in matrices,”
+   Rutherford Appleton Lab, Tech. Rep., 2001.
+
+.. [Biegler1984] L. T. Biegler, “Solution of dynamic optimization problems by successive quadratic
+   programming and orthogonal collocation,” Computers & Chemical Engineering, vol. 8,
+   no. 3, pp. 243–247, 1984.
+
+.. [Fahroo2003] F. Fahroo,D. B.Doman, and A.D.Ngo, “Footprint generation for reusable launch vehicles
+   using a direct pseudospectral method,” ser. American Control Conference, vol. 3, 2003,
+   pp. 2163–2168.
+
+.. [Benson2005] D. Benson, “A gauss pseudospectral transcription for optimal control,” Ph.D. dissertation,
+    Massachusetts Institute of Technology, 2005.
+
+.. [Huntington2007] G. Huntington, “Advancement and analysis of gauss pseudospectral transcription for
+   optimal control problems,” Ph.D. dissertation,Massachusetts Institute of Technology, 2007.

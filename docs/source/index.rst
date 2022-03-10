@@ -16,6 +16,7 @@ PolyMPC an open-source C++ library for real-time embedded nonlinear optimal cont
    install
    opti_kernel
    ocp
+   applications
    bibliography
 
 

@@ -494,9 +494,221 @@ this problem as described in :ref:`chapter-nlp` chapter. We create a nonlinear s
 MPC Wrapper
 ===========
 
+Even though we can solve the OCP now, the user or control engineer is required to understand how the collocation method works and how control and state polynomial coefficients
+are stored in memory which is not user friendly to say the least. Therefore, *PolyMPC* includes the :class:`MPC` wrapper class that abstracts the numerical scheme from the user.
+Additionally, since the control and state trajectories are represented by splines it is convenient to evaluate the solution at any point, or interpolate them.
+
+Here is how our particular example will look like with the MPC wrapper:
+
+.. code:: c++
+
+    int main(void)
+    {
+        /** create an MPC algorithm and set the prediction horison */
+        using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
+        mpc_t mpc;
+        mpc.settings().max_iter = 20;
+        mpc.settings().line_search_max_iter = 10;
+        mpc.set_time_limits(0, 2);
+
+        /** problem data */
+        mpc_t::static_param p; p << 2.0;          // robot wheel base
+        mpc_t::state_t x0; x0 << 0.5, 0.5, 0.5;   // initial condition
+        mpc_t::control_t lbu; lbu << -1.5, -0.75; // lower bound on control
+        mpc_t::control_t ubu; ubu <<  1.5,  0.75; // upper bound on control
+
+        mpc.set_static_parameters(p);
+        mpc.control_bounds(lbu, ubu);
+        mpc.initial_conditions(x0);
+
+        /** solve */
+        polympc::time_point start = polympc::get_time();
+        mpc.solve();
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        /** retrieve solution and statistics */
+        std::cout << "MPC status: " << mpc.info().status.value << "\n";
+        std::cout << "Num iterations: " << mpc.info().iter << "\n";
+        std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+
+        std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
+        std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
+
+        /** sample x solution at collocation points [0, 5, 10] */
+        std::cout << "x[0]: " << mpc.solution_x_at(0).transpose() << "\n";
+        std::cout << "x[5]: " << mpc.solution_x_at(5).transpose() << "\n";
+        std::cout << "x[10]: " << mpc.solution_x_at(10).transpose() << "\n";
+
+        std::cout << " ------------------------------------------------ \n";
+
+        /** sample control at collocation points */
+        std::cout << "u[0]: " << mpc.solution_u_at(0).transpose() << "\n";
+        std::cout << "u[1]: " << mpc.solution_u_at(1).transpose() << "\n";
+
+        std::cout << " ------------------------------------------------ \n";
+
+        /** sample state at time 't = [0.0, 0.5]' */
+        std::cout << "x(0.0): " << mpc.solution_x_at(0.0).transpose() << "\n";
+        std::cout << "x(0.5): " << mpc.solution_x_at(0.5).transpose() << "\n";
+
+        std::cout << " ------------------------------------------------ \n";
+
+        /**  sample control at time 't = [0.0, 0.5]' */
+        std::cout << "u(0.0): " << mpc.solution_u_at(0.0).transpose() << "\n";
+        std::cout << "u(0.5): " << mpc.solution_u_at(0.5).transpose() << "\n";
+
+        return EXIT_SUCCESS;
+    }
 
 
+Below is the list of all currently available interface functions:
 
+
+*Set Time Limits*
+
+.. function:: inline void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept
+
+*Set Initial Conditions*
+
+.. function:: inline void initial_conditions(const Eigen::Ref<const state_t>& x0) noexcept
+.. function::  inline void initial_conditions(const Eigen::Ref<const state_t>& x0_lb, const Eigen::Ref<const state_t>& x0_ub) noexcept
+
+*Set State (Trajectory) Bounds*
+
+.. function:: void x_lower_bound(const Eigen::Ref<const state_t>& xlb)
+
+.. function:: void x_upper_bound(const Eigen::Ref<const state_t>& xub)
+
+.. function:: void state_bounds(const Eigen::Ref<const state_t>& xlb, const Eigen::Ref<const state_t>& xub)
+
+.. function:: void state_trajectory_bounds(const Eigen::Ref<const traj_state_t>& xlb, const Eigen::Ref<const traj_state_t>& xub)
+
+.. function:: void x_final_lower_bound(const Eigen::Ref<const state_t>& xlb)
+
+.. function:: void x_final_upper_bound(const Eigen::Ref<const state_t>& xub)
+
+.. function:: void final_state_bounds(const Eigen::Ref<const state_t>& xlb, const Eigen::Ref<const state_t>& xub)
+
+
+*Set Control (Trajectory) Bounds*
+
+.. function:: void u_lower_bound(const Eigen::Ref<const control_t>& lb)
+
+.. function:: void u_upper_bound(const Eigen::Ref<const control_t>& ub)
+
+.. function:: void control_trajecotry_bounds(const Eigen::Ref<const traj_control_t>& lb, const Eigen::Ref<const traj_control_t>& ub)
+
+.. function:: void control_bounds(const Eigen::Ref<const control_t>& lb, const Eigen::Ref<const control_t>& ub)
+
+
+*Set Generic Inequalities Bounds*
+
+.. function:: void constraints_trajectory_bounds(const Eigen::Ref<const constraints_t>& lbg, const Eigen::Ref<const constraints_t>& ubg)
+
+.. function:: void constraints_bounds(const Eigen::Ref<const constraint_t>& lbg, const Eigen::Ref<const constraint_t>& ubg)
+
+*Set Variable Parameters Bounds*
+
+.. function:: void parameters_bounds(const Eigen::Ref<const parameter_t>& lbp, const Eigen::Ref<const parameter_t>& ubp)
+
+*Set Static Parameters*
+
+.. function:: void set_static_parameters(const Eigen::Ref<const static_param>& param)
+
+*Set State Trajectory Guess (for optimiser)*
+
+.. function:: void x_guess(const Eigen::Ref<const traj_state_t>& x_guess)
+
+*Set Control Trajectory Guess (for optimiser)*
+
+.. function:: void u_guess(const Eigen::Ref<const traj_control_t>& u_guess)
+
+*Set Parameters Guess*
+
+.. function::  void p_guess(const Eigen::Ref<const parameter_t>& p_guess)
+
+*Set Dual Variable Guess (if available)*
+
+.. function:: void lam_guess(const Eigen::Ref<const dual_var_t>& lam_guess)
+
+*Set/Get NLP Solver Settings*
+
+.. function:: const typename nlp_solver_t::nlp_settings_t& settings() const
+
+.. function:: typename nlp_solver_t::nlp_settings_t& settings()
+
+*Set/Get QP Solver Settings*
+
+.. function:: const typename nlp_solver_t::nlp_settings_t& settings() const
+
+.. function:: typename nlp_solver_t::nlp_settings_t& settings()
+
+*Access NLP Solver Info*
+
+.. function:: const typename nlp_solver_t::nlp_info_t& info() const
+
+.. function:: typename nlp_solver_t::nlp_info_t& info()
+
+*Access NLP Solver (object)*
+
+.. function:: const nlp_solver_t& solver() const
+
+.. function:: nlp_solver_t& solver()
+
+*Access OCP class (object)*
+
+.. function:: const OCP& ocp() const
+
+.. function:: OCP& ocp() noexcept
+
+*Access NLP Solver Convergence Properties*
+
+.. function const scalar_t primal_norm() const
+
+.. function const scalar_t dual_norm()   const
+
+.. function const scalar_t constr_violation() const
+
+.. function const scalar_t cost() const
+
+
+*Get State Trajectory as Column or [NX x NUM_NODES] matrix*
+
+.. function:: traj_state_t solution_x() const
+
+.. function:: Eigen::Matrix<scalar_t, nx, num_nodes> solution_x_reshaped() const
+
+*Get State Trajectory at K-th Collocation Point*
+
+.. function:: state_t solution_x_at(const int &k) const
+
+*Get State Trajectory at Time Point 't' (interpolated)*
+
+.. function:: state_t solution_x_at(const scalar_t& t) const
+
+
+*Get Control Trajectory as Column or [NU x NUM_NODES] matrix*
+
+.. function:: traj_control_t solution_u() const
+
+.. function:: Eigen::Matrix<scalar_t, nu, num_nodes> solution_u_reshaped() const
+
+*Get Control Trajectory at K-th Collocation Point*
+
+.. function:: control_t solution_u_at(const int &k) const
+
+*Get Control Trajectory at Time Point 't' (interpolated)*
+
+.. function:: control_t solution_u_at(const scalar_t& t) const
+
+*Get Optimal Parameters*
+
+.. function:: parameter_t solution_p() const
+
+*Get Dual Solution*
+
+.. function:: dual_var_t solution_dual() const
 
 
 

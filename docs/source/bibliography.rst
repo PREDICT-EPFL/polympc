@@ -42,3 +42,8 @@ References
 
 .. [Huntington2007] G. Huntington, “Advancement and analysis of gauss pseudospectral transcription for
    optimal control problems,” Ph.D. dissertation,Massachusetts Institute of Technology, 2007.
+
+.. [Trefethen2000] L. N. Trefethen "Spectral methods in MATLAB", Society for industrial and applied mathematics, 2000.
+
+.. [Listov2020] P. Listov, C. Jones "PolyMPC: An efficient and extensible tool for real‐time nonlinear
+   model predictive tracking and path following for fast mechatronic systems", Optimal Control Applications and Methods, 2020.

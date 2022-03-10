@@ -39,3 +39,476 @@ or spectral, convergence.
 
 **Chebyshev Pseudospectral Method**
 
+Assuming the approximate solution for the state and control trajectories are represented by an appropriately chosen set of basis functions :math:`\phi_{k}(\cdot)`:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   x(t) \approx x^{N}(t) = \sum_{k=0}^{N} x_{k} \phi_k(t) \\
+   u(t) \approx u^{N}(t) = \sum_{k=0}^{N} u_{k} \phi_k(t) \\
+   \end{aligned}
+   \end{equation}
+
+the collocation approach requires that the differential equation is satisfied exactly at a set of collocation points :math:`t_j \in (t_0, \ t_f)`:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \left.\frac{dx^{N}}{dt} - f(x^{N}, u^{N}, t_j, p) \right \vert_{t=t_{j}} = 0 , \ j = 1,...,N \\
+   \end{aligned}
+   \end{equation}
+
+With some initial conditions: :math:`x^{N}(t_0) = x_0`. Formulas represent a function expansion in the nodal basis, where :math:`x_k` is the value of :math:`x(t)` at the node
+:math:`t_k` and :math:`\phi_{k}` denotes a specific cardinal basis function, which satisfies the condition: :math:`\phi_{j}(t_i) = \delta_{ij}, \ i,j = 0,...,N`, where:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \delta_{ij} =
+   \begin{cases}
+   1 &  \ i = j \\
+   0 & \ i \neq j
+   \end{cases}
+   \end{aligned}
+   \end{equation}
+
+
+A common choice of the cardinal basis in pseudospectral methods is the characteristic Lagrange polynomial of order :math:`N`. This means that each basis function reproduces one
+function value at a particular point in the domain. The general expression for these polynomials is given by:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \phi_k(t) = \prod^{N}_{j,\  j \neq k} \frac{(t - t_j)}{(t_k - t_j)}, \ k = 0,...,N \\
+   \end{aligned}
+   \end{equation}
+
+Using the approximations above one can compute derivatives of the state trajectory at the nodal points:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   (x^{N}(t_j))' = \sum_{k=0}^{N} x_{k} \dot{\phi}_k(t_j) = \sum_{k=0}^{N} x_{k} D_{jk} \\
+   \end{aligned}
+   \end{equation}
+
+where :math:`D_{jk}` are elements of the interpolation derivative matrix :math:`\mathbf{D}`. And the approximate solution to the differential equation satisfies a system of
+algebraic equations:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \sum_{k=0}^{N} x_{k} D_{jk} = f(x_j, u_j, t_j, p), \quad  j = 0,  \dots, N
+   \end{aligned}
+   \end{equation}
+
+A careful choice of collocation points is crucial for numerical accuracy and convergence of the collocation method. An equidistant spacing of the collocation nodes is known
+to cause an exponential error growth of the polynomial interpolation near the edges of the domain, an effect called Runge's phenomenon.
+
+In the *PolyMPC* we employ the most commonly used set of :math:`N+1` Chebyshev Gauss-Lobatto (CGL) points:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   t_j = \cos \left( \frac{\pi j }{N} \right), \ j=0,...,N \\
+   \end{aligned}
+   \end{equation}
+
+Using Chebyshev polynomials in the collocation scheme is not efficient because they do not satisfy the cardinality condition, and therefore
+we will be using CGL nodes, which allow us to avoid Runge's phenomenon, in combination with Lagrange polynomials to solve the system differential equations.
+
+**Cost Function**
+
+The Mayer term of the cost function can be trivially approximated at the last collocation point:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \mathit{\Phi[x(\tau_f)], \tau_f, p} = \mathit{\Phi[x_N, 1, p]} = \mathit{\Phi[x(1), 1, p]} \\
+   \end{aligned}
+   \end{equation}
+
+For the Lagrange term approximation using the CGL set of points it is convenient to utilize the Clenshaw-Curtis quadrature integration scheme, as suggested
+in [Trefethen2000]_. The method allows one to find a set of weights :math:`\{\omega_j\} \in \mathbb{R}, \ j = 0, \cdots , N` such that the following approximation
+is exact for all polynomials :math:`p(t)` of order less than :math:`N` and corresponding weight function :math:`\omega(t)`:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \sum_{j=0}^{N}p(t_j) \omega_j = \int_{-1}^{1}p(t)\omega(t)dt, \  p(t) \in \mathbb{P}_{N} \\
+   \end{aligned}
+   \end{equation}
+
+Where :math:`\mathbb{P}_{N}` is the space of polynomials of degree less or equal than :math:`N` and :math:`p(t)` is a Chebyshev approximation of the integrated function:
+
+.. math::
+
+   \begin{equation}
+   \begin{aligned}
+   \mathit{L}(x(t), u(t), t, p) \approx p(t) = \sum_{k=0}^{N} a_k T_k(t) \\
+   \end{aligned}
+   \end{equation}
+
+.. NOTE::
+
+   The pseudospectral collocation method helps to transform the continous optimal control into a finite dimensional nonlinear optimisation problem (:ref:`chapter-nlp`)
+   with respect to polynomial expansion coefficients. More details on the implementation of the numerical method and extension to spline can [Listov2020]_.
+
+Modelling Optimal Control Problems
+==================================
+
+Following the *PolyMPC* concept, the user should specify the problem dimensions and data types at compile-time. This is done to enable embedded applications of the tool.
+
+- ``Problem``: The user specifies an OCP by deriving from the :class:`ContinuousOCP` class. At this point the problem contains meta data such as dimensions, number of constraints,
+  state and control data types, functions to evaluate cost and constraints. The derived :class:`Problem` class becomes a nonlinear problem and can passed to an NLP solver.
+
+- ``Approximation``: This defines the control and state approximating function and numerical scheme. This is typically a :class:`Spline` class or :class:`Polynomial`.
+
+- ``Sparsity [Optional (SPARSE/DENSE), Default: DENSE]``: This template argument defines whether sparse or dense representation of problem sensitivities should be used.
+
+
+**A Guiding Example**
+
+Let us demonstrate the functionality of software on a simple automatic parking problem. We will consider a simple mobile robot that should park at a specific point with a
+specified orientation :math:`[0,0,0]` starting from some point :math:`(x,y,\theta)`, which is illustrated in the figure below.
+
+.. image:: img/mobile_robot.png
+
+The robot is controlled by setting front wheel velocity :math:`v` and the steering angle :math:`\phi`, :math:`d` denotes the wheel base of the robot. Assuming no wheel slip
+and omitting dynamics, the robot differential equation can be written as:
+
+.. math::
+
+   \begin{equation}
+   \begin{bmatrix}
+   \dot{x} \\
+   \dot{y} \\
+   \dot{\theta}
+   \end{bmatrix}=
+   \begin{bmatrix}
+   v \cos(\theta) \cos(\phi) \\
+   v \sin(\theta) \cos(\phi) \\
+   v \sin(\phi) / d
+   \end{bmatrix}
+   \end{equation}
+
+One option to drive the robot to a desired spot is to penalise the squared distance to the target in the cost function. Below, we show how to formulate and solve such problem
+using *PolyMPC*.
+
+.. code:: c++
+
+    #include "polynomials/ebyshev.hpp"
+    #include "polynomials/splines.hpp"
+    #include "control/continuous_ocp.hpp"
+    #include "utils/helpers.hpp"
+
+    #include <iomanip>
+    #include <iostream>
+    #include <chrono>
+
+    #define POLY_ORDER 5
+    #define NUM_SEG    2
+
+    /** benchmark the new collocation class */
+    using Polynomial = polympc::Chebyshev<POLY_ORDER, polympc::GAUSS_LOBATTO, double>;
+    using Approximation = polympc::Spline<Polynomial, NUM_SEG>;
+
+    POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*ND*/ 1, /*NG*/0, /*TYPE*/ double)
+
+    using namespace Eigen;
+
+    class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+    {
+    public:
+        ~RobotOCP() = default;
+
+        RobotOCP()
+        {
+            /** initialise weight matrices to identity (for example)*/
+            Q.setIdentity();
+            R.setIdentity();
+            QN.setIdentity;
+        }
+
+        Matrix<scalar_t, 3, 3> Q;
+        Matrix<scalar_t, 2, 2> R;
+        Eigen::DiagonalMatrix<scalar_t, 3> QN{1,1,1};
+
+        template<typename T>
+        inline void dynamics_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                  const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> &d,
+                                  const T &t, Ref<state_t<T>> xdot) const noexcept
+        {
+            polympc::ignore_unused_var(p);
+            polympc::ignore_unused_var(t);
+
+            xdot(0) = u(0) * cos(x(2)) * cos(u(1));
+            xdot(1) = u(0) * sin(x(2)) * cos(u(1));
+            xdot(2) = u(0) * sin(u(1)) / d(0);
+        }
+
+        template<typename T>
+        inline void lagrange_term_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                       const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> d,
+                                       const scalar_t &t, T &lagrange) noexcept
+        {
+            polympc::ignore_unused_var(p);
+            polympc::ignore_unused_var(t);
+            polympc::ignore_unused_var(d);
+
+            lagrange = x.dot(Q.template cast<T>() * x) + u.dot(R.template cast<T>() * u);
+        }
+
+        template<typename T>
+        inline void mayer_term_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                    const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> d,
+                                    const scalar_t &t, T &mayer) noexcept
+        {
+            polympc::ignore_unused_var(p);
+            polympc::ignore_unused_var(t);
+            polympc::ignore_unused_var(d);
+            polympc::ignore_unused_var(u);
+
+            mayer = x.dot(QN.template cast<T>() * x);
+        }
+    };
+
+Below we will look into the code in more detail.
+
+.. code:: c++
+
+    #include "polynomials/ebyshev.hpp"
+    #include "polynomials/splines.hpp"
+    #include "control/continuous_ocp.hpp"
+    #include "utils/helpers.hpp"
+
+These headers contain classes necessary to define the approximation (Chebyshev polynomials, splines) and :class:`ContinuousOCP`. The header *utils/helpers.hpp* constains
+some useful utilities.
+
+
+.. code:: c++
+
+    #define POLY_ORDER 5
+    #define NUM_SEG    2
+
+    using Polynomial = polympc::Chebyshev<POLY_ORDER, polympc::GAUSS_LOBATTO, double>;
+    using Approximation = polympc::Spline<Polynomial, NUM_SEG>;
+
+    POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*ND*/ 1, /*NG*/0, /*TYPE*/ double)
+
+Here, we choose the parameters of the approximation: two-segement spline with Lagrange polynomials of order `5` in each segment. Furthermore, ``polympc::GAUSS_LOBATTO``
+with :class:`Chebyshev` class means that we will be using Chebyshev-Gauss-Lobatto collocation scheme. Next, similar to nonlinear programs, macro :class:`POLYMPC_FORWARD_DECLARATION`
+creates class traits for the class :class:`RobotOCP` to infer compile time information. Here, ``NX`` is again the dimension of the state space, ``NU``- control, ``NP``- variable
+parameters, ``ND``- static parameters, ``NG``- number of constraints, and finally the scalar type (``double`` in this case).
+
+.. NOTE::
+
+   The ``NP`` parameters, unlike static ``ND`` parameters can be changed by the nonlinear solver during iterations. ``ND`` parameters can be changed by the user inbetween solver
+   calls. ``ND`` parameters are reduntant, strictly speaking, as mutable attributes of :class:`RobotOCP` can be used instead; this feature is primarily exists for compatibility of
+   `Eigen` and `CasADi` interfaces.
+
+Let's now move on to defining the dynamics functions.
+
+.. code:: c++
+
+    class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+    {
+    public:
+        ~RobotOCP() = default;
+
+        RobotOCP()
+        {
+            /** initialise weight matrices to identity (for example)*/
+            Q.setIdentity();
+            R.setIdentity();
+            QN.setIdentity;
+        }
+
+        Matrix<scalar_t, 3, 3> Q;
+        Matrix<scalar_t, 2, 2> R;
+        Eigen::DiagonalMatrix<scalar_t, 3> QN{1,1,1};
+
+        template<typename T>
+        inline void dynamics_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                  const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> &d,
+                                  const T &t, Ref<state_t<T>> xdot) const noexcept
+        {
+            polympc::ignore_unused_var(p);
+            polympc::ignore_unused_var(t);
+
+            xdot(0) = u(0) * cos(x(2)) * cos(u(1));
+            xdot(1) = u(0) * sin(x(2)) * cos(u(1));
+            xdot(2) = u(0) * sin(u(1)) / d(0);
+        }
+
+Here, :class:`ContinuousOCP` creates templated types for state (:class:`state_t`), control (:class:`control_t`), parameters (:class:`parameter_t`), derivatives (:class:`state_t`).
+Static parameter type is not templated. Templates are necesary to propagate special :class:`AutoDiffScalar` type objects through the user-defined functions in order to compute
+sensitivities. The user should implement :func:`dynamics_impl` function with a given particular signature. Function :func:`ignore_unused_var` is here merely to suppress compiler
+warnings about unused variables, it does not add any computational overhead.
+
+As a next step we will define a cost that penalises the squared distance of the robot from the target, which may look like one below:
+
+.. math::
+
+   \begin{aligned}
+   J[x(t_0),u(\cdot), p]  =  x^T(t_f) QN x(t_f) + \int_{t_0}^{t_f} x^T(\tau) Q x(\tau) + u^T(\tau) R u(\tau) d\tau \\
+   \end{aligned}
+
+In the code, the user has to implement Lagrange (:func:`lagrange_term_impl`) and Mayer (:func:`mayer_term_impl`) terms. By default, :math:`t_0= 0.0` and :math:`t_f = 1.0`, we
+will explain in the next section how to chenge these values.
+
+.. code:: c++
+
+    template<typename T>
+    inline void lagrange_term_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                   const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> d,
+                                   const scalar_t &t, T &lagrange) noexcept
+    {
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(d);
+
+        lagrange = x.dot(Q.template cast<T>() * x) + u.dot(R.template cast<T>() * u);
+    }
+
+    template<typename T>
+    inline void mayer_term_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> d,
+                                const scalar_t &t, T &mayer) noexcept
+    {
+        polympc::ignore_unused_var(p);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(d);
+        polympc::ignore_unused_var(u);
+
+        mayer = x.dot(QN.template cast<T>() * x);
+     }
+
+
+.. NOTE::
+
+   Inconvenience of using :func:`template cast<T>()` has to do with certain current limitations of forward-mode automatic differentiation code in Eigen. In case, the exact
+   second order derivatives are not required by the nonlinear solver, i.e. BFGS approximation is used, the :func:`cast` function is not required.
+
+
+**Generic Inequality Constraints**
+
+
+Additionally, we could limit angular acceleration of the robot a bit. This heuristicaly can be achieved by introducing a nonlinear inequality constraint:
+
+.. math::
+
+   \begin{aligned}
+   g_l \leq v^2 \cos(\phi) \leq g_u \\
+   \end{aligned}
+
+The user can implement this inequality constraint function in :class:`RobotOCP` as shown below:
+
+.. code:: c++
+
+    template<typename T>
+    inline void inequality_constraints_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
+                                            const Ref<const parameter_t<T>> p, const Ref<const static_parameter_t> d,
+                                            const scalar_t &t, Eigen::Ref<constraint_t<T>> g) const noexcept
+    {
+        g(0) = u(0) * u(0) * cos(u(1));
+
+        polympc::ignore_unused_var(x);
+        polympc::ignore_unused_var(d);
+        polympc::ignore_unused_var(t);
+        polympc::ignore_unused_var(p);
+    }
+
+Values :math:`g_l` and :math:`g_u` will be set after in the solver.
+
+
+Solving OCP
+===========
+
+Now :class:`RobotOCP` is in principle equivalent to a nonlinear program, i.e. the user can access cost, constraints, Lagrangian, their derivatives etc. We can proceed solving
+this problem as described in :ref:`chapter-nlp` chapter. We create a nonlinear solver, set up settings.
+
+.. code:: c++
+
+    using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
+                                    RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
+
+    using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE,
+                                                        RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
+
+    int main(void)
+    {
+        Solver<RobotOCP, box_admm_solver, preconditioner_t> solver;
+        /** change the final time */
+        solver.get_problem().set_time_limits(0, 2);
+
+        /** set optimiser properties */
+        solver.settings().max_iter = 10;
+        solver.settings().line_search_max_iter = 10;
+        solver.qp_settings().max_iter = 1000;
+
+        /** set the parameter 'd' */
+        solver.parameters()(0) = 2.0;
+
+        /** initial conditions and constraints on the control signal */
+        Eigen::Matrix<RobotOCP::scalar_t, 3, 1> init_cond; init_cond << 0.5, 0.5, 0.5;
+        Eigen::Matrix<RobotOCP::scalar_t, 2, 1> ub; ub <<  1.5,  0.75;
+        Eigen::Matrix<RobotOCP::scalar_t, 2, 1> lb; lb << -1.5, -0.75;
+
+        /** setting up bounds and initial conditions: magic for now */
+        solver.upper_bound_x().tail(22) = ub.replicate(11, 1);
+        solver.lower_bound_x().tail(22) = lb.replicate(11, 1);
+
+        solver.upper_bound_x().segment(30, 3) = init_cond;
+        solver.lower_bound_x().segment(30, 3) = init_cond;
+
+        /** solve the NLP */
+        polympc::time_point start = polympc::get_time();
+        solver.solve();
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        /** retrieve solution and some statistics */
+        std::cout << "Solve status: " << solver.info().status.value << "\n";
+        std::cout << "Num iterations: " << solver.info().iter << "\n";
+        std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+                  << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
+        std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
+        std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+        std::cout << "Size of the solver: " << sizeof (solver) << "\n";
+        std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+
+        return EXIT_SUCCESS;
+    }
+
+
+MPC Wrapper
+===========
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

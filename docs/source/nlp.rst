@@ -187,7 +187,7 @@ Let us see closely what is going on.
 
    using namespace Eigen;
 
-This macro creates class traits for :class:`HS071` which allows to deduce compile information about the problem. The arguments here are: ``Name`` of the problem class
+This macro creates class traits for :class:`HS071` which allow to deduce compile information about the problem. The arguments here are: ``Name`` of the problem class
 (should coincide with the later class declaration), ``NX``- number of optimisation variables, ``NE``- number of equality constraints, ``NI``- number of inequality
 constraints, ``NP``- number of static problem parameters, ``Type``- scalar type. ``Using namespace Eigen`` is for here brevity and not encouraged in general.
 

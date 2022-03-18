@@ -219,7 +219,7 @@ private:
         osqp_solver.settings()->setVerbosity(this->m_settings.verbose);
         osqp_solver.settings()->setWarmStart(this->m_settings.warm_start);
         osqp_solver.settings()->setAdaptiveRho(this->m_settings.adaptive_rho);
-        osqp_solver.settings()->setMaxIteraction(this->m_settings.max_iter);
+        osqp_solver.settings()->setMaxIteration(this->m_settings.max_iter);
         osqp_solver.settings()->setCheckTermination(this->m_settings.check_termination);
         osqp_solver.settings()->setAbsoluteTolerance(this->m_settings.eps_abs);
         osqp_solver.settings()->setRelativeTolerance(this->m_settings.eps_rel);

@@ -38,7 +38,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+class RobotOCP : public polympc::ContinuousOCP<RobotOCP, Approximation, polympc::SPARSE>
 {
 public:
     ~RobotOCP() = default;
@@ -99,12 +99,12 @@ public:
 /** create solver */
 template<typename Problem, typename QPSolver, typename Preconditioner> class MySolver;
 
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>,
+template<typename Problem, typename QPSolver = polympc::boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>,
          typename Preconditioner = polympc::IdentityPreconditioner>
-class MySolver : public SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>
+class MySolver : public polympc::SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>
 {
 public:
-    using Base = SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>;
+    using Base = polympc::SQPBase<MySolver<Problem, QPSolver, Preconditioner>, Problem, QPSolver, Preconditioner>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -112,7 +112,7 @@ public:
     //EIGEN_STRONG_INLINE const typename Base::_Problem& get_problem() const noexcept { return this->problem; }
     EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return this->problem; }
 
-    LSFilter<scalar_t> filter;
+    polympc::LSFilter<scalar_t> filter;
 
     /** change step size selection algorithm  : filter line search */
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
@@ -171,11 +171,11 @@ public:
 
 
 /** QP solvers */
-using admm_solver = ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
-                         RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
+using admm_solver = polympc::ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
+                                  RobotOCP::MATRIXFMT, polympc::linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
-using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
-                                RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
+using box_admm_solver = polympc::boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
+                                         RobotOCP::MATRIXFMT, polympc::linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
 // for advanced users
 //using osqp_solver_t = polympc::OSQP<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t>;

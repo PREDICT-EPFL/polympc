@@ -14,6 +14,8 @@
 #include "Eigen/Sparse"
 #include <chrono>
 
+namespace polympc {
+
 enum MEMORY
 {
     DENSE  = 0,
@@ -49,29 +51,23 @@ struct linear_solver_traits<SPARSE>
     using default_solver = typename Eigen::SimplicialLDLT<Type, Flags>;
 };
 
+// supress 'unused variable' warnings
+template<typename T>
+EIGEN_STRONG_INLINE void ignore_unused_var(const T& ) noexcept {}
 
-/** get rid of unused variables warnings*/
-namespace polympc
+typedef std::chrono::time_point<std::chrono::system_clock> time_point;
+static EIGEN_STRONG_INLINE time_point get_time()
 {
-    // supress 'unused variable' warnings
-    template<typename T>
-    EIGEN_STRONG_INLINE void ignore_unused_var(const T& ) noexcept {}
-
-    typedef std::chrono::time_point<std::chrono::system_clock> time_point;
-    static EIGEN_STRONG_INLINE time_point get_time()
-    {
-        /** OS dependent */
-    #ifdef __APPLE__
-        return std::chrono::system_clock::now();
-    #elif defined _WIN32 || defined _WIN64 || defined _MSC_VER
-        return std::chrono::system_clock::now();
-    #else
-        return std::chrono::high_resolution_clock::now();
-    #endif
-    }
+    /** OS dependent */
+#ifdef __APPLE__
+    return std::chrono::system_clock::now();
+#elif defined _WIN32 || defined _WIN64 || defined _MSC_VER
+    return std::chrono::system_clock::now();
+#else
+    return std::chrono::high_resolution_clock::now();
+#endif
 }
 
-
-
+} // polympc namespace
 
 #endif // HELPERS_HPP

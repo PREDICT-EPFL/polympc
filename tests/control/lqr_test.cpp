@@ -57,7 +57,7 @@ int main(void)
               0, 0, 0, 0, 0, 0, 0, 0, 6.00641e-11, 0, 0, 2.15012;
 
     /** call LQR */
-    lqr(A,B,Q,R,M,S,K, true);
+    polympc::lqr(A,B,Q,R,M,S,K, true);
 
     return EXIT_SUCCESS;
 }

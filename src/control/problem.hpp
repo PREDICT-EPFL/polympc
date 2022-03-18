@@ -35,6 +35,6 @@ public:
     };
 };
 
-}
+} // polympc namespace
 
 #endif // PROBLEM_HPP

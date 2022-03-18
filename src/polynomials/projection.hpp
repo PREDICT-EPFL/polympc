@@ -12,6 +12,8 @@
 
 #include "iostream"
 
+namespace polympc {
+
 /** @brief : Orthogonal projections */
 /** a struct to store Chebyshev projections */
 template<typename Basis>
@@ -76,5 +78,6 @@ private:
     coeff_t m_norm_factors;
 };
 
+} // polympc namespace
 
 #endif // PROJECTION_HPP

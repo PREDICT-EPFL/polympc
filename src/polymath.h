@@ -22,8 +22,10 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace polymath
-{
+namespace polympc {
+
+namespace polymath {
+
     /** quaternion arithmetic */
     casadi::SX T1quat(const casadi::SX &rotAng);
     casadi::SX T2quat(const casadi::SX &rotAng);
@@ -336,6 +338,8 @@ namespace polymath
                             const Eigen::Ref<const Eigen::MatrixXd> R, const Eigen::Ref<const Eigen::MatrixXd> M, const bool &check = false) noexcept;
     }
 
-}
+} // polymath namespace
+
+} // polympc namespace
 
 #endif // POLYMATH_H

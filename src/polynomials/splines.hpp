@@ -18,7 +18,6 @@
 
 namespace polympc {
 
-
 template<typename Polynomial, int NumSegments>
 class Spline
 {
@@ -137,7 +136,6 @@ public:
         return res;
     }
 };
-
 
 } // polympc namespace
 

@@ -27,9 +27,9 @@ static constexpr int NUM_SEGMENTS = 2;
 
 int main()
 {
-    using SoftCheb = SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0>;
+    using SoftCheb = polympc::SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0>;
 
-    SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0> cheb;
+    polympc::SoftChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0, 0> cheb;
     MobileRobot robot;
     casadi::Function ode = robot.getDynamics();
 

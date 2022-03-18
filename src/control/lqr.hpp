@@ -5,6 +5,7 @@
 #include "unsupported/Eigen/Polynomials"
 #include "iostream"
 
+namespace polympc {
 
 /** Moore-Penrose pseudo-inverse */
 Eigen::MatrixXd pinv(const Eigen::Ref<const Eigen::MatrixXd> mat) noexcept
@@ -227,5 +228,7 @@ void lqr(const Eigen::Ref<const Eigen::MatrixXd>& F, const Eigen::Ref<const Eige
     /** compute gain matrix */
     K = invR * ( (G).transpose() * S + M.transpose());
 }
+
+} // polympc namespace
 
 #endif // LQR_HPP

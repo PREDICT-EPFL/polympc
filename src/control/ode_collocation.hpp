@@ -15,8 +15,7 @@
 #include "unsupported/Eigen/KroneckerProduct"
 #include "unsupported/Eigen/AutoDiff"
 
-namespace polympc
-{
+namespace polympc {
 
 template <typename Dynamics, typename Polynomial, int NumSegments = 1>
 class ode_collocation
@@ -200,9 +199,6 @@ void ode_collocation<Dynamics, Polynomial, NumSegments>::linearized(const var_t 
     A.template leftCols<VARX_SIZE>() += m_DiffMat;
 }
 
+} // polympc namespace
 
-
-
-
-}
 #endif // ODE_COLLOCATION_HPP

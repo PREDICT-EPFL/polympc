@@ -24,7 +24,6 @@ class GenericDiagonalPreconditioner
 
 namespace polympc {
 
-
 /** empty preconditioner */
 class IdentityPreconditioner
 {
@@ -551,9 +550,6 @@ public:
 
 };
 
-
-} // end of polympc namespace
-
-
+} // polympc namespace
 
 #endif // QP_PRECONDITIONERS_HPP

@@ -213,7 +213,6 @@ Chebyshev<PolyOrder, Qtype, Scalar>::compute_diff_matrix() noexcept
     return Dn - diag_D;
 }
 
-
 } // polympc namespace
 
 #endif // EBYSHEV_HPP

@@ -12,6 +12,8 @@
 
 #include "polymath.h"
 
+namespace polympc {
+
 template<class BaseClass,
          int PolyOrder,
          int NumSegments,
@@ -583,5 +585,7 @@ BaseClass MSChebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Differ
         return Derivative;
     }
 }
+
+} // polympc namespace
 
 #endif // CHEBYSHEV_MS_HPP

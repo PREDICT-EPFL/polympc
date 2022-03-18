@@ -31,7 +31,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQP)
     h << 1, 1;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -41,7 +41,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 
 }
 
@@ -62,12 +62,12 @@ TEST(QPSolverSparseTest, box_admmRuizEquilibration)
     h << 1, 1;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
 
-    polympc::RuizEquilibration<scalar, 2, 1, SPARSE> preconditioner;
+    polympc::RuizEquilibration<scalar, 2, 1, polympc::SPARSE> preconditioner;
     preconditioner.compute(H, h, A, Al, Au, xl, xu);
 
     prob.solve(H, h, A, Al, Au, xl, xu);
@@ -78,7 +78,7 @@ TEST(QPSolverSparseTest, box_admmRuizEquilibration)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 
 }
 
@@ -99,7 +99,7 @@ TEST(QPSolverSparseTest, admmSimpleQP)
     h << 1, 1;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::ADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -109,7 +109,7 @@ TEST(QPSolverSparseTest, admmSimpleQP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 
 }
 
@@ -131,7 +131,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQPTwice)
     h << 1, 1;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -145,7 +145,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQPTwice)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 
@@ -166,7 +166,7 @@ TEST(QPSolverSparseTest, admmSimpleQPTwice)
     h << 1, 1;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::ADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -180,7 +180,7 @@ TEST(QPSolverSparseTest, admmSimpleQPTwice)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 
@@ -201,7 +201,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQPSinglePrecision)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    boxADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -211,7 +211,7 @@ TEST(QPSolverSparseTest, box_admmSimpleQPSinglePrecision)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverSparseTest, admmSimpleQPSinglePrecision)
@@ -231,7 +231,7 @@ TEST(QPSolverSparseTest, admmSimpleQPSinglePrecision)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    ADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::ADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().max_iter = 150;
     prob.settings().adaptive_rho = false;
@@ -241,7 +241,7 @@ TEST(QPSolverSparseTest, admmSimpleQPSinglePrecision)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverSparseTest, box_admmAdaptiveRho)
@@ -261,7 +261,7 @@ TEST(QPSolverSparseTest, box_admmAdaptiveRho)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    boxADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -281,7 +281,7 @@ TEST(QPSolverSparseTest, box_admmAdaptiveRho)
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
 }
 
 TEST(QPSolverSparseTest, admmAdaptiveRho)
@@ -301,7 +301,7 @@ TEST(QPSolverSparseTest, admmAdaptiveRho)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    ADMM<2, 1, scalar, SPARSE, linear_solver_traits<SPARSE>::default_solver> prob;
+    polympc::ADMM<2, 1, scalar, polympc::SPARSE, polympc::linear_solver_traits<polympc::SPARSE>::default_solver> prob;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -321,7 +321,7 @@ TEST(QPSolverSparseTest, admmAdaptiveRho)
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
 }
 
 
@@ -342,13 +342,13 @@ TEST(QPSolverSparseTest, box_admmSparseConjugateGradientLinearSolver)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    boxADMM<2, 1, scalar, SPARSE, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    polympc::boxADMM<2, 1, scalar, polympc::SPARSE, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
     prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     auto info = prob.info();
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
     EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
 }
 
@@ -369,13 +369,13 @@ TEST(QPSolverSparseTest, admmSparseConjugateGradientLinearSolver)
     h << 1, 1;
     solution << 0.3f, 0.7f;
 
-    ADMM<2, 1, scalar, SPARSE, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
+    polympc::ADMM<2, 1, scalar, polympc::SPARSE, Eigen::ConjugateGradient, Eigen::Lower | Eigen::Upper> prob;
     prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
     auto info = prob.info();
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
     EXPECT_LT(info.iter, prob.settings().max_iter); // convergence test
 }
 
@@ -411,7 +411,7 @@ TEST(QPSolverSparseTest, osqpSimpleQP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.info().iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverSparseTest, osqpSimpleQPTwice)
@@ -446,7 +446,7 @@ TEST(QPSolverSparseTest, osqpSimpleQPTwice)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.info().iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverSparseTest, osqpAdaptiveRho)
@@ -487,7 +487,7 @@ TEST(QPSolverSparseTest, osqpAdaptiveRho)
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LE(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
 }
 
 #endif

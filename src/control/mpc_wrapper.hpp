@@ -14,6 +14,8 @@
 #include "polynomials/splines.hpp"
 #include <iostream>
 
+namespace polympc {
+
 /** interface/aggregate class for MPC controllers */
 template<typename OCP, template<typename, typename ...Args> class Solver, typename ...Args>
 class MPC
@@ -299,9 +301,6 @@ public:
 
 };
 
-
-
-
-
+} // polympc namespace
 
 #endif // MPC_WRAPPER_HPP

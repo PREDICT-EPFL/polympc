@@ -14,6 +14,7 @@
 #include "utils/helpers.hpp"
 #include <iostream>
 
+namespace polympc {
 
 template<int Size, typename Scalar = double>
 struct rbf_kernel
@@ -90,6 +91,8 @@ struct rbf_kernel
     }
 
 };
+
+} // polympc namespace
 
 #endif // RBF_KERNEL_HPP
 

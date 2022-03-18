@@ -601,6 +601,6 @@ casadi::DM nmpf<System, Path, NX, NU, NumSegments, PolyOrder>::findClosestPointO
     return theta_i;
 }
 
-}
+} // polympc namespace
 
 #endif // NMPF_HPP

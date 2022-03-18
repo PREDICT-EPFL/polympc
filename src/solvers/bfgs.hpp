@@ -13,6 +13,8 @@
 #include <Eigen/Dense>
 #include <limits>
 
+namespace polympc {
+
 /** Damped BFGS update
  * Implements "Procedure 18.2 Damped BFGS updating for SQP" form Numerical Optimization by Nocedal.
  *
@@ -50,5 +52,7 @@ void BFGS_update(Eigen::MatrixBase<Mat>& B, const Eigen::MatrixBase<Vec>& s, con
     B.noalias() += -Bs * Bs.transpose() / sBs;
     B.noalias() += r * r.transpose() / sr;
 }
+
+} // polympc namespace
 
 #endif /* BFGS_HPP */

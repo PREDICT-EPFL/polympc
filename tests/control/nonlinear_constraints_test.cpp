@@ -30,7 +30,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ ParkingOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 1, /
 
 using namespace Eigen;
 
-class ParkingOCP : public ContinuousOCP<ParkingOCP, Approximation, SPARSE>
+class ParkingOCP : public polympc::ContinuousOCP<ParkingOCP, Approximation, polympc::SPARSE>
 {
 public:
     ~ParkingOCP() = default;
@@ -77,12 +77,12 @@ public:
 
 /** create solver */
 template<typename Problem, typename QPSolver> class Solver;
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
-                                             typename Problem::scalar_t, Problem::MATRIXFMT, linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>>
-class Solver : public SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>
+template<typename Problem, typename QPSolver = polympc::boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
+         typename Problem::scalar_t, Problem::MATRIXFMT, polympc::linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>>
+class Solver : public polympc::SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
-    using Base = SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>;
+    using Base = polympc::SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -159,7 +159,7 @@ public:
 
 int main(void)
 {
-    using mpc_t = MPC<ParkingOCP, Solver>;
+    using mpc_t = polympc::MPC<ParkingOCP, Solver>;
     mpc_t mpc;
     mpc.settings().max_iter = 20;
     mpc.settings().line_search_max_iter = 10;

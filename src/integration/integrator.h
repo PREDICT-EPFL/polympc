@@ -4,6 +4,8 @@
 #include "casadi/casadi.hpp"
 #include "Eigen/Dense"
 
+namespace polympc {
+
 enum IntType {RK4, CVODES};
 
 /** Solve ODE of the form : xdot = f(x, u, p) */
@@ -42,5 +44,6 @@ private:
     casadi::Function cvodes_integrator;
 };
 
+} // polympc namespace
 
 #endif // INTEGRATOR_H

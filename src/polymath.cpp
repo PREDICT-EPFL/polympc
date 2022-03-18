@@ -13,8 +13,9 @@ using namespace casadi;
 
 /** collection of auxillary mathematical routines */
 
-namespace polymath
-{
+namespace polympc {
+
+namespace polymath {
 
 /** quaternion arithmetics */
 SX T1quat(const casadi::SX &rotAng) { return SX::vertcat({cos(-rotAng / 2.0), sin(-rotAng / 2.0), 0, 0}); }
@@ -536,5 +537,6 @@ Eigen::MatrixXd lqr(const LinearSystem &sys, const Eigen::Ref<const Eigen::Matri
 /**oc bracket */
 }
 
-/**polymath bracket */
-}
+} // polymath namespace
+
+} // polympc namespace

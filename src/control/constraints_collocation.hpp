@@ -187,10 +187,7 @@ auto constraint_collocation<NX, NU, NP, Polynomial, NumSegments>::generic_functi
     return value;
 }
 
-
-// end of namespace
-}
-
+} // polympc namespace
 
 
 #endif // CONSTRAINTS_COLLOCATION_HPP

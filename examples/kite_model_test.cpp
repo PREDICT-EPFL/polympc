@@ -42,11 +42,11 @@ int main(void)
     Dict opts;
     opts["tf"]         = 5.0;
     opts["tol"]        = 1e-5;
-    opts["method"]     = IntType::RK4;
-    ODESolver rk4_solver(ode, opts);
+    opts["method"]     = polympc::IntType::RK4;
+    polympc::ODESolver rk4_solver(ode, opts);
 
-    opts["method"] = IntType::CVODES;
-    ODESolver cvodes_solver(ode, opts);
+    opts["method"] = polympc::IntType::CVODES;
+    polympc::ODESolver cvodes_solver(ode, opts);
 
     double tf = 5.0;
     casadi::DMDict props;
@@ -57,7 +57,7 @@ int main(void)
     casadi::Dict solver_options;
     solver_options["ipopt.linear_solver"] = "mumps";
 
-    PSODESolver<10, 10, 3, 1, 0>ps_solver(ode, tf, props, solver_options);
+    polympc::PSODESolver<10, 10, 3, 1, 0>ps_solver(ode, tf, props, solver_options);
 
     /** solve the problem */
     DM rk4_sol, cheb_sol, cv_sol, ps_sol;

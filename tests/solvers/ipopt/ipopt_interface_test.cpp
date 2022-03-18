@@ -21,7 +21,7 @@ class IpoptSolver : public IpoptInterface<IpoptSolver<Problem>, Problem> {}; */
 
 // Constrained Rosenbrock Function
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ ConstrainedRosenbrock, /*NX*/ 2, /*NE*/1, /*NI*/0, /*NP*/0, /*Type*/double);
-class ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock>
+class ConstrainedRosenbrock : public polympc::ProblemBase<ConstrainedRosenbrock>
 {
 public:
     const scalar_t a = 1;
@@ -50,7 +50,7 @@ public:
 
 /** HS071 problem as in Ipopt tutorial */
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ HS071, /*NX*/ 4, /*NE*/0, /*NI*/2, /*NP*/0, /*Type*/double);
-class HS071 : public ProblemBase<HS071>
+class HS071 : public polympc::ProblemBase<HS071>
 {
 public:
     Eigen::Matrix<scalar_t, 4, 1> SOLUTION = {1.00000000, 4.74299963, 3.82114998, 1.37940829};
@@ -76,7 +76,7 @@ public:
 TEST(IpoptTestCase, TestHS071)
 {
     // will be using the default
-    using Solver = IpoptInterface<HS071>;
+    using Solver = polympc::IpoptInterface<HS071>;
     HS071 problem;
     Solver solver;
 
@@ -100,7 +100,7 @@ TEST(IpoptTestCase, TestHS071)
 
 /** HS071 problem as in Ipopt tutorial */
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ HS071_2, /*NX*/ 4, /*NE*/1, /*NI*/1, /*NP*/0, /*Type*/double);
-class HS071_2 : public ProblemBase<HS071_2>
+class HS071_2 : public polympc::ProblemBase<HS071_2>
 {
 public:
     Eigen::Matrix<scalar_t, 4, 1> SOLUTION = {1.00000000, 4.74299963, 3.82114998, 1.37940829};
@@ -135,7 +135,7 @@ public:
 TEST(IpoptTestCase, TestHS071_2)
 {
     // will be using the default
-    using Solver = IpoptInterface<HS071_2>;
+    using Solver = polympc::IpoptInterface<HS071_2>;
     HS071_2 problem;
     Solver solver;
 

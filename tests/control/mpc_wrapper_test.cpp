@@ -34,7 +34,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+class RobotOCP : public polympc::ContinuousOCP<RobotOCP, Approximation, polympc::SPARSE>
 {
 public:
     ~RobotOCP() = default;
@@ -82,12 +82,12 @@ public:
 /** create solver */
 template<typename Problem, typename QPSolver> class MySolver;
 
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
-                                               typename Problem::scalar_t, Problem::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>>
-class MySolver : public SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
+template<typename Problem, typename QPSolver = polympc::boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
+         typename Problem::scalar_t, Problem::MATRIXFMT, polympc::linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>>
+class MySolver : public polympc::SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
-    using Base = SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>;
+    using Base = polympc::SQPBase<MySolver<Problem, QPSolver>, Problem, QPSolver>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -127,18 +127,18 @@ public:
 
 
 /** QP solvers */
-using admm_solver = ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
-                         RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
+using admm_solver = polympc::ADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
+                                  RobotOCP::MATRIXFMT, polympc::linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
-using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
-                                RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
+using box_admm_solver = polympc::boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
+                                         RobotOCP::MATRIXFMT, polympc::linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
 
 int main(void)
 {
-    using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
+    using mpc_t = polympc::MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
     mpc.ocp().set_Q_coeff(2.0);
     mpc.settings().max_iter = 10;

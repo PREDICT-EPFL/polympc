@@ -12,6 +12,8 @@
 
 #include "qp_base.hpp"
 
+namespace polympc {
+
 template<int N, int M, typename Scalar = double, int MatrixType = DENSE,
          template <typename, int, typename... Args> class LinearSolver = linear_solver_traits<DENSE>::default_solver,
          int LinearSolver_UpLo = Eigen::Lower, typename ...Args>
@@ -501,8 +503,6 @@ public:
 
 };
 
-
-
-
+} // polympc namespace
 
 #endif // ADMM_HPP

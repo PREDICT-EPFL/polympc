@@ -20,6 +20,8 @@
 #include "IpSolveStatistics.hpp"
 #include "IpTNLP.hpp"
 
+namespace polympc {
+
 /** Ipopt info */
 struct ipopt_info_t {
     int iter;
@@ -497,10 +499,6 @@ public:
 
 };
 
-
-
-
-
-
+} // polympc namespace
 
 #endif // IPOPT_INTERFACE_HPP

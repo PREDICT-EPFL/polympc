@@ -286,5 +286,4 @@ void Legendre<PolyOrder, Qtype, Scalar>::compute_galerkin_tensor() noexcept
 
 } // polympc namespace
 
-
 #endif // LEGENDRE_HPP

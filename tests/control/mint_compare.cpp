@@ -25,7 +25,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ ParkingOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 1, /
 
 using namespace Eigen;
 
-class ParkingOCP : public ContinuousOCP<ParkingOCP, Approximation, DENSE>
+class ParkingOCP : public polympc::ContinuousOCP<ParkingOCP, Approximation, polympc::DENSE>
 {
 public:
     ~ParkingOCP() = default;
@@ -57,7 +57,7 @@ public:
 };
 
 POLYMPC_FORWARD_DECLARATION(/*Name*/ ParkingOCPSparse, /*NX*/ 3, /*NU*/ 2, /*NP*/ 1, /*ND*/ 1, /*NG*/0, /*TYPE*/ double)
-class ParkingOCPSparse : public ContinuousOCP<ParkingOCPSparse, Approximation, SPARSE>
+class ParkingOCPSparse : public polympc::ContinuousOCP<ParkingOCPSparse, Approximation, polympc::SPARSE>
 {
 public:
     ~ParkingOCPSparse() = default;
@@ -90,12 +90,12 @@ public:
 
 /** create solver */
 template<typename Problem, typename QPSolver> class Solver;
-template<typename Problem, typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
-                                             typename Problem::scalar_t, Problem::MATRIXFMT, linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>>
-class Solver : public SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>
+template<typename Problem, typename QPSolver = polympc::boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ,
+         typename Problem::scalar_t, Problem::MATRIXFMT, polympc::linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>>
+class Solver : public polympc::SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>
 {
 public:
-    using Base = SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>;
+    using Base = polympc::SQPBase<Solver<Problem, QPSolver>, Problem, QPSolver>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -139,13 +139,13 @@ public:
     }
 };
 
-using dense_admm_t = boxADMM<ParkingOCP::VAR_SIZE, ParkingOCP::NUM_EQ + ParkingOCP::NUM_INEQ, typename ParkingOCP::scalar_t,
-                     ParkingOCP::MATRIXFMT, linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>;
+using dense_admm_t = polympc::boxADMM<ParkingOCP::VAR_SIZE, ParkingOCP::NUM_EQ + ParkingOCP::NUM_INEQ, typename ParkingOCP::scalar_t,
+                                      ParkingOCP::MATRIXFMT, polympc::linear_solver_traits<ParkingOCP::MATRIXFMT>::default_solver>;
 
 using dense_solver_t = dense_admm_t::linear_solver_t;
 
-using sparse_admm_t = boxADMM<ParkingOCPSparse::VAR_SIZE, ParkingOCPSparse::NUM_EQ + ParkingOCPSparse::NUM_INEQ, typename ParkingOCPSparse::scalar_t,
-                      ParkingOCPSparse::MATRIXFMT, linear_solver_traits<ParkingOCPSparse::MATRIXFMT>::default_solver>;
+using sparse_admm_t = polympc::boxADMM<ParkingOCPSparse::VAR_SIZE, ParkingOCPSparse::NUM_EQ + ParkingOCPSparse::NUM_INEQ, typename ParkingOCPSparse::scalar_t,
+                                       ParkingOCPSparse::MATRIXFMT, polympc::linear_solver_traits<ParkingOCPSparse::MATRIXFMT>::default_solver>;
 
 using sparse_solver_t = sparse_admm_t::linear_solver_t;
 

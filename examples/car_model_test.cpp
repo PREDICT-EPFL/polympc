@@ -63,7 +63,7 @@ int main(void)
     const int NUM_SEGMENTS = 2;
     const int POLY_ORDER   = 5;
 
-    PSODESolver<POLY_ORDER, NUM_SEGMENTS, 3, 2, 1>ps_solver(ode, tf, props, solver_options);
+    polympc::PSODESolver<POLY_ORDER, NUM_SEGMENTS, 3, 2, 1>ps_solver(ode, tf, props, solver_options);
 
     /** solve the problem */
     DMDict ps_sol;
@@ -83,15 +83,15 @@ int main(void)
     //casadi::Function f_v   = polymath::lagrange_interpolant(points, v);
     //casadi::Function f_phi = polymath::lagrange_interpolant(points, phi);
 
-    polymath::LagrangeInterpolator f_v(points, v);
-    polymath::LagrangeInterpolator f_phi(points, phi);
+    polympc::polymath::LagrangeInterpolator f_v(points, v);
+    polympc::polymath::LagrangeInterpolator f_phi(points, phi);
 
     /** integrate independently with the CVODES integrator */
     Dict opts;
     opts["tf"]         = 0.01;
     opts["tol"]        = 1e-5;
-    opts["method"] = IntType::CVODES;
-    ODESolver cvodes_solver(ode, opts);
+    opts["method"] = polympc::IntType::CVODES;
+    polympc::ODESolver cvodes_solver(ode, opts);
 
     double t = 0, dt = 0.01;
     casadi::DM x_t = init_state;

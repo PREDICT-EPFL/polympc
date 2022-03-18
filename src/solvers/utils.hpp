@@ -14,6 +14,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
+namespace polympc {
+
 template <typename qp_t>
 void print_qp(qp_t qp)
 {
@@ -37,5 +39,7 @@ bool is_psd(Mat &h)
     }
     return true;
 }
+
+} // polympc namespace
 
 #endif /* UTILS_HPP */

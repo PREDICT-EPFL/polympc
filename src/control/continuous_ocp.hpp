@@ -21,14 +21,16 @@
 
 /** define the macro for forward declarations */
 #define POLYMPC_FORWARD_DECLARATION( cNAME, cNX, cNU, cNP, cND, cNG, TYPE ) \
-class cNAME;                                        \
-template<>                                          \
-struct polympc_traits<cNAME>                        \
-{                                                   \
-public:                                             \
-    using Scalar = TYPE;                            \
+class cNAME;                                                  \
+template<>                                                    \
+struct polympc::polympc_traits<cNAME>                         \
+{                                                             \
+public:                                                       \
+    using Scalar = TYPE;                                      \
     enum { NX = cNX, NU = cNU, NP = cNP, ND = cND, NG = cNG}; \
-};                                                  \
+};
+
+namespace polympc {
 
 /** define derived class traits */
 template<typename Derived> struct polympc_traits;
@@ -2430,6 +2432,6 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<
     }
 }
 
-
+} // polympc namespace
 
 #endif // CONTINUOUS_OCP_HPP

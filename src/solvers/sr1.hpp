@@ -12,6 +12,8 @@
 
 #include "utils/helpers.hpp"
 
+namespace polympc {
+
 /** Safe guarded SR1 update
  * Implements "Formula 6.24" form Numerical Optimization by Nocedal.
  *
@@ -35,6 +37,6 @@ void SR1_update(Eigen::MatrixBase<Mat>& B, const Eigen::MatrixBase<Vec>& s, cons
     //else: leave matrix unchanged B_{k+1} = B_{k}
 }
 
-
+} // polympc namespace
 
 #endif // SR1_HPP

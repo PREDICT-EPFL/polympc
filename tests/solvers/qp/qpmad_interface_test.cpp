@@ -40,7 +40,7 @@ TEST(QPMADSolverTest, qpmadSimpleQP)
     Eigen::Vector2d sol = prob.primal_solution();
 
     //EXPECT_TRUE(sol.isApprox(solution, 1e-2));
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 #endif

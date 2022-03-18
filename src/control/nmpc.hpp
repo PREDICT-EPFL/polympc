@@ -223,6 +223,6 @@ void nmpc<Problem, Approximation, Solver>
     _set_constraints(var, c_ode, eq, ineq, lbx, ubx);
 }
 
-}
+} // polympc namespace
 
 #endif // NMPC_HPP

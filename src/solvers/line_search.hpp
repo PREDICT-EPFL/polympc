@@ -13,6 +13,8 @@
 #include <list>
 #include <iostream>
 
+namespace polympc {
+
 template<typename Scalar>
 struct dominated_by
 {
@@ -97,7 +99,6 @@ public:
     }
 };
 
-
-
+} // polympc namespace
 
 #endif // LINE_SEARCH_HPP

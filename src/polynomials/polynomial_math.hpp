@@ -93,7 +93,7 @@ typename Derived::PlainObject poly_diff(const Eigen::MatrixBase<Derived> &p)
 }
 
 
-} // polymath namespace
+} // namespace polymath
 
 } // polympc namespace
 

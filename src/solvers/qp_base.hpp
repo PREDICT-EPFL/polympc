@@ -14,6 +14,8 @@
 #include <iostream>
 #include <array>
 
+namespace polympc {
+
 template <typename Scalar>
 struct qp_solver_settings_t {
 
@@ -253,8 +255,6 @@ class QPBase
 
 };
 
-
-
-
+} // polympc namespace
 
 #endif // QP_BASE_HPP

@@ -2,6 +2,8 @@
 
 using namespace casadi;
 
+namespace polympc {
+
 /** ODESolver class implementation */
 ODESolver::ODESolver(const Function &rhs, const Dict &params)
 {
@@ -134,3 +136,5 @@ DM ODESolver::solve(const DM &x0, const DM &u, const double &dt)
     casadi::DM p = casadi::DM::zeros(np); // dummy input
     return solve(x0, u, p, dt);
 }
+
+} // polympc namespace

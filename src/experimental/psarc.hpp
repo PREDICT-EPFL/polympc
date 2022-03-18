@@ -16,8 +16,9 @@
 #include "Eigen/Eigenvalues"
 #include "kite.h"
 
-namespace psarc_math
-{
+namespace polympc {
+
+namespace psarc_math {
 
 enum MAT : int {CASADI, EIGEN_DENSE, EIGEN_SPARSE};
 
@@ -368,5 +369,7 @@ symbolic_psarc<Equalities, CorrectorProps>::symbolic_psarc(const typename Equali
     std::cout << "Total number of iterations: " << iter_count << "\n";
     //std::cout << solution.at("x") << "\n";
 }
+
+} // polympc namespace
 
 #endif // PSARC_HPP

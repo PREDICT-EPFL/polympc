@@ -21,6 +21,8 @@
 #include "qp_preconditioners.hpp"
 #include "utils.hpp"
 
+namespace polympc {
+
 template <typename Scalar>
 struct sqp_settings_t {
     Scalar tau = 0.5;       /**< line search iteration decrease, 0 < tau < 1 */
@@ -65,7 +67,7 @@ template<typename Derived, typename Problem, typename QPSolver, typename Precond
 
 template<typename Derived, typename Problem,
          typename QPSolver = boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>,
-         typename Preconditioner = polympc::IdentityPreconditioner>
+         typename Preconditioner = IdentityPreconditioner>
 class SQPBase
 {
 public:
@@ -694,5 +696,6 @@ void SQPBase<Derived, Problem, QPSolver, Preconditioner>::solve() noexcept
     //    m_info.status.value = sqp_status_t::MAX_ITER_EXCEEDED;
 }
 
+} // polympc namespace
 
 #endif // SQP_BASE_HPP

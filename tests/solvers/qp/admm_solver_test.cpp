@@ -33,7 +33,7 @@ TEST(QPSolverTest, admmSimpleQP)
     au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 1000;
 
     prob.solve(H, h, A, al, au, xl, xu);
@@ -41,7 +41,7 @@ TEST(QPSolverTest, admmSimpleQP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverTest, admmRuizEquilibration)
@@ -64,7 +64,7 @@ TEST(QPSolverTest, admmRuizEquilibration)
     au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 1000;
 
     polympc::RuizEquilibration<Scalar, 2, 1> preconditioner;
@@ -78,7 +78,7 @@ TEST(QPSolverTest, admmRuizEquilibration)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverTest, admmSinglePrecisionFloat)
@@ -101,14 +101,14 @@ TEST(QPSolverTest, admmSinglePrecisionFloat)
     au << 1; xu << Scalar(0.7), Scalar(0.7);
     solution << Scalar(0.3), Scalar(0.7);
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
 
     prob.solve(H,h,A,al,au,xl,xu);
     Eigen::Vector2f sol = prob.primal_solution();
 
     EXPECT_TRUE(sol.isApprox(solution, Scalar(1e-2)));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(QPSolverTest, admmConstraintViolation)
@@ -131,7 +131,7 @@ TEST(QPSolverTest, admmConstraintViolation)
     au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
 
     prob.settings().eps_rel = 1e-4;
     prob.settings().eps_abs = 1e-4;
@@ -170,7 +170,7 @@ TEST(QPSolverTest, admmAdaptiveRho)
     au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
 
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
@@ -178,7 +178,7 @@ TEST(QPSolverTest, admmAdaptiveRho)
     prob.solve(H,h,A,al,au, xl, xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 
@@ -202,7 +202,7 @@ TEST(QPSolverTest, admmLox)
     au << 1; xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    ADMM<2, 1, Scalar> prob;
+    polympc::ADMM<2, 1, Scalar> prob;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -221,7 +221,7 @@ TEST(QPSolverTest, admmLox)
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
 }
 
 #ifdef EIGEN_NO_DEBUG
@@ -271,7 +271,7 @@ TEST(QPSolverTest, admmTestConstraint)
     h.setConstant(-1);
     A.setIdentity();
 
-    using solver_t = ADMM<5,0,Scalar>;
+    using solver_t = polympc::ADMM<5,0,Scalar>;
     solver_t prob;
 
     int type_expect[5];
@@ -318,7 +318,7 @@ TEST(QPSolverTest, admmSimpleLP)
     xu <<  1e6;
     solution << -1e6;
 
-    ADMM<1, 0, Scalar> prob;
+    polympc::ADMM<1, 0, Scalar> prob;
 
     prob.settings().max_iter = 200;
     prob.settings().alpha = 1.0;
@@ -330,7 +330,7 @@ TEST(QPSolverTest, admmSimpleLP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 TEST(QPSolverTest, admmNonConvex)
@@ -354,7 +354,7 @@ TEST(QPSolverTest, admmNonConvex)
     dual_guess << 0.1;
 
 
-    ADMM<1, 0, Scalar> prob;
+    polympc::ADMM<1, 0, Scalar> prob;
 
     prob.settings().max_iter = 200;
     prob.settings().alpha = 1.0;
@@ -367,7 +367,7 @@ TEST(QPSolverTest, admmNonConvex)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 

@@ -439,8 +439,6 @@ double nmpc<System, NX, NU, NumSegments, PolyOrder>::getPathError()
     return error;
 }
 
-
-} //polympc namespace
-
+} // polympc namespace
 
 #endif // NMPC_HPP

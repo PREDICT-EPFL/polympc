@@ -14,6 +14,8 @@
 #include "chebyshev_ms.hpp"
 #include "chebyshev_soft.hpp"
 
+namespace polympc {
+
 enum PENALTY { QUADRATIC, EXACT };
 enum OPERATOR_OUTPUT {NORM_DIFF_VALUE = 5};
 
@@ -579,5 +581,6 @@ void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi:
     solve_status = NLP_Solver.stats();
 }
 
+} // polympc namespace
 
 #endif // GENERIC_OCP_HPP

@@ -244,5 +244,4 @@ private:
 
 #endif
 
-
 #endif // OSQP_INTERFACE_HPP

@@ -33,7 +33,7 @@ TEST(ADMMSolverTest, box_admmSimpleQP)
     xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 150;
 
     prob.solve(H,h,A,Al,Au,xl,xu);
@@ -41,7 +41,7 @@ TEST(ADMMSolverTest, box_admmSimpleQP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(ADMMSolverTest, box_admmRuizEquilibration)
@@ -65,7 +65,7 @@ TEST(ADMMSolverTest, box_admmRuizEquilibration)
     xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 150;
 
     polympc::RuizEquilibration<Scalar, 2, 1> preconditioner;
@@ -79,7 +79,7 @@ TEST(ADMMSolverTest, box_admmRuizEquilibration)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(ADMMSolverTest, box_admmSinglePrecisionFloat)
@@ -103,7 +103,7 @@ TEST(ADMMSolverTest, box_admmSinglePrecisionFloat)
     xu << Scalar(0.7), Scalar(0.7);
     solution << Scalar(0.3), Scalar(0.7);
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
     prob.settings().max_iter = 150;
 
     prob.solve(H,h,A,Al,Au,xl,xu);
@@ -111,7 +111,7 @@ TEST(ADMMSolverTest, box_admmSinglePrecisionFloat)
 
     EXPECT_TRUE(sol.isApprox(solution, Scalar(1e-2)));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, status_t::SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::status_t::SOLVED);
 }
 
 TEST(ADMMSolverTest, box_admmConstraintViolation)
@@ -135,7 +135,7 @@ TEST(ADMMSolverTest, box_admmConstraintViolation)
     xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
 
     prob.settings().eps_rel = 1e-4;
     prob.settings().eps_abs = 1e-4;
@@ -175,7 +175,7 @@ TEST(ADMMSolverTest, box_admmAdaptiveRho)
     xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
 
     prob.settings().adaptive_rho = false;
     prob.settings().adaptive_rho_interval = 10;
@@ -183,7 +183,7 @@ TEST(ADMMSolverTest, box_admmAdaptiveRho)
     prob.solve(H,h,A,Al,Au,xl,xu);
     Eigen::Vector2d sol = prob.primal_solution();
 
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 
@@ -208,7 +208,7 @@ TEST(ADMMSolverTest, box_admmLox)
     xu << 0.7, 0.7;
     solution << 0.3, 0.7;
 
-    boxADMM<2, 1, Scalar> prob;
+    polympc::boxADMM<2, 1, Scalar> prob;
 
     prob.settings().warm_start = false;
     prob.settings().max_iter = 1000;
@@ -227,7 +227,7 @@ TEST(ADMMSolverTest, box_admmLox)
     auto info = prob.info();
     EXPECT_LT(info.iter, prob.settings().max_iter);
     EXPECT_LT(info.iter, prev_iter); // adaptive rho should improve :)
-    EXPECT_EQ(info.status, SOLVED);
+    EXPECT_EQ(info.status, polympc::SOLVED);
 }
 
 #ifdef EIGEN_NO_DEBUG
@@ -281,7 +281,7 @@ TEST(ADMMSolverTest, box_admmSimpleLP)
     xu <<  1e6;
     solution << -1e6;
 
-    boxADMM<1, 0, Scalar> prob;
+    polympc::boxADMM<1, 0, Scalar> prob;
 
     prob.settings().max_iter = 200;
     prob.settings().alpha = 1.0;
@@ -293,7 +293,7 @@ TEST(ADMMSolverTest, box_admmSimpleLP)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 TEST(ADMMSolverTest, box_admmNonConvex)
@@ -317,7 +317,7 @@ TEST(ADMMSolverTest, box_admmNonConvex)
     dual_guess << 0.1;
 
 
-    boxADMM<1, 0, Scalar> prob;
+    polympc::boxADMM<1, 0, Scalar> prob;
 
     prob.settings().max_iter = 200;
     prob.settings().alpha = 1.0;
@@ -330,7 +330,7 @@ TEST(ADMMSolverTest, box_admmNonConvex)
 
     EXPECT_TRUE(sol.isApprox(solution, 1e-2));
     EXPECT_LT(prob.iter, prob.settings().max_iter);
-    EXPECT_EQ(prob.info().status, SOLVED);
+    EXPECT_EQ(prob.info().status, polympc::SOLVED);
 }
 
 

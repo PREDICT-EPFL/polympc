@@ -26,7 +26,7 @@ static constexpr int NUM_SEGMENTS = 2;
 
 int main()
 {
-    Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0> cheb;
+    polympc::Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, 3, 2, 0> cheb;
     //std::cout << "Nodes: " << cheb.CPoints() << "\n";
     //std::cout << "Weights: " << cheb.QWeights() << "\n";
     //std::cout << "_D : \n" << cheb.D() << "\n";

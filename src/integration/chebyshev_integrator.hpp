@@ -13,6 +13,8 @@
 //#include "chebyshev.hpp"
 #include "../chebyshev.hpp"
 
+namespace polympc {
+
 template<typename ODE, int PolyOrder, int NumSegments, int NX, int NU, int NP>
 class eig_chebyshev_solver{
 
@@ -480,8 +482,6 @@ casadi::DMDict PSODESolver<PolyOrder, NumSegments, NX, NU, NP>::solve_trajectory
     return res;
 }
 
-
-
-
+} // polympc namespace
 
 #endif // CHEBYSHEV_INTEGRATOR_HPP

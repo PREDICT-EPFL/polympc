@@ -29,7 +29,7 @@ POLYMPC_FORWARD_DECLARATION(/*Name*/ RobotOCP, /*NX*/ 3, /*NU*/ 2, /*NP*/ 0, /*N
 
 using namespace Eigen;
 
-class RobotOCP : public ContinuousOCP<RobotOCP, Approximation, SPARSE>
+class RobotOCP : public polympc::ContinuousOCP<RobotOCP, Approximation, polympc::SPARSE>
 {
 public:
     ~RobotOCP() = default;
@@ -89,7 +89,7 @@ public:
 
 int main(void)
 {
-    IpoptInterface<RobotOCP> solver;
+    polympc::IpoptInterface<RobotOCP> solver;
     //solver.get_problem().set_Q_coeff(1.0);
     //solver.get_problem().set_time_limits(0, 2); // another way to set optimisation horizon
     solver.settings().SetIntegerValue("max_iter", 10);

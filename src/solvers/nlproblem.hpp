@@ -15,23 +15,24 @@
 
 #include <iostream>
 
+/** define the macro for forward declarations */
+#define POLYMPC_FORWARD_NLP_DECLARATION( cNAME, cNX, cNE, cNI, cNP, TYPE ) \
+class cNAME;                                        \
+template<>                                          \
+struct polympc::nlp_traits<cNAME>                   \
+{                                                   \
+public:                                             \
+    using Scalar = TYPE;                            \
+    enum { NX = cNX, NE = cNE, NI = cNI, NP = cNP}; \
+};
+
+namespace polympc {
+
 template<int I, int U>
 struct more
 {
     static constexpr bool ret = I > U ? true : false;
 };
-
-
-/** define the macro for forward declarations */
-#define POLYMPC_FORWARD_NLP_DECLARATION( cNAME, cNX, cNE, cNI, cNP, TYPE ) \
-class cNAME;                                        \
-template<>                                          \
-struct nlp_traits<cNAME>                            \
-{                                                   \
-public:                                             \
-    using Scalar = TYPE;                            \
-    enum { NX = cNX, NE = cNE, NI = cNI, NP = cNP}; \
-};                                                  \
 
 /** define derived class traits */
 template<typename Derived> struct nlp_traits;
@@ -670,5 +671,6 @@ void ProblemBase<Derived, MatrixFormat>::constraints_impl(const Eigen::Ref<const
     inequality_constraints<scalar_t>(var, p, _constraints.template tail<NUM_INEQ>());
 }
 
+} // polympc namespace
 
 #endif // NLPROBLEM_HPP

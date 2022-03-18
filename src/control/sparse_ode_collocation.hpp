@@ -18,8 +18,7 @@
 #include <iostream>
 
 
-namespace polympc
-{
+namespace polympc {
 
 template <typename Dynamics, typename Polynomial, int NumSegments = 1>
 class sparse_ode_collocation
@@ -300,7 +299,6 @@ void sparse_ode_collocation<Dynamics, Polynomial, NumSegments>::_linearized_same
     A.diagonal() = m_DiffMat.diagonal() + A.diagonal();
 }
 
-}
-
+} // polympc namespace
 
 #endif // SPARSE_ODE_COLLOCATION_HPP

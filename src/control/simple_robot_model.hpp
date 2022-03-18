@@ -12,6 +12,8 @@
 
 #include "Eigen/Dense"
 
+namespace polympc {
+
 template <typename _Scalar = double>
 struct MobileRobot
 {
@@ -89,5 +91,7 @@ struct Mayer
         value = state.dot(Q.template cast<ScalarT>() * state);
     }
 };
+
+} // polympc namespace
 
 #endif // SIMPLE_ROBOT_MODEL_HPP

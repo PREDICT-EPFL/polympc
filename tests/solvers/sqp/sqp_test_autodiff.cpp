@@ -15,10 +15,10 @@
 /** create solver */
 template<typename Problem> class SQPSolver;
 template<typename Problem>
-class SQPSolver : public SQPBase<SQPSolver<Problem>, Problem>
+class SQPSolver : public polympc::SQPBase<SQPSolver<Problem>, Problem>
 {
 public:
-    using Base = SQPBase<SQPSolver<Problem>, Problem>;
+    using Base = polympc::SQPBase<SQPSolver<Problem>, Problem>;
     using typename Base::scalar_t;
     using typename Base::nlp_variable_t;
     using typename Base::nlp_hessian_t;
@@ -48,7 +48,7 @@ public:
 
 // Constrained Rosenbrock Function
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ ConstrainedRosenbrock, /*NX*/ 2, /*NE*/1, /*NI*/0, /*NP*/0, /*Type*/double);
-class ConstrainedRosenbrock : public ProblemBase<ConstrainedRosenbrock>
+class ConstrainedRosenbrock : public polympc::ProblemBase<ConstrainedRosenbrock>
 {
 public:
     const scalar_t a = 1;
@@ -101,7 +101,7 @@ TEST(SQPTestCase, TestConstrainedRosenbrock)
 
 // Unconstrained Rosenbrock Function
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ Rosenbrock, /*NX*/ 2, /*NE*/0, /*NI*/0, /*NP*/0, /*Type*/double);
-class Rosenbrock : public ProblemBase<Rosenbrock>
+class Rosenbrock : public polympc::ProblemBase<Rosenbrock>
 {
 public:
     const scalar_t a = 1;
@@ -144,7 +144,7 @@ TEST(SQPTestCase, TestRosenbrock) {
 
 // Constrained Rosenbrock Function
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ SimpleNLP, /*NX*/ 2, /*NE*/0, /*NI*/1, /*NP*/0, /*Type*/double);
-class SimpleNLP : public ProblemBase<SimpleNLP>
+class SimpleNLP : public polympc::ProblemBase<SimpleNLP>
 {
 public:
     const scalar_t a = 1;
@@ -198,7 +198,7 @@ TEST(SQPTestCase, TestSimpleNLP)
 
 /** HS071 problem as in Ipopt tutorial */
 POLYMPC_FORWARD_NLP_DECLARATION(/*Name*/ HS071, /*NX*/ 4, /*NE*/1, /*NI*/1, /*NP*/0, /*Type*/double);
-class HS071 : public ProblemBase<HS071>
+class HS071 : public polympc::ProblemBase<HS071>
 {
 public:
     Eigen::Matrix<scalar_t, 4, 1> SOLUTION = {1.00000000, 4.74299963, 3.82114998, 1.37940829};

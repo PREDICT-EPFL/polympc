@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(polympc VERSION 0.0.2)
+project(polympc VERSION 0.1.0)
 
 ## is used, also find other catkin packages
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)

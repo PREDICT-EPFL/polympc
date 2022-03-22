@@ -4,7 +4,7 @@
 Quadratic Programming
 =====================
 
-PolyMPC solves quadratic programs with two-sided linear inequality constraints of the form.
+PolyMPC solves quadratic programs with two-sided linear inequality constraints of the form:
 
 .. math::
    \begin{equation}
@@ -34,9 +34,9 @@ Numerical Methods
 **Alternating Direction Methods of Multipliers (ADMM)**
 
 The ADMM algorithm was chosen for its cheap and well vectorisable iterations that are particularly suitable for embedded applications. We first present a standard splitting
-approach suggested in the literature [Boyd2011]_, [Stellato2020]_, [Stathopoulos2016]_. The key ingredients of the method (similar to other operator splitting methods):
+approach suggested in the literature [Boyd2011]_, [Stellato2020]_, [Stathopoulos2016]_. The key ingredients of the method (similar to other operator splitting methods) are:
 
-* **Splitting step**. Assume for brevity that box contraints are part of the general polytopic constraints :math:`Ax`; here the idea is to "separate" the uncontrained quadratic
+* **Splitting step**. Assume for brevity that box constraints are part of the general polytopic constraints :math:`Ax`; here the idea is to "separate" the unconstrained quadratic
   cost function from the inequality constraints by introducing an auxillary variable :math:`z`:
 
 .. math::
@@ -74,7 +74,7 @@ where :math:`x \in \mathbb{R}^n`, :math:`z \in \mathbb{R}^{m + n}`. :math:`\math
    + \mathcal{I}_{Ax=z}(\tilde{x},\tilde{z})
    + \mathcal{I_C}(z) \\
    &+ \frac{\sigma}{2}\Vert \tilde{x} - x + \sigma^{-1}w \Vert_{2}^2
-   + \frac{\rho}{2}\Vert \tilde{z} - z + \rho^{-1}y |Vert_{2}^2
+   + \frac{\rho}{2}\Vert \tilde{z} - z + \rho^{-1}y \Vert_{2}^2
    \end{array}
    \end{equation}
 
@@ -116,7 +116,7 @@ and :math:`r_{dual} = \Vert Px + q + A^Ty \Vert_\infty`
 For dense problems with box constraints the splitting described before is not very efficient due to the potentially large number of zero
 values in :math:`A` and the linear system at the step (1) in ADMM iterations that have to be stored. We therefore implement
 an additional splitting which aims at reducing memory consumption and better vectorisation -- *boxADMM*. The method treats general polytopic
-constraints and box differently which results in better performance especially for dense QPs.
+and box constraints differently which results in better performance especially for dense QPs.
 
 
 Interfacing Other Solvers

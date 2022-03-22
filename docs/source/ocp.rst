@@ -236,12 +236,12 @@ using *PolyMPC*.
             /** initialise weight matrices to identity (for example)*/
             Q.setIdentity();
             R.setIdentity();
-            QN.setIdentity;
+            QN.setIdentity();
         }
 
         Matrix<scalar_t, 3, 3> Q;
         Matrix<scalar_t, 2, 2> R;
-        Eigen::DiagonalMatrix<scalar_t, 3> QN{1,1,1};
+        Matrix<scalar_t, 3, 3> QN;
 
         template<typename T>
         inline void dynamics_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
@@ -330,12 +330,12 @@ Let's now move on to defining the dynamics functions.
             /** initialise weight matrices to identity (for example)*/
             Q.setIdentity();
             R.setIdentity();
-            QN.setIdentity;
+            QN.setIdentity();
         }
 
         Matrix<scalar_t, 3, 3> Q;
         Matrix<scalar_t, 2, 2> R;
-        Eigen::DiagonalMatrix<scalar_t, 3> QN{1,1,1};
+        Matrix<scalar_t, 3, 3> QN;
 
         template<typename T>
         inline void dynamics_impl(const Ref<const state_t<T>> x, const Ref<const control_t<T>> u,
@@ -442,8 +442,8 @@ this problem as described in :ref:`chapter-nlp` chapter. We create a nonlinear s
     using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::scalar_t,
                                     RobotOCP::MATRIXFMT, linear_solver_traits<RobotOCP::MATRIXFMT>::default_solver>;
 
-    using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE,
-                                                        RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
+    using preconditioner_t = RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE,
+                                               RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
     int main(void)
     {
@@ -505,7 +505,7 @@ Here is how our particular example will look like with the MPC wrapper:
     int main(void)
     {
         /** create an MPC algorithm and set the prediction horison */
-        using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
+        using mpc_t = MPC<RobotOCP, Solver, box_admm_solver>;
         mpc_t mpc;
         mpc.settings().max_iter = 20;
         mpc.settings().line_search_max_iter = 10;

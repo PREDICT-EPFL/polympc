@@ -43,4 +43,10 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(ocp_rewrite_test ocp_rewrite_test.cpp)
   target_link_libraries(ocp_rewrite_test Eigen3::Eigen)
 
+  add_executable(pendulum_ocp_rewrite_test pendulum_ocp_rewrite_test.cpp)
+  target_link_libraries(pendulum_ocp_rewrite_test ${Ipopt_LIBRARIES} Eigen3::Eigen)
+
+  add_executable(pendulum_ocp_test pendulum_ocp_test.cpp)
+  target_link_libraries(pendulum_ocp_test ${Ipopt_LIBRARIES} Eigen3::Eigen)
+
 endif()

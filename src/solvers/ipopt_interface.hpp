@@ -434,8 +434,8 @@ public:
     EIGEN_STRONG_INLINE const nlp_settings_t& settings() const noexcept { return *(m_app->Options()); }
     EIGEN_STRONG_INLINE nlp_settings_t& settings() noexcept { return *(m_app->Options()); }
 
-    EIGEN_STRONG_INLINE const Problem& get_problem() const noexcept { return *(m_problem); }
-    EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return *(m_problem); }
+    EIGEN_STRONG_INLINE const Problem& get_problem() const noexcept { return m_problem->problem; }
+    EIGEN_STRONG_INLINE Problem& get_problem() noexcept { return m_problem->problem; }
 
     EIGEN_STRONG_INLINE const ipopt_info_t& info() const noexcept { return m_info; }
     EIGEN_STRONG_INLINE ipopt_info_t& info() noexcept { return m_info; }

@@ -17,7 +17,7 @@ enum quadrature_t {
     GAUSS_LOBATTO
 };
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat = DENSE, quadrature_t QuadType = CLENSHAW_CURTIS>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat = DENSE, quadrature_t QuadType = CLENSHAW_CURTIS, bool CollocLast = false>
 class CollocationTranscription : public OCP
 {
 public:
@@ -61,7 +61,7 @@ public:
 
         /** NLP dimensions */
         VAR_SIZE  = VARX_SIZE + VARU_SIZE + VARP_SIZE,
-        NUM_EQ    = VARX_SIZE,
+        NUM_EQ    = CollocLast ? VARX_SIZE : VARX_SIZE - NX,
         NUM_INEQ  = NG * NUM_NODES,
         NUM_BOX   = VAR_SIZE,
         DUAL_SIZE = NUM_EQ + NUM_INEQ + NUM_BOX,
@@ -313,23 +313,38 @@ public:
 
         if(NUM_SEGMENTS < 2)
         {
-            m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
-            return;
+            if (CollocLast)
+            {
+                m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
+            } else
+            {
+                using diff_mat_tilde_t = Eigen::Matrix<scalar_t, PolyOrder, PolyOrder + 1>;
+                m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_tilde_t, Eigen::SparseMatrix<scalar_t>>(m_D.template topLeftCorner<POLY_ORDER, POLY_ORDER + 1>(), E);
+            }
         }
         else
         {
-            Eigen::Matrix<scalar_t, NUM_NODES, NUM_NODES> DM; DM.setZero();
-            DM.template bottomRightCorner<POLY_ORDER + 1, POLY_ORDER + 1>() = m_D;
+            Eigen::Matrix<scalar_t, CollocLast ? NUM_NODES : NUM_NODES -  1, NUM_NODES> DM;
+            DM.setZero();
+
             for(int k = 0; k < (NUM_SEGMENTS - 1) * POLY_ORDER; k += POLY_ORDER)
+            {
                 DM.template block<POLY_ORDER, POLY_ORDER + 1>(k, k) = m_D.template topLeftCorner<POLY_ORDER, POLY_ORDER + 1>();
+            }
+
+            if (CollocLast)
+            {
+                DM.template bottomRightCorner<POLY_ORDER + 1, POLY_ORDER + 1>() = m_D;
+            } else
+            {
+                DM.template bottomRightCorner<POLY_ORDER, POLY_ORDER + 1>() = m_D.template topLeftCorner<POLY_ORDER, POLY_ORDER + 1>();
+            }
 
             Eigen::SparseMatrix<scalar_t> SpDM = DM.sparseView().pruned(std::numeric_limits<scalar_t>::epsilon());
             SpDM.makeCompressed();
 
             m_DiffMat = Eigen::KroneckerProductSparse<Eigen::SparseMatrix<scalar_t>, Eigen::SparseMatrix<scalar_t>>(SpDM, E);
             m_DiffMat.makeCompressed();
-
-            return;
         }
     }
 
@@ -337,19 +352,39 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type estimate_eq_jac_inner_nnz() noexcept
     {
         m_eq_jac_inner_nnz = Eigen::VectorXi::Zero(VAR_SIZE);
-        m_eq_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
+        // dynamics entries
+        if (CollocLast)
+        {
+            // all points are collocated
+            m_eq_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
+        }
+        else
+        {
+            // last points are not collocated
+            m_eq_jac_inner_nnz. template head<VARX_SIZE - NX>() = Eigen::VectorXi::Constant(VARX_SIZE - NX, NX);
+            m_eq_jac_inner_nnz. template segment<VARU_SIZE - NU>(VARX_SIZE) = Eigen::VectorXi::Constant(VARU_SIZE - NU, NX);
+        }
         m_eq_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
 
         // add diff matrix entries
         for(Eigen::Index i = 0; i < NUM_NODES; i++)
         {
+            // only POLY_ORDER - 1 because there is 1 nnz overlap with dynamics
             m_eq_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER - 1);
             if((i != 0) && (i != (NUM_NODES-1)) && (i % POLY_ORDER) == 0)
                 m_eq_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER);
         }
-
-        m_eq_jac_inner_nnz. template segment<(POLY_ORDER + 1) * NX>((NUM_NODES - (POLY_ORDER + 1)) * NX) +=
-                Eigen::VectorXi::Ones((POLY_ORDER + 1) * NX);
+        if (CollocLast)
+        {
+            // last collocation node
+            m_eq_jac_inner_nnz. template segment<(POLY_ORDER + 1) * NX>((NUM_NODES - (POLY_ORDER + 1)) * NX) +=
+                    Eigen::VectorXi::Ones((POLY_ORDER + 1) * NX);
+        }
+        else
+        {
+            // add back 1 nnz for last node
+            m_eq_jac_inner_nnz. template segment<NX>(VARX_SIZE - NX) += Eigen::VectorXi::Constant(NX, 1);
+        }
     }
 
     // estimate number of non-zeros in Hessian
@@ -408,6 +443,55 @@ public:
         for(Eigen::Index k = 0; k < src.outerSize(); ++k)
             for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(src, k); it; ++it)
                 dst.insert(row_offset + it.row(), col_offset + it.col()) = it.value();
+    }
+
+    template<class InputIt, class Size, int T = MatrixFormat>
+    EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
+    copy_n_sparse(InputIt first, Size count, Eigen::SparseMatrix<scalar_t>& dst, const Eigen::Index &col, const Eigen::Index &offset)
+    {
+#ifndef EIGEN_NO_DEBUG
+        // assert col exists
+        eigen_assert(col < dst.outerSize());
+        // uncompressed
+        if (dst.innerNonZeroPtr() != 0)
+        {
+            // assert not writing outside memory
+            eigen_assert(count + offset <= dst.innerNonZeroPtr()[col]);
+        }
+        // compressed
+        else
+        {
+            // assert not writing outside memory
+            eigen_assert(dst.outerIndexPtr()[col] + offset < dst.nonZeros());
+        }
+#endif
+        std::copy_n(first, count, dst.valuePtr() + dst.outerIndexPtr()[col] + offset);
+    }
+
+    template<class InputIt, class Size, int T = MatrixFormat>
+    EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type
+    add_n_sparse(InputIt first, Size count, Eigen::SparseMatrix<scalar_t>& dst, const Eigen::Index &col, const Eigen::Index &offset)
+    {
+#ifndef EIGEN_NO_DEBUG
+        // assert col exists
+        eigen_assert(col < dst.outerSize());
+        // uncompressed
+        if (dst.innerNonZeroPtr() != 0)
+        {
+            // assert not writing outside memory
+            eigen_assert(count + offset <= dst.innerNonZeroPtr()[col]);
+        }
+            // compressed
+        else
+        {
+            // assert not writing outside memory
+            eigen_assert(dst.outerIndexPtr()[col] + offset < dst.nonZeros());
+        }
+#endif
+        std::transform(dst.valuePtr() + dst.outerIndexPtr()[col] + offset,
+                       dst.valuePtr() + dst.outerIndexPtr()[col] + offset + count,
+                       first, dst.valuePtr() + dst.outerIndexPtr()[col] + offset,
+                       std::plus<scalar_t>());
     }
 
     /** @brief
@@ -681,8 +765,8 @@ public:
     }
 };
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::seed_derivatives()
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::seed_derivatives()
 {
     const int deriv_num = NX + NU + NP;
     int deriv_idx = 0;
@@ -729,8 +813,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                Eigen::Ref<nlp_eq_constraints_t> constraint) const noexcept
 {
@@ -748,7 +832,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 
     int n = 0;
     int t = 0;
-    for(int k = 0; k < VARX_SIZE; k += NX)
+    for(int k = 0; k < (CollocLast ? VARX_SIZE : VARX_SIZE - NX); k += NX)
     {
         dynamics<scalar_t>(var.template segment<NX>(k), var.template segment<NU>(n + VARX_SIZE),
                            var.template segment<NP>(VARX_SIZE + VARU_SIZE), p, time_nodes(t), f_res);
@@ -760,8 +844,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 // evaluate constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                  const Eigen::Ref<const static_parameter_t>& p,
                                                                                                  Eigen::Ref<nlp_ineq_constraints_t> constraint) const noexcept
 {
@@ -776,8 +860,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 // evaluate combined constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                 const Eigen::Ref<const static_parameter_t>& p,
                                                                                                 Eigen::Ref<nlp_constraints_t> constraint) const noexcept
 {
@@ -785,10 +869,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     this->inequalities(var, p, constraint.template tail<NUM_INEQ>()); // why???
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
                                                                                                      Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                      Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
@@ -803,10 +887,11 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::e
     Eigen::Matrix<scalar_t, NUM_NODES, NX> DX;
 
     for(int i = 0; i < NUM_SEGMENTS; ++i)
+    {
         DX.template block<POLY_ORDER + 1, NX>(i*POLY_ORDER, 0).noalias() = m_D * lox.template block<NX, POLY_ORDER + 1>(0, i*POLY_ORDER).transpose();
+    }
 
     /** add Diff matrix to the Jacobian */
-
     Eigen::DiagonalMatrix<scalar_t, NX> I; I.setIdentity();
     for(int s = 0; s < NUM_SEGMENTS; s++)
     {
@@ -815,35 +900,27 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::e
             for(int j = 0; j < POLY_ORDER + 1; j++)
             {
                 int shift = s * POLY_ORDER * NX;
-                jacobian.template block<NX, NX>(shift + i * NX, shift + j * NX) = m_D(i,j) * I;
+                jacobian.template block<NX, NX>(shift + i * NX, shift + j * NX) = m_D(i, j) * I;
             }
         }
     }
 
-
-    /** add Diff matrix to the Jacobian */
-    /**
-    Eigen::DiagonalMatrix<scalar_t, NX> I; I.setIdentity();
-    for(int i = 0; i < POLY_ORDER; i++)
+    // last node
+    if (CollocLast)
     {
+        int shift = (NUM_SEGMENTS - 1) * POLY_ORDER * NX;
+        int i = POLY_ORDER;
         for(int j = 0; j < POLY_ORDER + 1; j++)
-            jacobian.template block<NX, NX>(i * NX, j * NX) = m_D(i,j) * I;
+        {
+            jacobian.template block<NX, NX>(shift + i * NX, shift + j * NX) = m_D(i, j) * I;
+        }
     }
-
-    for(int s = 1; s < NUM_SEGMENTS; s++)
-        jacobian.template block<NX * POLY_ORDER, NX * (POLY_ORDER + 1)>( s * POLY_ORDER * NX, s * POLY_ORDER * NX) =
-                jacobian.template block<NX * POLY_ORDER, NX * (POLY_ORDER + 1)>(0,0);
-    */
-
-    //last segment
-    jacobian.template block<NX, NX * (POLY_ORDER + 1)>(VARX_SIZE - NX, VARX_SIZE - (NX * (POLY_ORDER + 1))) =
-            -jacobian.template block<NX, NX * (POLY_ORDER + 1)>(0,0).reverse();
 
     /** initialize AD veriables */
     int n = 0;
     int t = 0;
     m_ad_p = var.template segment<NP>(VARX_SIZE + VARU_SIZE);
-    for(int k = 0; k < VARX_SIZE; k += NX)
+    for(int k = 0; k < (CollocLast ? VARX_SIZE : VARX_SIZE - NX); k += NX)
     {
         m_ad_x = var.template segment<NX>(k);
         m_ad_u = var.template segment<NU>(n + VARX_SIZE);
@@ -851,7 +928,7 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::e
         dynamics<ad_scalar_t>(m_ad_x, m_ad_u, m_ad_p, p, time_nodes(t), m_ad_y);
 
         /** compute value and first derivatives */
-        for(int i = 0; i< NX; i++)
+        for(int i = 0; i < NX; i++)
         {
             constraint. template segment<NX>(k)(i) = -t_scale * m_ad_y(i).value();
             jac.row(i) = m_ad_y(i).derivatives();
@@ -871,10 +948,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::e
 
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
                                                                                                      Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                      nlp_eq_jacobian_t &jacobian) noexcept
@@ -886,8 +963,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::e
 }
 
 /** sparse linearisation */
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                   const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                   Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                                   nlp_eq_jacobian_t &jacobian) noexcept
@@ -903,13 +980,15 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     Eigen::Matrix<scalar_t, NUM_NODES, NX> DX;
 
     for(int i = 0; i < NUM_SEGMENTS; ++i)
+    {
         DX.template block<POLY_ORDER + 1, NX>(i*POLY_ORDER, 0).noalias() = m_D * lox.template block<NX, POLY_ORDER + 1>(0, i*POLY_ORDER).transpose();
+    }
 
     /** initialize AD veriables */
     int n = 0;
     int t = 0;
     m_ad_p = var.template segment<NP>(VARX_SIZE + VARU_SIZE);
-    for(int k = 0; k < VARX_SIZE; k += NX)
+    for(int k = 0; k < (CollocLast ? VARX_SIZE : VARX_SIZE - NX); k += NX)
     {
         m_ad_x = var.template segment<NX>(k);
         m_ad_u = var.template segment<NU>(n + VARX_SIZE);
@@ -943,13 +1022,12 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
         t++;
     }
 
-    //jacobian.makeCompressed();
     jacobian.template leftCols<VARX_SIZE>() += m_DiffMat;
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                          const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                          Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                                          nlp_eq_jacobian_t &jacobian) noexcept
@@ -964,14 +1042,16 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     Eigen::Matrix<scalar_t, NUM_NODES, NX> DX;
 
     for(int i = 0; i < NUM_SEGMENTS; ++i)
+    {
         DX.template block<POLY_ORDER + 1, NX>(i*POLY_ORDER, 0).noalias() = m_D * lox.template block<NX, POLY_ORDER + 1>(0, i*POLY_ORDER).transpose();
+    }
 
     /** initialize AD veriables */
     int n = 0;
     int t = 0;
     int nnz_count = 0;
     m_ad_p = var.template segment<NP>(VARX_SIZE + VARU_SIZE);
-    for(int k = 0; k < VARX_SIZE; k += NX)
+    for(int k = 0; k < (CollocLast ? VARX_SIZE : VARX_SIZE - NX); k += NX)
     {
         m_ad_x = var.template segment<NX>(k);
         m_ad_u = var.template segment<NU>(n + VARX_SIZE);
@@ -994,15 +1074,14 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 
         /** copy state sensitivities */
         for(int j = 0; j < NX; ++j)
-            std::copy_n(jac.col(j).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[k + j] + nnz_count);
+            copy_n_sparse(jac.col(j).data(), NX, jacobian, k + j, nnz_count);
 
         /** copy control sensitivities */
-        //for(int j = 0; j < NU; ++j)
-        //    std::copy_n(jac.col(j + NX).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + n + VARX_SIZE]);
-        std::copy_n(jac.template block<NX, NU>(0, NX).data(), NX * NU, jacobian.valuePtr() + jacobian.outerIndexPtr()[n + VARX_SIZE]);
+        for(int j = 0; j < NU; ++j)
+            copy_n_sparse(jac.col(j + NX).data(), NX, jacobian, j + n + VARX_SIZE, 0);
 
         for(int j = 0; j < NP; ++j)
-            std::copy_n(jac.col(j + NX + NU).data(), NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + VARX_SIZE + VARU_SIZE] + t * NX);
+            copy_n_sparse(jac.col(j + NX + NU).data(), NX, jacobian, j + VARX_SIZE + VARU_SIZE, t * NX);
 
         ++nnz_count;
 
@@ -1010,15 +1089,14 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
         t++;
     }
 
-    //jacobian.makeCompressed();
+    // instead of overwriting m_DiffMat completely we just update the changed parts on the diagonal
     jacobian.diagonal() += m_DiffMat.diagonal();
-    //jacobian.template leftCols<VARX_SIZE>() += m_DiffMat;
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                        const Eigen::Ref<const static_parameter_t> &p,
                                                                                                        Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                        Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
@@ -1026,10 +1104,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::i
     _inequalities_linearised_dense(var, p, constraint, jacobian);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                        const Eigen::Ref<const static_parameter_t> &p,
                                                                                                        Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                        nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1041,9 +1119,9 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::i
 }
 
 //sparse linearisation
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int N> typename std::enable_if<(N > 0)>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                                nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1084,9 +1162,9 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template <int N> typename std::enable_if<(N > 0)>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                       Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                                       nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1112,23 +1190,25 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_
         }
 
         /** copy state sensitivities */
-        std::copy_n(jac.template block<NG, NX>(0, 0).data(), NG * NX, jacobian.valuePtr() + jacobian.outerIndexPtr()[k * NX]);
+        for(int j = 0; j < NX; ++j)
+            copy_n_sparse(jac.col(j).data(), NG, jacobian, j + k * NX, 0);
 
         /** copy control sensitivities */
-        std::copy_n(jac.template block<NG, NU>(0, NX).data(), NG * NU, jacobian.valuePtr() + jacobian.outerIndexPtr()[k * NU + VARX_SIZE]);
+        for(int j = 0; j < NU; ++j)
+            copy_n_sparse(jac.col(j + NX).data(), NG, jacobian, j + k * NU + VARX_SIZE, 0);
 
         /** @bug: iterate over NP columns */
         for(int j = 0; j < NP; ++j)
-            std::copy_n(jac.col(j + NX + NU).data(), NG, jacobian.valuePtr() + jacobian.outerIndexPtr()[j + VARX_SIZE + VARU_SIZE] + k * NG);
+            copy_n_sparse(jac.col(j + NX + NU).data(), NG, jacobian, j + VARX_SIZE + VARU_SIZE, k * NG);
     }
 }
 
 
 // linearise combined constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                       Eigen::Ref<nlp_constraints_t> constraint,
                                                                                                       Eigen::Ref<nlp_jacobian_t> jacobian) noexcept
@@ -1137,10 +1217,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::c
     this->inequalities_linearised(var, p, constraint.template tail<NUM_INEQ>(), jacobian.bottomRows(NUM_INEQ)); // why???
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                       Eigen::Ref<nlp_constraints_t> constraint,
                                                                                                       nlp_jacobian_t &jacobian) noexcept
@@ -1161,19 +1241,19 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::c
         // copy Je and Ji blocks to jac_g
         if(NUM_EQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jacobian.valuePtr() + jacobian.outerIndexPtr()[k]);
+                copy_n_sparse(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jacobian, k, 0);
 
         if(NUM_INEQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
-                            jacobian.valuePtr() + jacobian.outerIndexPtr()[k] + m_Je.innerNonZeroPtr()[k]);
+                copy_n_sparse(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
+                              jacobian, k, m_Je.innerNonZeroPtr()[k]);
     }
 }
 
 
 /** cost computation */
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                          const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
 {
     cost = scalar_t(0);
@@ -1200,8 +1280,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     cost += cost_i;
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                   const Eigen::Ref<const static_parameter_t> &p,
                                                                                                   scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
 {
@@ -1244,10 +1324,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                      const Eigen::Ref<const static_parameter_t>& p,
                                                                                                      scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                      Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept
@@ -1360,10 +1440,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::c
     cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE + VARU_SIZE - NU) += hes.template block<NP, NU>(NX + NU, NX);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                      const Eigen::Ref<const static_parameter_t>& p,
                                                                                                      scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                      nlp_hessian_t& cost_hessian) noexcept
@@ -1374,8 +1454,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::c
         _cost_grad_hess_sparse_update(var, p, cost, cost_gradient, cost_hessian);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                            const Eigen::Ref<const static_parameter_t>& p,
                                                                                                            scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                            nlp_hessian_t& cost_hessian) noexcept
@@ -1435,80 +1515,49 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
                 /** dx^2 */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j],
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j],
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data(), NX, cost_hessian, (k + shift) * NX + j, 0);
                 }
                 /** dxdu */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j],
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j],
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data(), NX, cost_hessian, (k + shift) * NU + VARX_SIZE + j, 0);
                 }
                 /** dxdp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX + NX,
-                                   hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data(), NX, cost_hessian, VARX_SIZE + VARU_SIZE + j, (k + shift) * NX);
                 }
                 /** du^2 */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX + NU,
-                                   hes.col(j + NX).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data() + NX, NU, cost_hessian, (k + shift) * NU + VARX_SIZE + j, NX);
                 }
                 /** dudx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   hes.col(j).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data() + NX, NU, cost_hessian, (k + shift) * NX + j, NX);
                 }
                 /** dudp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU + NU,
-                                   hes.col(j + NX + NU).data() + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + (k + shift) * NU);
                 }
                 /** dp^2 */
                 /**
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                                   hes.col(j + NX + NU).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX + NU, NP, cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
                 }*/
 
                 /** dpdx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU + NP,
-                                   hes.col(j).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data() + NX + NU, NP, cost_hessian, (k + shift) * NX + j, NX + NU);
                 }
                 /** dpdu */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU + NP,
-                                   hes.col(j + NX).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data() + NX + NU, NP, cost_hessian, (k + shift) * NU + j + VARX_SIZE, NX + NU);
                 }
             } else
             {
@@ -1604,83 +1653,52 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     /** dx^2 */
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
-                       hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j).data(), NX, cost_hessian, VARX_SIZE - NX + j, 0);
     }
     /** dxdu */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
-                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX).data(), NX, cost_hessian, VARX_SIZE + VARU_SIZE - NU + j, 0);
     }
     /** dxdp */
     for(Eigen::Index j = 0; j < NP; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX + NX,
-                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data(), NX, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE - NX);
     }
     /** du^2 */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
-                       hes.col(j + NX).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX).data(), NU, cost_hessian, VARX_SIZE + VARU_SIZE - NU + j, NX);
     }
     /** dudx */
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
-                       hes.col(j).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j).data() + NX, NU, cost_hessian, VARX_SIZE - NX + j, NX);
     }
     /** dudp */
     for(Eigen::Index j = 0; j < NP; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU + NU,
-                       hes.col(j + NX + NU).data() + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + VARU_SIZE - NU);
     }
     /** dp^2 */
     for(Eigen::Index j = 0; j < NP; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                       hes.col(j + NX + NU).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data() + NX + NU, NP, cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
     }
     /** dpdx */
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU + NP,
-                       hes.col(j).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j).data() + NX + NU, NP, cost_hessian, VARX_SIZE - NX + j, NX + NU);
     }
     /** dpdu */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU + NP,
-                       hes.col(j + NX).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX).data() + NX + NU, NP, cost_hessian, VARX_SIZE + VARU_SIZE - NU + j, NX + NU);
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                                   const Eigen::Ref<const static_parameter_t>& p,
                                                                                                                   scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                                   nlp_hessian_t& cost_hessian) noexcept
@@ -1737,96 +1755,65 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
                 /** dx^2 */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j],
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j],
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data(), NX, cost_hessian, (k + shift) * NX + j, 0);
                 }
                 /** dxdu */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j],
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j],
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data(), NX, cost_hessian, (k + shift) * NU + VARX_SIZE + j, 0);
                 }
                 /** dxdp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX + NX,
-                                   hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + (k + shift) * NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data(), NX, cost_hessian, VARX_SIZE + VARU_SIZE + j, (k + shift) * NX);
                 }
                 /** du^2 */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX + NU,
-                                   hes.col(j + NX).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j] + NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data() + NX, NU, cost_hessian, (k + shift) * NU + VARX_SIZE + j, NX);
                 }
                 /** dudx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   hes.col(j).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data() + NX, NU, cost_hessian, (k + shift) * NX + j, NX);
                 }
                 /** dudp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU + NU,
-                                   hes.col(j + NX + NU).data() + NX,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + (k + shift) * NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + (k + shift) * NU);
                 }
                 /** dp^2 */
                 /**
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                                   hes.col(j + NX + NU).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX + NU, NP, cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
                 } */
                 /** dpdx */
                 for(Eigen::Index j = 0; j < NX; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU + NP,
-                                   hes.col(j).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j] + NX + NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j).data() + NX + NU, NP, cost_hessian, (k + shift) * NX + j, NX + NU);
                 }
                 /** dpdu */
                 for(Eigen::Index j = 0; j < NU; ++j)
                 {
-                    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU + NP,
-                                   hes.col(j + NX).data() + NX + NU,
-                                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + j + VARX_SIZE] + NX + NU,
-                                   std::plus<scalar_t>());
+                    add_n_sparse(hes.col(j + NX).data() + NX + NU, NP, cost_hessian, (k + shift) * NU + j + VARX_SIZE, NX + NU);
                 }
             } else
             {
                 /** copy content by columns where possible*/
                 for (Eigen::Index j = 0; j < NX; ++j)
-                    std::copy_n(hes.col(j).data(), NX + NU + NP, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NX + j]);
+                    copy_n_sparse(hes.col(j).data(), NX + NU + NP, cost_hessian, (k + shift) * NX + j, 0);
 
                 for (Eigen::Index j = 0; j < NU; ++j)
-                    std::copy_n(hes.col(j + NX).data(), NX + NU + NP,
-                                cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[(k + shift) * NU + VARX_SIZE + j]);
+                    copy_n_sparse(hes.col(j + NX).data(), NX + NU + NP,
+                                  cost_hessian, (k + shift) * NU + VARX_SIZE + j, 0);
 
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    std::copy_n(hes.col(j + NX + NU).data(), NX,
-                                cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + (k + shift) * NX);
-                    std::copy_n(hes.col(j + NX + NU).data() + NX, NU,
-                                cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + (k + shift) * NU);
+                    copy_n_sparse(hes.col(j + NX + NU).data(), NX,
+                                  cost_hessian, VARU_SIZE + VARX_SIZE + j, (k + shift) * NX);
+                    copy_n_sparse(hes.col(j + NX + NU).data() + NX, NU,
+                                  cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + (k + shift) * NU);
                 }
 
             }
@@ -1837,8 +1824,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 
     // copy pp portion
     for(Eigen::Index j = 0; j < NP; ++j)
-        std::copy_n(hes_pp.col(j).data(), NP,
-                    cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE);
+        copy_n_sparse(hes_pp.col(j).data(), NP,
+                      cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
 
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
@@ -1862,47 +1849,32 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     // add values by columns when possible
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU + NP,
-                       hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j).data(), NX + NU + NP, cost_hessian, VARX_SIZE - NX + j, 0);
     }
 
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU + NP,
-                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX).data(), NX + NU + NP, cost_hessian, VARX_SIZE + VARU_SIZE - NU + j, 0);
     }
 
 
     for(Eigen::Index j = 0; j < NP; ++j)
     {
         /** dxdp */
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX + NX,
-                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data(), NX, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE - NX);
+
         /** dudp */
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU + NU,
-                       hes.col(j + NX + NU).data() + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + VARU_SIZE - NU);
+
         /** dp^2 */
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                       hes.col(j + NX + NU).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                       std::plus<scalar_t>());
+        add_n_sparse(hes.col(j + NX + NU).data() + NX + NU, NP, cost_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
     }
 
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) noexcept
 {
@@ -1917,8 +1889,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
      * we do not need Lagrangian itself for optimisation itself, so this function can be safely skipped (optimise later)*/
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                Eigen::Ref<nlp_constraints_t> g) noexcept
@@ -1930,8 +1902,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     _lagrangian += g.dot(lam.template head<NUM_EQ + NUM_INEQ>()) + var.dot(lam.template tail<NUM_BOX>());
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                         const Eigen::Ref<const static_parameter_t> &p,
                                                                                                         const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
                                                                                                         Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
@@ -1950,10 +1922,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     lag_gradient += lam.template tail<VAR_SIZE>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                    const Eigen::Ref<const static_parameter_t>& p,
                                                                                                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                    Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -1970,10 +1942,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                    const Eigen::Ref<const static_parameter_t>& p,
                                                                                                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                    Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -1997,12 +1969,12 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
         // copy Je and Ji blocks to jac_g
         if(NUM_EQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jac_g.valuePtr() + jac_g.outerIndexPtr()[k]);
+                copy_n_sparse(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jac_g, k, 0);
 
         if(NUM_INEQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
-                            jac_g.valuePtr() + jac_g.outerIndexPtr()[k] + m_Je.innerNonZeroPtr()[k]);
+                copy_n_sparse(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
+                              jac_g, k, m_Je.innerNonZeroPtr()[k]);
     }
 
     //_lagrangian += g.dot(lam.template head<NUM_EQ>());
@@ -2012,8 +1984,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                                 const Eigen::Ref<const static_parameter_t>& p,
                                                                                                                 const Eigen::Ref<const nlp_dual_t>& lam,
                                                                                                                 scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -2090,10 +2062,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                            const Eigen::Ref<const static_parameter_t> &p,
                                                                                                            const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                                                            Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
@@ -2169,10 +2141,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                                                                                            const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                            Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                                                            nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
@@ -2196,12 +2168,12 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
         // copy Je and Ji blocks to jac_g
         if(NUM_EQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jac_g.valuePtr() + jac_g.outerIndexPtr()[k]);
+                copy_n_sparse(m_Je.valuePtr() + m_Je.outerIndexPtr()[k], m_Je.innerNonZeroPtr()[k], jac_g, k, 0);
 
         if(NUM_INEQ > 0)
             for(Eigen::Index k = 0; k < VAR_SIZE; ++k)
-                std::copy_n(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
-                            jac_g.valuePtr() + jac_g.outerIndexPtr()[k] + m_Je.innerNonZeroPtr()[k]);
+                copy_n_sparse(m_Ji.valuePtr() + m_Ji.outerIndexPtr()[k], m_Ji.innerNonZeroPtr()[k],
+                              jac_g, k, m_Je.innerNonZeroPtr()[k]);
     }
 
 
@@ -2257,50 +2229,34 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::l
         // add values by columns when possible
         for(Eigen::Index j = 0; j < NX; ++j)
         {
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j] + NX + NU + NP,
-                           hes.col(j).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NX + j],
-                           std::plus<scalar_t>());
+            add_n_sparse(hes.col(j).data(), NX + NU + NP, lag_hessian, k * NX + j, 0);
         }
 
         for(Eigen::Index j = 0; j < NU; ++j)
         {
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX + NU + NP,
-                           hes.col(j + NX).data(),  lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
-                           std::plus<scalar_t>());
+            add_n_sparse(hes.col(j + NX).data(), NX + NU + NP, lag_hessian, k * NU + VARX_SIZE + j, 0);
         }
 
-        /** dxdp */
         for(Eigen::Index j = 0; j < NP; ++j)
         {
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX + NX,
-                           hes.col(j + NX + NU).data(), lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + k * NX,
-                           std::plus<scalar_t>());
+            /** dxdp */
+            add_n_sparse(hes.col(j + NX + NU).data(), NX, lag_hessian, VARX_SIZE + VARU_SIZE + j, k * NX);
 
             /** dudp */
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU + NU,
-                           hes.col(j + NX + NU).data() + NX,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + k * NU,
-                           std::plus<scalar_t>());
+            add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, lag_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + k * NU);
+
             /** dp^2 */
-            std::transform(lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                           hes.col(j + NX + NU).data() + NX + NU,
-                           lag_hessian.valuePtr() + lag_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                           std::plus<scalar_t>());
+            add_n_sparse(hes.col(j + NX + NU).data() + NX + NU, NP, lag_hessian, VARU_SIZE + VARX_SIZE + j, VARX_SIZE + VARU_SIZE);
         }
 
     }
 }
 
 // sparsity preserving block BFGS update
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
                                                                                                    const Eigen::Ref<const nlp_variable_t> y) const noexcept
 {
     //std::cout << "s: " << s.transpose() << "\n";
@@ -2358,15 +2314,20 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::h
                            hessian.valuePtr() + hessian.outerIndexPtr()[k * NX + j] + NX + NU,
                            hes_ux.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[k * NX + j] + NX,
                            std::plus<scalar_t>());
+
+//            add_n_sparse(hes_xx.col(j).data(), NX, hessian, k * NX + j, 0);
+//            add_n_sparse(hes_ux.col(j).data(), NU, hessian, k * NX + j, NX);
         }
 
         for(Eigen::Index j = 0; j < NU; ++j)
         {
+            // add_n_sparse(hes_xu.col(j).data(), NX, hessian, k * NU + VARX_SIZE + j, 0);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
                            hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX,
                            hes_xu.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j],
                            std::plus<scalar_t>());
 
+            // add_n_sparse(hes_uu.col(j).data(), NU, hessian, k * NU + VARX_SIZE + j, NX);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX,
                            hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX + NU,
                            hes_uu.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[k * NU + VARX_SIZE + j] + NX,
@@ -2403,11 +2364,13 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::h
 
         for(Eigen::Index j = 0; j < NP; ++j)
         {
+            // add_n_sparse(hes_ap.col(j).data(), VARX_SIZE + VARU_SIZE, hessian, VARX_SIZE + VARU_SIZE + j, 0);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
                            hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
                            hes_ap.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
                            std::plus<scalar_t>());
 
+            // add_n_sparse(hes_pp.col(j).data(), NP, hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + VARU_SIZE);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
                            hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
                            hes_pp.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
@@ -2418,6 +2381,7 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::h
         for(Eigen::Index j = 0; j < VARX_SIZE + VARU_SIZE; ++j)
         {
             tmp = hes_ap.row(j);
+            // add_n_sparse(tmp.data(), NP, hessian, j, NX + NU);
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU,
                            hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU + NP,
                            tmp.data(), hessian.valuePtr() + hessian.outerIndexPtr()[j] + NX + NU,

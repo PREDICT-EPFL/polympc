@@ -69,7 +69,7 @@ public:
 const int POLY_ORDER = 5;
 const int NUM_SEG = 2;
 
-using TranscribedRobotOCP = CollocationTranscription<RobotOCP, NUM_SEG, POLY_ORDER, SPARSE, CLENSHAW_CURTIS>;
+using TranscribedRobotOCP = CollocationTranscription<RobotOCP, NUM_SEG, POLY_ORDER, SPARSE, CLENSHAW_CURTIS, false>;
 
 using QPSolver = boxADMM<TranscribedRobotOCP::VAR_SIZE, TranscribedRobotOCP::NUM_EQ, TranscribedRobotOCP::scalar_t,
         TranscribedRobotOCP::MATRIXFMT, linear_solver_traits<TranscribedRobotOCP::MATRIXFMT>::default_solver>;

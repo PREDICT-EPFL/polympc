@@ -40,4 +40,7 @@ if(BUILD_TESTS OR CONTROL_TESTS)
   add_executable(lqr_test lqr_test.cpp)
   target_link_libraries(lqr_test Eigen3::Eigen)
 
+  add_executable(ocp_rewrite_test ocp_rewrite_test.cpp)
+  target_link_libraries(ocp_rewrite_test Eigen3::Eigen)
+
 endif()

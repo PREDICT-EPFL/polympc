@@ -1,86 +1,59 @@
-// This file is part of PolyMPC, a lightweight C++ template library
-// for real-time nonlinear optimization and optimal control.
-//
-// Copyright (C) 2020 Listov Petr <petr.listov@epfl.ch>
-//
-// This Source Code Form is subject to the terms of the Mozilla
-// Public License v. 2.0. If a copy of the MPL was not distributed
-// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#ifndef POLYMPC_COLLOCATION_TRANSCRIPTION_HPP
+#define POLYMPC_COLLOCATION_TRANSCRIPTION_HPP
 
-#ifndef CONTINUOUS_OCP_HPP
-#define CONTINUOUS_OCP_HPP
-
-#include "Eigen/Core"
-#include "Eigen/SparseCore"
+#include <Eigen/Core>
+#include <Eigen/SparseCore>
+#include <unsupported/Eigen/KroneckerProduct>
 #include "autodiff/AutoDiffScalar.h"
-#include "unsupported/Eigen/KroneckerProduct"
-#include "utils/helpers.hpp"
+#include "polynomials/polynomial_math.hpp"
 #include "solvers/bfgs.hpp"
-#include "iostream"
-#include <type_traits>
-
-/** define the macro for forward declarations */
-#define POLYMPC_FORWARD_DECLARATION( cNAME, cNX, cNU, cNP, cND, cNG, TYPE ) \
-class cNAME;                                                  \
-template<>                                                    \
-struct polympc::polympc_traits<cNAME>                         \
-{                                                             \
-public:                                                       \
-    using Scalar = TYPE;                                      \
-    enum { NX = cNX, NU = cNU, NP = cNP, ND = cND, NG = cNG}; \
-};
 
 namespace polympc {
 
-/** define derived class traits */
-template<typename Derived> struct polympc_traits;
-template<typename T> struct polympc_traits<const T> : polympc_traits<T> {};
+enum quadrature_t {
+    CLENSHAW_CURTIS,
+    GAUSS,
+    GAUSS_RADAU,
+    GAUSS_LOBATTO
+};
 
-/** forward declare base class */
-template<typename OCP, typename Approximation, int MatrixFormat> class ContinuousOCP;
-
-
-template<typename OCP, typename Approximation, int MatrixFormat = DENSE>
-class ContinuousOCP
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat = DENSE, quadrature_t QuadType = CLENSHAW_CURTIS>
+class CollocationTranscription : public OCP
 {
 public:
-    ContinuousOCP()
+    CollocationTranscription()
     {
         EIGEN_STATIC_ASSERT((MatrixFormat == DENSE) || (MatrixFormat == SPARSE), "MatrixFormat bit is either 0 [DENSE] or 1 [SPARSE]");
 
         /** compute time nodes */
-        const scalar_t t_length = (t_stop - t_start) / (NUM_SEGMENTS);
-        const scalar_t t_shift  = t_length / 2;
-        for(Eigen::Index i = 0; i < NUM_SEGMENTS; ++i)
-            time_nodes.template segment<POLY_ORDER + 1>(i * POLY_ORDER) =  (t_length/2) * m_nodes.reverse() +
-                    (t_start + t_shift + i * t_length) * Approximation::nodes_t::Ones();
-        time_nodes.reverseInPlace();
+        set_time_limits(0, 1);
 
         /** seed derivatives */
         seed_derivatives();
         compute_diff_composite_matrix();
-        estimate_jac_inner_nnz();
+        estimate_eq_jac_inner_nnz();
         estimate_hes_inner_nnz();
         estimate_ineq_jac_inner_nnz();
 
         // resize matrices for sparce computations
         allocate_jacobians();
     }
-    ~ContinuousOCP() = default;
+
+    ~CollocationTranscription() = default;
 
     enum
     {
         /** OCP dimensions */
-        NX = polympc_traits<OCP>::NX,
-        NU = polympc_traits<OCP>::NU,
-        NP = polympc_traits<OCP>::NP,
-        ND = polympc_traits<OCP>::ND,
-        NG = polympc_traits<OCP>::NG,
+        NX = OCP::NX,
+        NU = OCP::NU,
+        NP = OCP::NP,
+        ND = OCP::ND,
+        NG = OCP::NG,
 
         /** Collocation dimensions */
-        NUM_NODES    = Approximation::NUM_NODES,
-        POLY_ORDER   = Approximation::POLY_ORDER,
-        NUM_SEGMENTS = Approximation::NUM_SEGMENTS,
+        POLY_ORDER   = PolyOrder,
+        NUM_SEGMENTS = NumSegments,
+        NUM_NODES    = POLY_ORDER * NUM_SEGMENTS + 1,
         VARX_SIZE  = NX * NUM_NODES,
         VARU_SIZE  = NU * NUM_NODES,
         VARP_SIZE  = NP,
@@ -99,28 +72,31 @@ public:
         MATRIXFMT = MatrixFormat
     };
 
-    /** define types*/
     /** state */
     template<typename scalar_t>
-    using state_t = Eigen::Matrix<scalar_t, NX, 1>;
+    using state_t = typename OCP::template state_t<scalar_t>;
 
     /** control */
     template<typename scalar_t>
-    using control_t = Eigen::Matrix<scalar_t, NU, 1>;
+    using control_t = typename OCP::template control_t<scalar_t>;
 
     /** parameters */
     template<typename scalar_t>
-    using parameter_t = Eigen::Matrix<scalar_t, NP, 1>;
+    using parameter_t = typename OCP::template parameter_t<scalar_t>;
 
     /** inequality constraints */
     template<typename scalar_t>
-    using constraint_t = Eigen::Matrix<scalar_t, NG, 1>;
+    using constraint_t = typename OCP::template constraint_t<scalar_t>;
 
     /** static parameters */
-    using scalar_t = typename polympc_traits<OCP>::Scalar;
-    using static_parameter_t = Eigen::Matrix<scalar_t, ND, 1>;
-    using time_t   = typename Eigen::Matrix<scalar_t, NUM_NODES, 1>;
-    using nodes_t  = typename Approximation::nodes_t;
+    using scalar_t = typename OCP::scalar_t;
+    using static_parameter_t = typename OCP::static_parameter_t;
+
+    /** collocation types */
+    using time_t      = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using q_weights_t = Eigen::Matrix<scalar_t, PolyOrder + 1, 1>;
+    using nodes_t     = Eigen::Matrix<scalar_t, PolyOrder + 1, 1>;
+    using diff_mat_t  = Eigen::Matrix<scalar_t, PolyOrder + 1, PolyOrder + 1>;
 
     /** AD variables */
     using derivatives_t = Eigen::Matrix<scalar_t, NX + NU + NP, 1>;
@@ -143,9 +119,98 @@ public:
     Eigen::Matrix<ad2_scalar_t, NG, 1> m_ad2_g;
     ad2_scalar_t m_ad2_cost;
 
-    /** do not make constant */
-    scalar_t t_start{0};
-    scalar_t t_stop{1};
+    /** time limits */
+    scalar_t t_start;
+    scalar_t t_stop;
+
+    /** compute collocation parameters */
+    const diff_mat_t m_D = compute_diff_matrix();
+    const nodes_t m_nodes = compute_nodes();
+    const q_weights_t m_quad_weights = compute_int_weights();
+    time_t time_nodes = time_t::Zero();
+
+    /** NLP variables */
+    using nlp_variable_t         = typename dense_matrix_type_selector<scalar_t, VAR_SIZE, 1>::type;
+    using nlp_constraints_t      = typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, 1>::type;
+    using nlp_eq_constraints_t   = typename dense_matrix_type_selector<scalar_t, NUM_EQ, 1>::type;
+    using nlp_ineq_constraints_t = typename dense_matrix_type_selector<scalar_t, NUM_INEQ, 1>::type;
+
+    // choose to allocate sparse or dense jacoabian and hessian
+    using nlp_eq_jacobian_t   = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
+                                typename dense_matrix_type_selector<scalar_t, NUM_EQ, VAR_SIZE>::type>::type;
+    using nlp_ineq_jacobian_t = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
+                                typename dense_matrix_type_selector<scalar_t, NUM_INEQ, VAR_SIZE>::type>::type;
+    using nlp_jacobian_t      = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
+                                typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, VAR_SIZE>::type>::type;
+    using nlp_hessian_t       = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
+                                typename dense_matrix_type_selector<scalar_t, VAR_SIZE, VAR_SIZE>::type>::type;
+    using nlp_cost_t          = scalar_t;
+    using nlp_dual_t          = typename dense_matrix_type_selector<scalar_t, DUAL_SIZE, 1>::type;
+
+    // temporary matrices for equality and ineqquality Jacobians
+    typename std::conditional<is_sparse, nlp_eq_jacobian_t, void*>::type m_Je;
+    typename std::conditional<is_sparse, nlp_ineq_jacobian_t, void*>::type m_Ji;
+
+    diff_mat_t compute_diff_matrix() noexcept
+    {
+        nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, POLY_ORDER).reverse();
+        nodes_t c    = nodes_t::Ones(); c[0] = scalar_t(2); c[POLY_ORDER] = scalar_t(2);
+        c = (Eigen::pow(scalar_t(-1), grid.array()).matrix()).asDiagonal() * c;
+
+        nodes_t nodes = compute_nodes();
+        diff_mat_t XM = nodes.template replicate<1, PolyOrder + 1>();
+        diff_mat_t dX = XM - XM.transpose();
+
+        diff_mat_t Dn = (c * (c.cwiseInverse()).transpose()).array() * (dX + diff_mat_t::Identity()).cwiseInverse().array();
+        diff_mat_t diag_D = (Dn.rowwise().sum()).asDiagonal();
+
+        return Dn - diag_D;
+    }
+
+    nodes_t compute_nodes() noexcept
+    {
+        nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
+        return (grid * (M_PI / PolyOrder)).array().cos().reverse();
+    }
+
+    q_weights_t compute_int_weights() noexcept
+    {
+        /** Chebyshev collocation points for the interval [-1, 1]*/
+        nodes_t theta = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
+        theta *= (M_PI / PolyOrder);
+
+        q_weights_t w = q_weights_t::Zero(PolyOrder + 1, 1);
+        using tmp_vtype = Eigen::Matrix<scalar_t, PolyOrder - 1, 1>;
+        tmp_vtype v = tmp_vtype::Ones(PolyOrder - 1, 1);
+
+        if ( PolyOrder % 2 == 0 )
+        {
+            w[0]         = static_cast<scalar_t>(1 / (std::pow(PolyOrder, 2) - 1));
+            w[PolyOrder] = w[0];
+
+            for(int k = 1; k <= PolyOrder / 2 - 1; ++k)
+            {
+                tmp_vtype vk = Eigen::cos((2 * k * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
+                v -= static_cast<scalar_t>(2.0 / (4 * std::pow(k, 2) - 1)) * vk;
+            }
+            tmp_vtype vk = Eigen::cos((PolyOrder * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
+            v -= vk / (std::pow(PolyOrder, 2) - 1);
+        }
+        else
+        {
+            w[0] = static_cast<scalar_t>(1 / std::pow(PolyOrder, 2));
+            w[PolyOrder] = w[0];
+            for (int k = 1; k <= (PolyOrder - 1) / 2; ++k)
+            {
+                tmp_vtype vk = Eigen::cos((2 * k * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
+                v -= static_cast<scalar_t>(2.0 / (4 * pow(k, 2) - 1)) * vk;
+            }
+        }
+
+        polymath::segment<q_weights_t, PolyOrder - 1>(w, 1) =  static_cast<scalar_t>(2.0 / PolyOrder) * v;
+        return w;
+    }
+
     EIGEN_STRONG_INLINE void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept
     {
         t_start = t0;
@@ -155,146 +220,74 @@ public:
         const scalar_t t_length = (t_stop - t_start) / (NUM_SEGMENTS);
         const scalar_t t_shift  = t_length / 2;
         for(Eigen::Index i = 0; i < NUM_SEGMENTS; ++i)
-            time_nodes.template segment<POLY_ORDER + 1>(i * POLY_ORDER) =  (t_length/2) * m_nodes.reverse() +
-                    (t_start + t_shift + i * t_length) * Approximation::nodes_t::Ones();
-        time_nodes.reverseInPlace();
+        {
+            time_nodes.template segment<POLY_ORDER + 1>(i * POLY_ORDER) =  (t_length/2) * m_nodes +
+                                                                           (t_start + t_shift + i * t_length) * nodes_t::Ones();
+        }
     }
 
-    /** compute collocation parameters */
-    const typename Approximation::diff_mat_t  m_D     = Approximation::compute_diff_matrix();
-    const typename Approximation::nodes_t     m_nodes = Approximation::compute_nodes();
-    const typename Approximation::q_weights_t m_quad_weights = Approximation::compute_int_weights();
-    time_t time_nodes = time_t::Zero();
-
-    /** NLP variables */
-    using nlp_variable_t         = typename dense_matrix_type_selector<scalar_t, VAR_SIZE, 1>::type;
-    using nlp_constraints_t      = typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, 1>::type;
-    using nlp_eq_constraints_t   = typename dense_matrix_type_selector<scalar_t, NUM_EQ, 1>::type;
-    using nlp_ineq_constraints_t = typename dense_matrix_type_selector<scalar_t, NUM_INEQ, 1>::type;
-    // choose to allocate sparse or dense jacoabian and hessian
-    using nlp_eq_jacobian_t = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                              typename dense_matrix_type_selector<scalar_t, NUM_EQ, VAR_SIZE>::type>::type;
-    using nlp_ineq_jacobian_t = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                                typename dense_matrix_type_selector<scalar_t, NUM_INEQ, VAR_SIZE>::type>::type;
-    using nlp_jacobian_t    = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                              typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, VAR_SIZE>::type>::type;
-    using nlp_hessian_t     = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                              typename dense_matrix_type_selector<scalar_t, VAR_SIZE, VAR_SIZE>::type>::type;
-    using nlp_cost_t        = scalar_t;
-    using nlp_dual_t        = typename dense_matrix_type_selector<scalar_t, DUAL_SIZE, 1>::type;
-
-    // temporary matrices for equality and ineqquality Jacobians
-    typename std::conditional<MATRIXFMT == SPARSE, nlp_eq_jacobian_t, void*>::type m_Je;
-    typename std::conditional<MATRIXFMT == SPARSE, nlp_ineq_jacobian_t, void*>::type m_Ji;
-
-    /** @brief
-     *
-     */
     template<typename T>
-    EIGEN_STRONG_INLINE void inequality_constraints(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                                    const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
+    EIGEN_STRONG_INLINE void inequality_constraints(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                                    const Eigen::Ref<const parameter_t<T>> &p,const Eigen::Ref<const static_parameter_t> &d,
                                                     const scalar_t &t, Eigen::Ref<constraint_t<T>> g) const noexcept
     {
-        static_cast<const OCP*>(this)->inequality_constraints_impl(x,u,p,d,t,g);
+        this->inequality_constraints_impl(x,u,p,d,t,g);
     }
+
     template<typename T>
-    EIGEN_STRONG_INLINE void inequality_constraints(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                                    const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
+    EIGEN_STRONG_INLINE void inequality_constraints(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                                    const Eigen::Ref<const parameter_t<T>> &p,const Eigen::Ref<const static_parameter_t> &d,
                                                     const scalar_t &t, Eigen::Ref<constraint_t<T>> g) noexcept
     {
-        static_cast<OCP*>(this)->inequality_constraints_impl(x,u,p,d,t,g);
-    }
-    template<typename T>
-    EIGEN_STRONG_INLINE void inequality_constraints_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                                         const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
-                                                         const scalar_t &t, Eigen::Ref<constraint_t<T>> g) const noexcept
-    {
-        polympc::ignore_unused_var(x);
-        polympc::ignore_unused_var(u);
-        polympc::ignore_unused_var(p);
-        polympc::ignore_unused_var(d);
-        polympc::ignore_unused_var(t);
-        polympc::ignore_unused_var(g);
+        this->inequality_constraints_impl(x,u,p,d,t,g);
     }
 
-    /** @brief
-     *
-     */
     template<typename T>
-    EIGEN_STRONG_INLINE void dynamics(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                         const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
-                         const T &t, Eigen::Ref<state_t<T>> xdot) const noexcept
+    EIGEN_STRONG_INLINE void dynamics(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                      const Eigen::Ref<const parameter_t<T>> &p, const Eigen::Ref<const static_parameter_t> &d,
+                                      const T &t, Eigen::Ref<state_t<T>> xdot) const noexcept
     {
-        static_cast<const OCP*>(this)->dynamics_impl(x,u,p,d,t,xdot);
+        this->dynamics_impl(x,u,p,d,t,xdot);
     }
 
-    /** @brief
-     *
-     */
     template<typename T>
-    EIGEN_STRONG_INLINE void mayer_term(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                        const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
+    EIGEN_STRONG_INLINE void mayer_term(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                        const Eigen::Ref<const parameter_t<T>> &p,const Eigen::Ref<const static_parameter_t> &d,
                                         const scalar_t &t, T &mayer) const noexcept
     {
-        static_cast<const OCP*>(this)->mayer_term_impl(x,u,p,d,t,mayer);
+        this->mayer_term_impl(x,u,p,d,t,mayer);
     }
+
     template<typename T>
-    EIGEN_STRONG_INLINE void mayer_term(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                        const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
+    EIGEN_STRONG_INLINE void mayer_term(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                        const Eigen::Ref<const parameter_t<T>> &p,const Eigen::Ref<const static_parameter_t> &d,
                                         const scalar_t &t, T &mayer) noexcept
     {
-        static_cast<OCP*>(this)->mayer_term_impl(x,u,p,d,t,mayer);
-    }
-    template<typename T>
-    EIGEN_STRONG_INLINE void mayer_term_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                             const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
-                                             const scalar_t &t, T &mayer) const noexcept
-    {
-        polympc::ignore_unused_var(x);
-        polympc::ignore_unused_var(u);
-        polympc::ignore_unused_var(p);
-        polympc::ignore_unused_var(d);
-        polympc::ignore_unused_var(t);
-        polympc::ignore_unused_var(mayer);
+        this->mayer_term_impl(x,u,p,d,t,mayer);
     }
 
-    /** @brief
-     *
-     */
     template<typename T>
-    EIGEN_STRONG_INLINE void lagrange_term(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                              const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
-                              const scalar_t &t, T &lagrange) const noexcept
+    EIGEN_STRONG_INLINE void lagrange_term(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                                           const Eigen::Ref<const parameter_t<T>> &p,const Eigen::Ref<const static_parameter_t> &d,
+                                           const scalar_t &t, T &lagrange) const noexcept
     {
-        static_cast<const OCP*>(this)->lagrange_term_impl(x,u,p,d,t,lagrange);
+        this->lagrange_term_impl(x,u,p,d,t,lagrange);
     }
 
     template<typename T>
     EIGEN_STRONG_INLINE void lagrange_term(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                              const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
-                              const scalar_t &t, T &lagrange) noexcept
+                                           const Eigen::Ref<const parameter_t<T>> p,const Eigen::Ref<const static_parameter_t> d,
+                                           const scalar_t &t, T &lagrange) noexcept
     {
-        static_cast<OCP*>(this)->lagrange_term_impl(x,u,p,d,t,lagrange);
-    }
-    template<typename T>
-    EIGEN_STRONG_INLINE void lagrange_term_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                                const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
-                                                const scalar_t &t, T &lagrange) const noexcept
-    {
-        polympc::ignore_unused_var(x);
-        polympc::ignore_unused_var(u);
-        polympc::ignore_unused_var(p);
-        polympc::ignore_unused_var(d);
-        polympc::ignore_unused_var(t);
-        polympc::ignore_unused_var(lagrange);
+        this->lagrange_term_impl(x,u,p,d,t,lagrange);
     }
 
-    /** seed edrivatives */
+    /** seed derivatives */
     void seed_derivatives();
 
     /** in case of sparse representation, estimate the upper bound amount of non-zero elements */
     // store number of nonzeros per column in Jacobian and Hessian
-    Eigen::VectorXi m_jac_inner_nnz, m_ineq_jac_inner_nnz;
+    Eigen::VectorXi m_eq_jac_inner_nnz, m_ineq_jac_inner_nnz;
     Eigen::VectorXi m_hes_inner_nnz;
     Eigen::SparseMatrix<scalar_t> m_DiffMat; // store sparse differentiation matrix for sparse implementation
 
@@ -302,7 +295,7 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type compute_diff_composite_matrix() const noexcept {}
 
     template<int T = MatrixFormat>
-    EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type estimate_jac_inner_nnz() const noexcept {}
+    EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type estimate_eq_jac_inner_nnz() const noexcept {}
 
     template<int T = MatrixFormat>
     EIGEN_STRONG_INLINE typename std::enable_if<T == DENSE>::type estimate_ineq_jac_inner_nnz() const noexcept {}
@@ -320,7 +313,7 @@ public:
 
         if(NUM_SEGMENTS < 2)
         {
-            m_DiffMat = Eigen::KroneckerProductSparse<typename Approximation::diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
+            m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
             return;
         }
         else
@@ -341,22 +334,22 @@ public:
     }
 
     template<int T = MatrixFormat>
-    EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type estimate_jac_inner_nnz() noexcept
+    EIGEN_STRONG_INLINE typename std::enable_if<T == SPARSE>::type estimate_eq_jac_inner_nnz() noexcept
     {
-        m_jac_inner_nnz = Eigen::VectorXi::Zero(VAR_SIZE);
-        m_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
-        m_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
+        m_eq_jac_inner_nnz = Eigen::VectorXi::Zero(VAR_SIZE);
+        m_eq_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
+        m_eq_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
 
         // add diff matrix entries
         for(Eigen::Index i = 0; i < NUM_NODES; i++)
         {
-            m_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER - 1);
+            m_eq_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER - 1);
             if((i != 0) && (i != (NUM_NODES-1)) && (i % POLY_ORDER) == 0)
-               m_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER);
+                m_eq_jac_inner_nnz. template segment<NX>(i * NX) += Eigen::VectorXi::Constant(NX, POLY_ORDER);
         }
 
-        m_jac_inner_nnz. template segment<(POLY_ORDER + 1) * NX>((NUM_NODES - (POLY_ORDER + 1)) * NX) +=
-                                                             Eigen::VectorXi::Ones((POLY_ORDER + 1) * NX);
+        m_eq_jac_inner_nnz. template segment<(POLY_ORDER + 1) * NX>((NUM_NODES - (POLY_ORDER + 1)) * NX) +=
+                Eigen::VectorXi::Ones((POLY_ORDER + 1) * NX);
     }
 
     // estimate number of non-zeros in Hessian
@@ -380,8 +373,8 @@ public:
     /** interface functions to comply with ipopt */
     EIGEN_STRONG_INLINE int nnz_jacobian() const noexcept
     {
-        if(MatrixFormat == SPARSE)
-            return m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum();
+        if(is_sparse)
+            return m_eq_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum();
         else
             return (NUM_EQ + NUM_INEQ) * VAR_SIZE;
     }
@@ -389,7 +382,7 @@ public:
     // number of nonzeros in lower-triangular part of the hessian
     EIGEN_STRONG_INLINE int nnz_lag_hessian() const noexcept
     {
-        if(MatrixFormat == SPARSE)
+        if(is_sparse)
             return (m_hes_inner_nnz.sum() + VAR_SIZE) / 2;
         else
             return (VAR_SIZE * (VAR_SIZE + 1)) / 2;
@@ -411,7 +404,7 @@ public:
     block_insert_sparse(Eigen::SparseMatrix<scalar_t>& dst, const Eigen::Index &row_offset,
                         const Eigen::Index &col_offset, const Eigen::SparseMatrix<scalar_t>& src) const noexcept
     {
-        // assumes enough spase is allocated in the dst matrix
+        // assumes enough space is allocated in the dst matrix
         for(Eigen::Index k = 0; k < src.outerSize(); ++k)
             for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(src, k); it; ++it)
                 dst.insert(row_offset + it.row(), col_offset + it.col()) = it.value();
@@ -608,10 +601,10 @@ public:
 
     /** compute Lagrangian */
     EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                    const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian) noexcept;
+                                        const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian) noexcept;
 
     EIGEN_STRONG_INLINE void lagrangian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept;
+                                        const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian, Eigen::Ref<nlp_constraints_t> g) noexcept;
 
     /** Lagrangian gradient */
     void lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
@@ -686,11 +679,10 @@ public:
     {
         BFGS_update(hessian, s, y);
     }
-
 };
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::seed_derivatives()
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::seed_derivatives()
 {
     const int deriv_num = NX + NU + NP;
     int deriv_idx = 0;
@@ -737,10 +729,10 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::seed_derivatives()
 }
 
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                 const Eigen::Ref<const static_parameter_t>& p,
-                                                                 Eigen::Ref<nlp_eq_constraints_t> constraint) const noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                               const Eigen::Ref<const static_parameter_t>& p,
+                                                                                               Eigen::Ref<nlp_eq_constraints_t> constraint) const noexcept
 {
     state_t<scalar_t> f_res; f_res.setZero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
@@ -750,9 +742,9 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities(const Eigen::Re
     Eigen::Matrix<scalar_t, NUM_NODES, NX> DX;
 
     for(int i = 0; i < NUM_SEGMENTS; ++i)
+    {
         DX.template block<POLY_ORDER + 1, NX>(i*POLY_ORDER, 0).noalias() = m_D * lox.template block<NX, POLY_ORDER + 1>(0, i*POLY_ORDER).transpose();
-
-    //DX.transposeInPlace();
+    }
 
     int n = 0;
     int t = 0;
@@ -768,10 +760,10 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities(const Eigen::Re
 }
 
 // evaluate constraints
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                   const Eigen::Ref<const static_parameter_t>& p,
-                                                                   Eigen::Ref<nlp_ineq_constraints_t> constraint) const noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                 const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                 Eigen::Ref<nlp_ineq_constraints_t> constraint) const noexcept
 {
     constraint_t<scalar_t> g_res; g_res.setZero();
     for (int k = 0; k < NUM_NODES; ++k)
@@ -784,22 +776,22 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::inequalities(const Eigen::
 }
 
 // evaluate combined constraints
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                  const Eigen::Ref<const static_parameter_t>& p,
-                                                                  Eigen::Ref<nlp_constraints_t> constraint) const noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                Eigen::Ref<nlp_constraints_t> constraint) const noexcept
 {
     this->equalities(var, p, constraint.template head<NUM_EQ>());
     this->inequalities(var, p, constraint.template tail<NUM_INEQ>()); // why???
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                       const Eigen::Ref<const static_parameter_t> &p,
-                                                                       Eigen::Ref<nlp_eq_constraints_t> constraint,
-                                                                       Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                     const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                     Eigen::Ref<nlp_eq_constraints_t> constraint,
+                                                                                                     Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
 {
     jacobian = nlp_eq_jacobian_t::Zero(NUM_EQ, VAR_SIZE);
     /** compute jacoabian of dynamics */
@@ -879,29 +871,29 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities_linearised(const Eig
 
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                       const Eigen::Ref<const static_parameter_t> &p,
-                                                                       Eigen::Ref<nlp_eq_constraints_t> constraint,
-                                                                       nlp_eq_jacobian_t &jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                     const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                     Eigen::Ref<nlp_eq_constraints_t> constraint,
+                                                                                                     nlp_eq_jacobian_t &jacobian) noexcept
 {
-    if(jacobian.nonZeros() != m_jac_inner_nnz.sum())
+    if(jacobian.nonZeros() != m_eq_jac_inner_nnz.sum())
         _equalities_linearised_sparse(var, p, constraint, jacobian);
     else
         _equalities_linearised_sparse_update(var, p, constraint, jacobian);
 }
 
 /** sparse linearisation */
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                                    const Eigen::Ref<const static_parameter_t> &p,
-                                                                                    Eigen::Ref<nlp_eq_constraints_t> constraint,
-                                                                                    nlp_eq_jacobian_t &jacobian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                                  const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                                  Eigen::Ref<nlp_eq_constraints_t> constraint,
+                                                                                                                  nlp_eq_jacobian_t &jacobian) noexcept
 {
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
-    jacobian.reserve(m_jac_inner_nnz);
+    jacobian.reserve(m_eq_jac_inner_nnz);
     /** compute jacoabian of dynamics */
     Eigen::Matrix<scalar_t, NX, NX + NU + NP> jac = Eigen::Matrix<scalar_t, NX, NX + NU + NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
@@ -956,11 +948,11 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
 }
 
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                                           const Eigen::Ref<const static_parameter_t> &p,
-                                                                                           Eigen::Ref<nlp_eq_constraints_t> constraint,
-                                                                                           nlp_eq_jacobian_t &jacobian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                                         const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                                         Eigen::Ref<nlp_eq_constraints_t> constraint,
+                                                                                                                         nlp_eq_jacobian_t &jacobian) noexcept
 {
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
     /** compute jacoabian of dynamics */
@@ -1023,24 +1015,24 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_equalities_linearised_spa
     //jacobian.template leftCols<VARX_SIZE>() += m_DiffMat;
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                         const Eigen::Ref<const static_parameter_t> &p,
-                                                                         Eigen::Ref<nlp_ineq_constraints_t> constraint,
-                                                                         Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                       Eigen::Ref<nlp_ineq_constraints_t> constraint,
+                                                                                                       Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
 {
     _inequalities_linearised_dense(var, p, constraint, jacobian);
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                         const Eigen::Ref<const static_parameter_t> &p,
-                                                                         Eigen::Ref<nlp_ineq_constraints_t> constraint,
-                                                                         nlp_ineq_jacobian_t &jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                       Eigen::Ref<nlp_ineq_constraints_t> constraint,
+                                                                                                       nlp_ineq_jacobian_t &jacobian) noexcept
 {
     if(jacobian.nonZeros() != m_ineq_jac_inner_nnz.sum())
         _inequalities_linearised_sparse(var, p, constraint, jacobian);
@@ -1049,12 +1041,12 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::inequalities_linearised(const E
 }
 
 //sparse linearisation
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int N> typename std::enable_if<(N > 0)>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                                 const Eigen::Ref<const static_parameter_t> &p,
-                                                                                 Eigen::Ref<nlp_ineq_constraints_t> constraint,
-                                                                                 nlp_ineq_jacobian_t &jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                               const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                               Eigen::Ref<nlp_ineq_constraints_t> constraint,
+                                                                                                               nlp_ineq_jacobian_t &jacobian) noexcept
 {
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
     jacobian.reserve(m_ineq_jac_inner_nnz);
@@ -1092,12 +1084,12 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::_inequalities_linearised_sparse
     }
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template <int N> typename std::enable_if<(N > 0)>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                                        const Eigen::Ref<const static_parameter_t> &p,
-                                                                                        Eigen::Ref<nlp_ineq_constraints_t> constraint,
-                                                                                        nlp_ineq_jacobian_t &jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                                      Eigen::Ref<nlp_ineq_constraints_t> constraint,
+                                                                                                                      nlp_ineq_jacobian_t &jacobian) noexcept
 {
     eigen_assert(jacobian.outerSize() == VAR_SIZE);
     /** compute jacoabian of dynamics */
@@ -1133,34 +1125,34 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::_inequalities_linearised_sparse
 
 
 // linearise combined constraints
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                        const Eigen::Ref<const static_parameter_t> &p,
-                                                                        Eigen::Ref<nlp_constraints_t> constraint,
-                                                                        Eigen::Ref<nlp_jacobian_t> jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                      Eigen::Ref<nlp_constraints_t> constraint,
+                                                                                                      Eigen::Ref<nlp_jacobian_t> jacobian) noexcept
 {
     this->equalities_linearised(var, p, constraint.template head<NUM_EQ>(), jacobian.topRows(NUM_EQ));
     this->inequalities_linearised(var, p, constraint.template tail<NUM_INEQ>(), jacobian.bottomRows(NUM_INEQ)); // why???
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                         const Eigen::Ref<const static_parameter_t> &p,
-                                                                         Eigen::Ref<nlp_constraints_t> constraint,
-                                                                         nlp_jacobian_t &jacobian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                      Eigen::Ref<nlp_constraints_t> constraint,
+                                                                                                      nlp_jacobian_t &jacobian) noexcept
 {
     this->equalities_linearised(var, p, constraint.template head<NUM_EQ>(), m_Je);
     this->inequalities_linearised(var, p, constraint.template tail<NUM_INEQ>(), m_Ji);
 
     // check if we need to allocate memory (first function entry)
-    if(jacobian.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
+    if(jacobian.nonZeros() != (m_eq_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
     {
         jacobian.resize(NUM_EQ + NUM_INEQ, VAR_SIZE);
-        jacobian.reserve(m_jac_inner_nnz + m_ineq_jac_inner_nnz);
+        jacobian.reserve(m_eq_jac_inner_nnz + m_ineq_jac_inner_nnz);
         block_insert_sparse(jacobian, 0, 0, m_Je);
         block_insert_sparse(jacobian, NUM_EQ, 0, m_Ji);
     }
@@ -1180,9 +1172,9 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::constraints_linearised(const Ei
 
 
 /** cost computation */
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::cost(const Eigen::Ref<const nlp_variable_t>& var,
-                                             const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                         const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
 {
     cost = scalar_t(0);
     scalar_t cost_i = scalar_t(0);
@@ -1203,15 +1195,15 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::cost(const Eigen::Ref<cons
     }
 
     cost_i = scalar_t(0);
-    mayer_term<scalar_t>(var.template head<NX>(), var.template segment<NU>(VARX_SIZE),
-                         var.template segment<NP>(VARX_SIZE + VARU_SIZE), p, time_nodes(0), cost_i);
+    mayer_term<scalar_t>(var.template segment<NX>(VARX_SIZE - NX), var.template segment<NU>(VARX_SIZE + VARU_SIZE - NU),
+                         var.template segment<NP>(VARX_SIZE + VARU_SIZE), p, time_nodes(NUM_NODES - 1), cost_i);
     cost += cost_i;
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                    const Eigen::Ref<const static_parameter_t> &p,
-                                                                    scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                  const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                  scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
 {
     cost = scalar_t(0);
     cost_gradient.setZero();
@@ -1241,24 +1233,24 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient(const Eigen:
     }
 
     m_ad_cost = ad_scalar_t(0);
-    m_ad_x = var.template head<NX>();
-    m_ad_u = var.template segment<NU>(VARX_SIZE);
-    mayer_term<ad_scalar_t>(m_ad_x, m_ad_u, m_ad_p, p, time_nodes(0), m_ad_cost);
+    m_ad_x = var.template segment<NX>(VARX_SIZE - NX);
+    m_ad_u = var.template segment<NU>(VARX_SIZE + VARU_SIZE - NU);
+    mayer_term<ad_scalar_t>(m_ad_x, m_ad_u, m_ad_p, p, time_nodes(NUM_NODES - 1), m_ad_cost);
     cost += m_ad_cost.value();
-    cost_gradient. template head<NX>().noalias() += m_ad_cost.derivatives().template head<NX>();
-    cost_gradient. template segment<NU>(VARX_SIZE).noalias() += m_ad_cost.derivatives(). template segment<NU>(NX);
+    cost_gradient. template segment<NX>(VARX_SIZE - NX).noalias() += m_ad_cost.derivatives().template head<NX>();
+    cost_gradient. template segment<NU>(VARX_SIZE + VARU_SIZE - NU).noalias() += m_ad_cost.derivatives(). template segment<NU>(NX);
     cost_gradient. template tail<NP>().noalias() += m_ad_cost.derivatives(). template tail<NP>();
 }
 
 
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                            const Eigen::Ref<const static_parameter_t>& p,
-                                                                            scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                            Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                     const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                     scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                     Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept
 {
     cost = scalar_t(0);
     cost_gradient.setZero();
@@ -1332,14 +1324,14 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
     for(int i = 0; i < NX; i++)
-        m_ad2_x(i).value().value() = var.template head<NX>()(i);
+        m_ad2_x(i).value().value() = var.template segment<NX>(VARX_SIZE - NX)(i);
     for(int i = 0; i < NU; i++)
-        m_ad2_u(i).value().value() = var.template segment<NX>(VARX_SIZE)(i);
+        m_ad2_u(i).value().value() = var.template segment<NU>(VARX_SIZE + VARU_SIZE - NU)(i);
 
-    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(0), mayer_cost);
+    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(NUM_NODES - 1), mayer_cost);
     cost += mayer_cost.value().value();
-    cost_gradient. template head<NX>().noalias() +=  mayer_cost.value().derivatives(). template head<NX>();
-    cost_gradient. template segment<NU>(VARX_SIZE).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
+    cost_gradient. template segment<NX>(VARX_SIZE - NX).noalias() +=  mayer_cost.value().derivatives(). template head<NX>();
+    cost_gradient. template segment<NU>(VARX_SIZE + VARU_SIZE - NU).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
     cost_gradient. template tail<NP>().noalias() += mayer_cost.value().derivatives(). template tail<NP>();
 
     for(int i = 0; i < NX + NU + NP; ++i)
@@ -1351,30 +1343,30 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
     //hes.transposeInPlace();
 
     /** diagonal  */
-    cost_hessian.template topLeftCorner<NX, NX>() += hes.template topLeftCorner<NX, NX>();
-    cost_hessian.template block<NU, NU>(VARX_SIZE, VARX_SIZE) += hes.template block<NU, NU>(NX, NX);
+    cost_hessian.template block<NX, NX>(VARX_SIZE - NX, VARX_SIZE - NX) += hes.template topLeftCorner<NX, NX>();
+    cost_hessian.template block<NU, NU>(VARX_SIZE + VARU_SIZE - NU, VARX_SIZE + VARU_SIZE - NU) += hes.template block<NU, NU>(NX, NX);
     cost_hessian.template bottomLeftCorner<NP, NP>() += hes.template bottomLeftCorner<NP, NP>();
 
     /** dxdu */
-    cost_hessian.template block<NX, NU>(0, VARX_SIZE) += hes.template block<NX, NU>(0, NX);
-    cost_hessian.template block<NU, NX>(VARX_SIZE, 0) += hes.template block<NU, NX>(NX, 0);
+    cost_hessian.template block<NX, NU>(VARX_SIZE - NX, VARX_SIZE + VARU_SIZE - NU) += hes.template block<NX, NU>(0, NX);
+    cost_hessian.template block<NU, NX>(VARX_SIZE + VARU_SIZE - NU, VARX_SIZE - NX) += hes.template block<NU, NX>(NX, 0);
 
     /** dxdp */
-    cost_hessian.template block<NX, NP>(0, VARX_SIZE + VARU_SIZE) += hes.template block<NX, NP>(0, NX + NU);
-    cost_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, 0) += hes.template block<NP, NX>(NX + NU, 0);
+    cost_hessian.template block<NX, NP>(VARX_SIZE - NX, VARX_SIZE + VARU_SIZE) += hes.template block<NX, NP>(0, NX + NU);
+    cost_hessian.template block<NP, NX>(VARX_SIZE + VARU_SIZE, VARX_SIZE - NX) += hes.template block<NP, NX>(NX + NU, 0);
 
     /** dudp */
-    cost_hessian.template block<NU, NP>(VARX_SIZE, VARX_SIZE + VARU_SIZE) += hes.template block<NU, NP>(NX, NX + NU);
-    cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE) += hes.template block<NP, NU>(NX + NU, NX);
+    cost_hessian.template block<NU, NP>(VARX_SIZE + VARU_SIZE - NU, VARX_SIZE + VARU_SIZE) += hes.template block<NU, NP>(NX, NX + NU);
+    cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE + VARU_SIZE - NU) += hes.template block<NP, NU>(NX + NU, NX);
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                       const Eigen::Ref<const static_parameter_t>& p,
-                                                                       scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                       nlp_hessian_t& cost_hessian) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                     const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                     scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                     nlp_hessian_t& cost_hessian) noexcept
 {
     if(cost_hessian.nonZeros() != m_hes_inner_nnz.sum())
         _cost_grad_hess_sparse(var, p, cost, cost_gradient, cost_hessian);
@@ -1382,11 +1374,11 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::cost_gradient_hessian(const Eig
         _cost_grad_hess_sparse_update(var, p, cost, cost_gradient, cost_hessian);
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                             const Eigen::Ref<const static_parameter_t>& p,
-                                                                             scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                             nlp_hessian_t& cost_hessian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                           const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                           scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                           nlp_hessian_t& cost_hessian) noexcept
 {
     eigen_assert(cost_hessian.outerSize() == VAR_SIZE);
     cost = scalar_t(0);
@@ -1592,14 +1584,14 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
     for(int i = 0; i < NX; i++)
-        m_ad2_x(i).value().value() = var.template head<NX>()(i);
+        m_ad2_x(i).value().value() = var.template segment<NX>(VARX_SIZE - NX)(i);
     for(int i = 0; i < NU; i++)
-        m_ad2_u(i).value().value() = var.template segment<NX>(VARX_SIZE)(i);
+        m_ad2_u(i).value().value() = var.template segment<NU>(VARX_SIZE + VARU_SIZE - NU)(i);
 
-    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(0), mayer_cost);
+    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(NUM_NODES - 1), mayer_cost);
     cost += mayer_cost.value().value();
-    cost_gradient. template head<NX>().noalias() += mayer_cost.value().derivatives(). template head<NX>();
-    cost_gradient. template segment<NU>(VARX_SIZE).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
+    cost_gradient. template segment<NX>(VARX_SIZE - NX).noalias() += mayer_cost.value().derivatives(). template head<NX>();
+    cost_gradient. template segment<NU>(VARX_SIZE + VARU_SIZE - NU).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
     cost_gradient. template tail<NP>().noalias() += mayer_cost.value().derivatives(). template tail<NP>();
 
     for(int i = 0; i < NX + NU + NP; ++i)
@@ -1611,49 +1603,51 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
     // add values
     /** dx^2 */
     for(Eigen::Index j = 0; j < NX; ++j)
-    std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j],
-                   cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX,
-                   hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j],
-                   std::plus<scalar_t>());
+    {
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
+                       hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
+                       std::plus<scalar_t>());
+    }
     /** dxdu */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j] + NX,
-                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j],
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
+                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
                        std::plus<scalar_t>());
     }
     /** dxdp */
     for(Eigen::Index j = 0; j < NP; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + NX,
-                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX + NX,
+                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
                        std::plus<scalar_t>());
     }
     /** du^2 */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j] + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j] + NX + NU,
-                       hes.col(j + NX).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j] + NX,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
+                       hes.col(j + NX).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX,
                        std::plus<scalar_t>());
     }
     /** dudx */
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX + NU,
-                       hes.col(j).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
+                       hes.col(j).data() + NX, cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX,
                        std::plus<scalar_t>());
     }
     /** dudp */
     for(Eigen::Index j = 0; j < NP; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + NU,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU + NU,
                        hes.col(j + NX + NU).data() + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
                        std::plus<scalar_t>());
     }
     /** dp^2 */
@@ -1668,28 +1662,28 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
     /** dpdx */
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX + NU + NP,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU + NP,
                        hes.col(j).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX + NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU,
                        std::plus<scalar_t>());
     }
     /** dpdu */
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j + VARX_SIZE] + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j + VARX_SIZE] + NX + NU + NP,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU + NP,
                        hes.col(j + NX).data() + NX + NU,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j + VARX_SIZE] + NX + NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU,
                        std::plus<scalar_t>());
     }
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                                    const Eigen::Ref<const static_parameter_t>& p,
-                                                                                    scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                                    nlp_hessian_t& cost_hessian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                                  const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                                  scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                                  nlp_hessian_t& cost_hessian) noexcept
 {
     eigen_assert(cost_hessian.outerSize() == VAR_SIZE);
     cost = scalar_t(0);
@@ -1849,14 +1843,14 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
     /** Mayer term */
     ad2_scalar_t mayer_cost(0);
     for(int i = 0; i < NX; i++)
-        m_ad2_x(i).value().value() = var.template head<NX>()(i);
+        m_ad2_x(i).value().value() = var.template segment<NX>(VARX_SIZE - NX)(i);
     for(int i = 0; i < NU; i++)
-        m_ad2_u(i).value().value() = var.template segment<NX>(VARX_SIZE)(i);
+        m_ad2_u(i).value().value() = var.template segment<NU>(VARX_SIZE + VARU_SIZE - NU)(i);
 
-    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(0), mayer_cost);
+    mayer_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(NUM_NODES - 1), mayer_cost);
     cost += mayer_cost.value().value();
-    cost_gradient. template head<NX>().noalias() +=  mayer_cost.value().derivatives(). template head<NX>();
-    cost_gradient. template segment<NU>(VARX_SIZE).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
+    cost_gradient. template segment<NX>(VARX_SIZE - NX).noalias() +=  mayer_cost.value().derivatives(). template head<NX>();
+    cost_gradient. template segment<NU>(VARX_SIZE + VARU_SIZE - NU).noalias() += mayer_cost.value().derivatives(). template segment<NU>(NX);
     cost_gradient. template tail<NP>().noalias() += mayer_cost.value().derivatives(). template tail<NP>();
 
     for(int i = 0; i < NX + NU + NP; ++i)
@@ -1868,17 +1862,17 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
     // add values by columns when possible
     for(Eigen::Index j = 0; j < NX; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j] + NX + NU + NP,
-                       hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[j],
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j] + NX + NU + NP,
+                       hes.col(j).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE - NX + j],
                        std::plus<scalar_t>());
     }
 
     for(Eigen::Index j = 0; j < NU; ++j)
     {
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j] + NX + NU + NP,
-                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + j],
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j] + NX + NU + NP,
+                       hes.col(j + NX).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE - NU + j],
                        std::plus<scalar_t>());
     }
 
@@ -1886,15 +1880,15 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
     for(Eigen::Index j = 0; j < NP; ++j)
     {
         /** dxdp */
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + NX,
-                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX + NX,
+                       hes.col(j + NX + NU).data(), cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE - NX,
                        std::plus<scalar_t>());
         /** dudp */
-        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + NU,
+        std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU + NU,
                        hes.col(j + NX + NU).data() + NX,
-                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE,
+                       cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE - NU,
                        std::plus<scalar_t>());
         /** dp^2 */
         std::transform(cost_hessian.valuePtr() + cost_hessian.outerIndexPtr()[VARU_SIZE + VARX_SIZE + j] + VARX_SIZE + VARU_SIZE,
@@ -1907,10 +1901,10 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse_upd
 }
 
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                 const Eigen::Ref<const static_parameter_t>& p,
-                                                                 const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                               const Eigen::Ref<const static_parameter_t>& p,
+                                                                                               const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) noexcept
 {
     /** @bug: Lagrangian is computed wrongly - fix */
     nlp_eq_constraints_t c;
@@ -1923,11 +1917,11 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian(const Eigen::Re
      * we do not need Lagrangian itself for optimisation itself, so this function can be safely skipped (optimise later)*/
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                 const Eigen::Ref<const static_parameter_t>& p,
-                                                                 const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                                 Eigen::Ref<nlp_constraints_t> g) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                               const Eigen::Ref<const static_parameter_t>& p,
+                                                                                               const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                                               Eigen::Ref<nlp_constraints_t> g) noexcept
 {
     /** @bug: Lagrangian is computed wrongly - fix */
     this->cost(var, p, _lagrangian);
@@ -1936,11 +1930,11 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian(const Eigen::Re
     _lagrangian += g.dot(lam.template head<NUM_EQ + NUM_INEQ>()) + var.dot(lam.template tail<NUM_BOX>());
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                          const Eigen::Ref<const static_parameter_t> &p,
-                                                                          const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
-                                                                          Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                        const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                        const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
+                                                                                                        Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
 {
     nlp_eq_constraints_t c;
     nlp_ineq_constraints_t g;
@@ -1956,15 +1950,15 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const 
     lag_gradient += lam.template tail<VAR_SIZE>();
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                     const Eigen::Ref<const static_parameter_t>& p,
-                                                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                                     Eigen::Ref<nlp_variable_t> lag_gradient,
-                                                                     Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                     Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                   const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                   const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                                                   Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                                                   Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                   Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
@@ -1976,25 +1970,25 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                     const Eigen::Ref<const static_parameter_t>& p,
-                                                                     const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                                     Eigen::Ref<nlp_variable_t> lag_gradient,
-                                                                     Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                     Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                   const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                   const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                                                   Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                                                   Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                   Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t& jac_g) noexcept
 {
     this->cost_gradient(var, p, _lagrangian, cost_gradient);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji); // why???
 
     // check if we need to allocate memory (first function entry)
-    if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
+    if(jac_g.nonZeros() != (m_eq_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
     {
         jac_g.resize(NUM_EQ + NUM_INEQ, VAR_SIZE);
-        jac_g.reserve(m_jac_inner_nnz + m_ineq_jac_inner_nnz);
+        jac_g.reserve(m_eq_jac_inner_nnz + m_ineq_jac_inner_nnz);
         block_insert_sparse(jac_g, 0, 0, m_Je);
         block_insert_sparse(jac_g, NUM_EQ, 0, m_Ji);
     }
@@ -2018,12 +2012,12 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient(const Eigen
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
-void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
-                                                                    const Eigen::Ref<const static_parameter_t>& p,
-                                                                    const Eigen::Ref<const nlp_dual_t>& lam,
-                                                                    scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
-                                                                    Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+                                                                                                                const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                                const Eigen::Ref<const nlp_dual_t>& lam,
+                                                                                                                scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                                                                Eigen::Ref<nlp_hessian_t> lag_hessian) noexcept
 {
     nlp_eq_constraints_t c;
     nlp_ineq_constraints_t g;
@@ -2096,14 +2090,14 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessia
 }
 
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
-                                                                             const Eigen::Ref<const static_parameter_t> &p,
-                                 const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
-                                 Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                 Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g, const scalar_t& cost_scale) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
+                                                                                                           const Eigen::Ref<const static_parameter_t> &p,
+                                                                                                           const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                                                           Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                           Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g, const scalar_t& cost_scale) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), jac_g.topRows(NUM_EQ));
@@ -2175,25 +2169,25 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
     }
 }
 
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
-                                                                             const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
-                                                                             Eigen::Ref<nlp_variable_t> lag_gradient,
-                                                                             nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
-                                                                             Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g,
-                                                                             const scalar_t& cost_scale) noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+                                                                                                           const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
+                                                                                                           Eigen::Ref<nlp_variable_t> lag_gradient,
+                                                                                                           nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
+                                                                                                           Eigen::Ref<nlp_constraints_t> g, nlp_jacobian_t &jac_g,
+                                                                                                           const scalar_t& cost_scale) noexcept
 {
     this->cost_gradient_hessian(var, p, _lagrangian, cost_gradient, lag_hessian);
     this->equalities_linearised(var, p, g.template head<NUM_EQ>(), m_Je);
     this->inequalities_linearised(var, p, g.template tail<NUM_INEQ>(), m_Ji);
 
     // check if we need to allocate memory (first function entry)
-    if(jac_g.nonZeros() != (m_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
+    if(jac_g.nonZeros() != (m_eq_jac_inner_nnz.sum() + m_ineq_jac_inner_nnz.sum()) )
     {
         jac_g.resize(NUM_EQ + NUM_INEQ, VAR_SIZE);
-        jac_g.reserve(m_jac_inner_nnz + m_ineq_jac_inner_nnz);
+        jac_g.reserve(m_eq_jac_inner_nnz + m_ineq_jac_inner_nnz);
         block_insert_sparse(jac_g, 0, 0, m_Je);
         block_insert_sparse(jac_g, NUM_EQ, 0, m_Ji);
     }
@@ -2303,11 +2297,11 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::lagrangian_gradient_hessian(con
 }
 
 // sparsity preserving block BFGS update
-template<typename OCP, typename Approximation, int MatrixFormat>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
-                                                                     const Eigen::Ref<const nlp_variable_t> y) const noexcept
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
+                                                                                                   const Eigen::Ref<const nlp_variable_t> y) const noexcept
 {
     //std::cout << "s: " << s.transpose() << "\n";
     //std::cout << "y: " << y.transpose() << "\n";
@@ -2410,14 +2404,14 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<
         for(Eigen::Index j = 0; j < NP; ++j)
         {
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                    hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                    hes_ap.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
-                    std::plus<scalar_t>());
+                           hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
+                           hes_ap.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j],
+                           std::plus<scalar_t>());
 
             std::transform(hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                    hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
-                    hes_pp.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
-                    std::plus<scalar_t>());
+                           hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE + NP,
+                           hes_pp.col(j).data(), hessian.valuePtr() + hessian.outerIndexPtr()[VARX_SIZE + VARU_SIZE + j] + VARX_SIZE + VARU_SIZE,
+                           std::plus<scalar_t>());
         }
 
         Eigen::Matrix<scalar_t, np_size, 1> tmp;
@@ -2434,4 +2428,4 @@ ContinuousOCP<OCP, Approximation, MatrixFormat>::hessian_update_impl(Eigen::Ref<
 
 } // polympc namespace
 
-#endif // CONTINUOUS_OCP_HPP
+#endif //POLYMPC_COLLOCATION_TRANSCRIPTION_HPP

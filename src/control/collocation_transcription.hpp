@@ -357,14 +357,15 @@ public:
         {
             // all points are collocated
             m_eq_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
+            m_eq_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
         }
         else
         {
             // last points are not collocated
             m_eq_jac_inner_nnz. template head<VARX_SIZE - NX>() = Eigen::VectorXi::Constant(VARX_SIZE - NX, NX);
             m_eq_jac_inner_nnz. template segment<VARU_SIZE - NU>(VARX_SIZE) = Eigen::VectorXi::Constant(VARU_SIZE - NU, NX);
+            m_eq_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE - NX);
         }
-        m_eq_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
 
         // add diff matrix entries
         for(Eigen::Index i = 0; i < NUM_NODES; i++)
@@ -1469,7 +1470,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     Eigen::Matrix<scalar_t, NP, NP> hes_pp = Eigen::Matrix<scalar_t, NP, NP>::Zero();
 
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
-    int t = 0;
 
     for(int i = 0; i < NP; i++)
         m_ad2_p(i).value().value() = var.template tail<NP>()(i);
@@ -1478,7 +1478,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     for (int s = 0; s < NUM_SEGMENTS; s++)
     {
         int shift = s * POLY_ORDER;
-        t = 0;
         for(int k = 0; k < POLY_ORDER + 1; k++ )
         {
             // set x values
@@ -1488,7 +1487,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
             for(int i = 0; i < NU; i++)
                 m_ad2_u(i).value().value() = var.template segment<NU>((k + shift) * NU + VARX_SIZE)(i);
 
-            lagrange_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(t + shift), m_ad2_cost);
+            lagrange_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(k + shift), m_ad2_cost);
             cost += t_scale * m_quad_weights(k) * m_ad2_cost.value().value();
 
             cost_gradient. template segment<NX>((k + shift) * NX).noalias() +=
@@ -1509,7 +1508,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
             hes_pp += hes.template bottomRightCorner<NP, NP>();
 
             /** complex logic to glue segments */
-            if((s > 0) && (t == 0))
+            if((s > 0) && (k == 0))
             {
                 // add values
                 /** dx^2 */
@@ -1540,7 +1539,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
                 /** dudp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + (k + shift) * NU);
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, (k + shift + 1) * NX + (k + shift) * NU);
                 }
                 /** dp^2 */
                 /**
@@ -1619,8 +1618,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
                 }
 
             }
-
-            ++t;
         }
     }
 
@@ -1710,7 +1707,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> hes = Eigen::Matrix<scalar_t, NX + NU + NP, NX + NU + NP> ::Zero();
     Eigen::Matrix<scalar_t, NP, NP> hes_pp = Eigen::Matrix<scalar_t, NP, NP>::Zero();
     const scalar_t t_scale = (t_stop - t_start) / (2 * NUM_SEGMENTS);
-    int t = 0;
 
     for(int i = 0; i < NP; i++)
         m_ad2_p(i).value().value() = var.template tail<NP>()(i);
@@ -1719,7 +1715,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     for (int s = 0; s < NUM_SEGMENTS; s++)
     {
         int shift = s * POLY_ORDER;
-        t = 0;
         for(int k = 0; k < POLY_ORDER + 1; k++ )
         {
             // set x values
@@ -1729,7 +1724,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
             for(int i = 0; i < NU; i++)
                 m_ad2_u(i).value().value() = var.template segment<NU>((k + shift) * NU + VARX_SIZE)(i);
 
-            lagrange_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(t + shift), m_ad2_cost);
+            lagrange_term<ad2_scalar_t>(m_ad2_x, m_ad2_u, m_ad2_p, p, time_nodes(k + shift), m_ad2_cost);
             cost += t_scale * m_quad_weights(k) * m_ad2_cost.value().value();
 
             cost_gradient. template segment<NX>((k + shift) * NX).noalias() +=
@@ -1749,7 +1744,7 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
             hes_pp += hes.template bottomRightCorner<NP, NP>();
 
             /** complex condition to glue segments */
-            if((s > 0) && (t == 0))
+            if((s > 0) && (k == 0))
             {
                 // add values
                 /** dx^2 */
@@ -1817,8 +1812,6 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
                 }
 
             }
-
-            ++t;
         }
     }
 

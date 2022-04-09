@@ -6,18 +6,12 @@
 #include <unsupported/Eigen/KroneckerProduct>
 #include "autodiff/AutoDiffScalar.h"
 #include "polynomials/polynomial_math.hpp"
+#include "quadratures/clenshaw_curtis.hpp"
 #include "solvers/bfgs.hpp"
 
 namespace polympc {
 
-enum quadrature_t {
-    CLENSHAW_CURTIS,
-    GAUSS,
-    GAUSS_RADAU,
-    GAUSS_LOBATTO
-};
-
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat = DENSE, quadrature_t QuadType = CLENSHAW_CURTIS, bool CollocLast = false>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat = DENSE, typename Quadrature = ClenshawCurtis<PolyOrder, typename OCP::scalar_t>, bool CollocLast = false>
 class CollocationTranscription : public OCP
 {
 public:
@@ -91,12 +85,8 @@ public:
     /** static parameters */
     using scalar_t = typename OCP::scalar_t;
     using static_parameter_t = typename OCP::static_parameter_t;
-
-    /** collocation types */
-    using time_t      = Eigen::Matrix<scalar_t, NUM_NODES, 1>;
-    using q_weights_t = Eigen::Matrix<scalar_t, PolyOrder + 1, 1>;
-    using nodes_t     = Eigen::Matrix<scalar_t, PolyOrder + 1, 1>;
-    using diff_mat_t  = Eigen::Matrix<scalar_t, PolyOrder + 1, PolyOrder + 1>;
+    using time_t   = typename Eigen::Matrix<scalar_t, NUM_NODES, 1>;
+    using nodes_t  = typename Quadrature::nodes_t;
 
     /** AD variables */
     using derivatives_t = Eigen::Matrix<scalar_t, NX + NU + NP, 1>;
@@ -124,9 +114,9 @@ public:
     scalar_t t_stop;
 
     /** compute collocation parameters */
-    const diff_mat_t m_D = compute_diff_matrix();
-    const nodes_t m_nodes = compute_nodes();
-    const q_weights_t m_quad_weights = compute_int_weights();
+    const typename Quadrature::nodes_t m_nodes = Quadrature::compute_nodes();
+    const typename Quadrature::q_weights_t m_quad_weights = Quadrature::compute_int_weights();
+    const typename Quadrature::diff_mat_t m_D = Quadrature::compute_diff_matrix();
     time_t time_nodes = time_t::Zero();
 
     /** NLP variables */
@@ -150,66 +140,6 @@ public:
     // temporary matrices for equality and ineqquality Jacobians
     typename std::conditional<is_sparse, nlp_eq_jacobian_t, void*>::type m_Je;
     typename std::conditional<is_sparse, nlp_ineq_jacobian_t, void*>::type m_Ji;
-
-    diff_mat_t compute_diff_matrix() noexcept
-    {
-        nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, POLY_ORDER).reverse();
-        nodes_t c    = nodes_t::Ones(); c[0] = scalar_t(2); c[POLY_ORDER] = scalar_t(2);
-        c = (Eigen::pow(scalar_t(-1), grid.array()).matrix()).asDiagonal() * c;
-
-        nodes_t nodes = compute_nodes();
-        diff_mat_t XM = nodes.template replicate<1, PolyOrder + 1>();
-        diff_mat_t dX = XM - XM.transpose();
-
-        diff_mat_t Dn = (c * (c.cwiseInverse()).transpose()).array() * (dX + diff_mat_t::Identity()).cwiseInverse().array();
-        diff_mat_t diag_D = (Dn.rowwise().sum()).asDiagonal();
-
-        return Dn - diag_D;
-    }
-
-    nodes_t compute_nodes() noexcept
-    {
-        nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
-        return (grid * (M_PI / PolyOrder)).array().cos().reverse();
-    }
-
-    q_weights_t compute_int_weights() noexcept
-    {
-        /** Chebyshev collocation points for the interval [-1, 1]*/
-        nodes_t theta = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
-        theta *= (M_PI / PolyOrder);
-
-        q_weights_t w = q_weights_t::Zero(PolyOrder + 1, 1);
-        using tmp_vtype = Eigen::Matrix<scalar_t, PolyOrder - 1, 1>;
-        tmp_vtype v = tmp_vtype::Ones(PolyOrder - 1, 1);
-
-        if ( PolyOrder % 2 == 0 )
-        {
-            w[0]         = static_cast<scalar_t>(1 / (std::pow(PolyOrder, 2) - 1));
-            w[PolyOrder] = w[0];
-
-            for(int k = 1; k <= PolyOrder / 2 - 1; ++k)
-            {
-                tmp_vtype vk = Eigen::cos((2 * k * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
-                v -= static_cast<scalar_t>(2.0 / (4 * std::pow(k, 2) - 1)) * vk;
-            }
-            tmp_vtype vk = Eigen::cos((PolyOrder * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
-            v -= vk / (std::pow(PolyOrder, 2) - 1);
-        }
-        else
-        {
-            w[0] = static_cast<scalar_t>(1 / std::pow(PolyOrder, 2));
-            w[PolyOrder] = w[0];
-            for (int k = 1; k <= (PolyOrder - 1) / 2; ++k)
-            {
-                tmp_vtype vk = Eigen::cos((2 * k * polymath::segment<q_weights_t, PolyOrder - 1>(theta, 1)).array());
-                v -= static_cast<scalar_t>(2.0 / (4 * pow(k, 2) - 1)) * vk;
-            }
-        }
-
-        polymath::segment<q_weights_t, PolyOrder - 1>(w, 1) =  static_cast<scalar_t>(2.0 / PolyOrder) * v;
-        return w;
-    }
 
     EIGEN_STRONG_INLINE void set_time_limits(const scalar_t& t0, const scalar_t& tf) noexcept
     {
@@ -315,7 +245,7 @@ public:
         {
             if (CollocLast)
             {
-                m_DiffMat = Eigen::KroneckerProductSparse<diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
+                m_DiffMat = Eigen::KroneckerProductSparse<typename Quadrature::diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
             } else
             {
                 using diff_mat_tilde_t = Eigen::Matrix<scalar_t, PolyOrder, PolyOrder + 1>;
@@ -766,8 +696,8 @@ public:
     }
 };
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::seed_derivatives()
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::seed_derivatives()
 {
     const int deriv_num = NX + NU + NP;
     int deriv_idx = 0;
@@ -814,8 +744,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::equalities(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                Eigen::Ref<nlp_eq_constraints_t> constraint) const noexcept
 {
@@ -845,8 +775,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 // evaluate constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::inequalities(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                  const Eigen::Ref<const static_parameter_t>& p,
                                                                                                  Eigen::Ref<nlp_ineq_constraints_t> constraint) const noexcept
 {
@@ -861,8 +791,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 // evaluate combined constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::constraints(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                 const Eigen::Ref<const static_parameter_t>& p,
                                                                                                 Eigen::Ref<nlp_constraints_t> constraint) const noexcept
 {
@@ -870,10 +800,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     this->inequalities(var, p, constraint.template tail<NUM_INEQ>()); // why???
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
                                                                                                      Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                      Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
@@ -949,10 +879,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::equalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                      const Eigen::Ref<const static_parameter_t> &p,
                                                                                                      Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                      nlp_eq_jacobian_t &jacobian) noexcept
@@ -964,8 +894,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 }
 
 /** sparse linearisation */
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_equalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                   const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                   Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                                   nlp_eq_jacobian_t &jacobian) noexcept
@@ -1027,8 +957,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_equalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                          const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                          Eigen::Ref<nlp_eq_constraints_t> constraint,
                                                                                                                          nlp_eq_jacobian_t &jacobian) noexcept
@@ -1094,10 +1024,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     jacobian.diagonal() += m_DiffMat.diagonal();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                        const Eigen::Ref<const static_parameter_t> &p,
                                                                                                        Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                        Eigen::Ref<nlp_ineq_jacobian_t> jacobian) noexcept
@@ -1105,10 +1035,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     _inequalities_linearised_dense(var, p, constraint, jacobian);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::inequalities_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                        const Eigen::Ref<const static_parameter_t> &p,
                                                                                                        Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                        nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1120,9 +1050,9 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 }
 
 //sparse linearisation
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int N> typename std::enable_if<(N > 0)>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_inequalities_linearised_sparse(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                                nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1163,9 +1093,9 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template <int N> typename std::enable_if<(N > 0)>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_inequalities_linearised_sparse_update(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                                       Eigen::Ref<nlp_ineq_constraints_t> constraint,
                                                                                                                       nlp_ineq_jacobian_t &jacobian) noexcept
@@ -1206,10 +1136,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 
 
 // linearise combined constraints
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                       Eigen::Ref<nlp_constraints_t> constraint,
                                                                                                       Eigen::Ref<nlp_jacobian_t> jacobian) noexcept
@@ -1218,10 +1148,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     this->inequalities_linearised(var, p, constraint.template tail<NUM_INEQ>(), jacobian.bottomRows(NUM_INEQ)); // why???
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::constraints_linearised(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                       const Eigen::Ref<const static_parameter_t> &p,
                                                                                                       Eigen::Ref<nlp_constraints_t> constraint,
                                                                                                       nlp_jacobian_t &jacobian) noexcept
@@ -1253,8 +1183,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 
 
 /** cost computation */
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::cost(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                          const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
 {
     cost = scalar_t(0);
@@ -1281,8 +1211,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     cost += cost_i;
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::cost_gradient(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                   const Eigen::Ref<const static_parameter_t> &p,
                                                                                                   scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
 {
@@ -1325,10 +1255,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                      const Eigen::Ref<const static_parameter_t>& p,
                                                                                                      scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                      Eigen::Ref<nlp_hessian_t> cost_hessian) noexcept
@@ -1441,10 +1371,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     cost_hessian.template block<NP, NU>(VARX_SIZE + VARU_SIZE, VARX_SIZE + VARU_SIZE - NU) += hes.template block<NP, NU>(NX + NU, NX);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                      const Eigen::Ref<const static_parameter_t>& p,
                                                                                                      scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                      nlp_hessian_t& cost_hessian) noexcept
@@ -1455,8 +1385,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
         _cost_grad_hess_sparse_update(var, p, cost, cost_gradient, cost_hessian);
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_cost_grad_hess_sparse(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                            const Eigen::Ref<const static_parameter_t>& p,
                                                                                                            scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                            nlp_hessian_t& cost_hessian) noexcept
@@ -1694,8 +1624,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::_cost_grad_hess_sparse_update(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                                   const Eigen::Ref<const static_parameter_t>& p,
                                                                                                                   scalar_t &cost, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                                                                                   nlp_hessian_t& cost_hessian) noexcept
@@ -1866,8 +1796,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian) noexcept
 {
@@ -1882,8 +1812,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
      * we do not need Lagrangian itself for optimisation itself, so this function can be safely skipped (optimise later)*/
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                const Eigen::Ref<const static_parameter_t>& p,
                                                                                                const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                Eigen::Ref<nlp_constraints_t> g) noexcept
@@ -1895,8 +1825,8 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     _lagrangian += g.dot(lam.template head<NUM_EQ + NUM_INEQ>()) + var.dot(lam.template tail<NUM_BOX>());
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                         const Eigen::Ref<const static_parameter_t> &p,
                                                                                                         const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian,
                                                                                                         Eigen::Ref<nlp_variable_t> lag_gradient) noexcept
@@ -1915,10 +1845,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
     lag_gradient += lam.template tail<VAR_SIZE>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                    const Eigen::Ref<const static_parameter_t>& p,
                                                                                                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                    Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -1935,10 +1865,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                    const Eigen::Ref<const static_parameter_t>& p,
                                                                                                    const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                    Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -1977,8 +1907,8 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     lag_gradient += lam.template tail<NUM_BOX>();
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
-void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
+void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var,
                                                                                                                 const Eigen::Ref<const static_parameter_t>& p,
                                                                                                                 const Eigen::Ref<const nlp_dual_t>& lam,
                                                                                                                 scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
@@ -2055,10 +1985,10 @@ void CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadTyp
 }
 
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == DENSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t> &var,
                                                                                                            const Eigen::Ref<const static_parameter_t> &p,
                                                                                                            const Eigen::Ref<const nlp_dual_t> &lam, scalar_t &_lagrangian, Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                                                            Eigen::Ref<nlp_hessian_t> lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
@@ -2134,10 +2064,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
     }
 }
 
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::lagrangian_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
                                                                                                            const Eigen::Ref<const nlp_dual_t>& lam, scalar_t &_lagrangian,
                                                                                                            Eigen::Ref<nlp_variable_t> lag_gradient,
                                                                                                            nlp_hessian_t& lag_hessian, Eigen::Ref<nlp_variable_t> cost_gradient,
@@ -2246,10 +2176,10 @@ CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, Co
 }
 
 // sparsity preserving block BFGS update
-template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, quadrature_t QuadType, bool CollocLast>
+template<typename OCP, int NumSegments, int PolyOrder, int MatrixFormat, typename Quadrature, bool CollocLast>
 template<int T>
 typename std::enable_if<T == SPARSE>::type
-CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, QuadType, CollocLast>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
+CollocationTranscription<OCP, NumSegments, PolyOrder, MatrixFormat, Quadrature, CollocLast>::hessian_update_impl(Eigen::Ref<nlp_hessian_t> hessian, const Eigen::Ref<const nlp_variable_t> s,
                                                                                                    const Eigen::Ref<const nlp_variable_t> y) const noexcept
 {
     //std::cout << "s: " << s.transpose() << "\n";

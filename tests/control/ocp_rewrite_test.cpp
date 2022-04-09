@@ -2,6 +2,7 @@
 #include <iomanip>
 #include "control/ocp_base.hpp"
 #include "control/collocation_transcription.hpp"
+#include "quadratures/legendre_gauss_lobatto.hpp"
 #include "solvers/box_admm.hpp"
 #include "solvers/qp_preconditioners.hpp"
 #include "solvers/sqp_base.hpp"
@@ -69,7 +70,7 @@ public:
 const int POLY_ORDER = 5;
 const int NUM_SEG = 2;
 
-using TranscribedRobotOCP = CollocationTranscription<RobotOCP, NUM_SEG, POLY_ORDER, SPARSE, CLENSHAW_CURTIS, false>;
+using TranscribedRobotOCP = CollocationTranscription<RobotOCP, NUM_SEG, POLY_ORDER, SPARSE, LegendreGaussLobatto<POLY_ORDER>, false>;
 
 using QPSolver = boxADMM<TranscribedRobotOCP::VAR_SIZE, TranscribedRobotOCP::NUM_EQ, TranscribedRobotOCP::scalar_t,
         TranscribedRobotOCP::MATRIXFMT, linear_solver_traits<TranscribedRobotOCP::MATRIXFMT>::default_solver>;

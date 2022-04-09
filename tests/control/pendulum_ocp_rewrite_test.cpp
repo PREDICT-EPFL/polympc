@@ -2,6 +2,7 @@
 #include <iomanip>
 #include "control/ocp_base.hpp"
 #include "control/collocation_transcription.hpp"
+#include "quadratures/legendre_gauss_lobatto.hpp"
 #include "solvers/box_admm.hpp"
 #include "solvers/qp_preconditioners.hpp"
 #include "solvers/sqp_base.hpp"
@@ -82,7 +83,7 @@ public:
 #define POLY_ORDER 5
 #define NUM_SEG 2
 
-using TranscribedPendulumOCP = CollocationTranscription<PendulumOCP, NUM_SEG, POLY_ORDER, SPARSE, CLENSHAW_CURTIS, false>;
+using TranscribedPendulumOCP = CollocationTranscription<PendulumOCP, NUM_SEG, POLY_ORDER, SPARSE, ClenshawCurtis<POLY_ORDER>, false>;
 
 using QPSolver = boxADMM<TranscribedPendulumOCP::VAR_SIZE, TranscribedPendulumOCP::NUM_EQ, TranscribedPendulumOCP::scalar_t,
         TranscribedPendulumOCP::MATRIXFMT, linear_solver_traits<TranscribedPendulumOCP::MATRIXFMT>::default_solver>;

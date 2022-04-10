@@ -160,6 +160,13 @@ public:
         m_solver.upper_bound_x().template segment<varu_size>(varx_size) = ub.replicate(num_nodes, 1);
     }
 
+    inline void final_control_bounds(const Eigen::Ref<const control_t>& lb,
+                                    const Eigen::Ref<const control_t>& ub) noexcept
+    {
+        m_solver.lower_bound_x().template segment<nu>(varx_size + varu_size - nu) = lb;
+        m_solver.upper_bound_x().template segment<nu>(varx_size + varu_size - nu) = ub;
+    }
+
     // generic inequality constraints
     inline void constraints_trajectory_bounds(const Eigen::Ref<const constraints_t>& lbg,
                                    const Eigen::Ref<const constraints_t>& ubg) noexcept

@@ -113,7 +113,7 @@ typename Chebyshev<PolyOrder, Qtype, Scalar>::nodes_t
 Chebyshev<PolyOrder, Qtype, Scalar>::compute_nodes() noexcept
 {
     nodes_t grid = nodes_t::LinSpaced(PolyOrder + 1, 0, PolyOrder);
-    return (grid * (M_PI / PolyOrder)).array().cos();
+    return (grid * (M_PI / PolyOrder)).array().cos().reverse();
 }
 
 

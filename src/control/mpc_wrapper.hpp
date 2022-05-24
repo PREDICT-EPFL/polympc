@@ -44,7 +44,7 @@ public:
     MPC()
     {
         // initialise time nodes and Lagrange interpolator
-        time_grid = this->ocp().time_nodes.reverse();
+        time_grid = this->ocp().time_nodes;
         time_nodes = time_grid.template head<OCP::nodes_t::RowsAtCompileTime>();
 
         polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
@@ -79,7 +79,7 @@ public:
         m_solver.get_problem().set_time_limits(t0, tf);
 
         // update time grid and Lagrange interpolator
-        time_grid = this->ocp().time_nodes.reverse();
+        time_grid = this->ocp().time_nodes;
         time_nodes = time_grid.template head<OCP::nodes_t::RowsAtCompileTime>();
         polympc::LagrangeSpline::compute_lagrange_basis(time_nodes, m_basis);
         sgm_length = (tf - t0) / num_segms;
@@ -88,31 +88,31 @@ public:
     /** set initial conditions bounds */
     inline void initial_conditions(const Eigen::Ref<const state_t>& x0) noexcept
     {
-        m_solver.upper_bound_x().template segment<nx>(varx_size - nx) = x0;
-        m_solver.lower_bound_x().template segment<nx>(varx_size - nx) = x0;
+        m_solver.upper_bound_x().template head<nx>() = x0;
+        m_solver.lower_bound_x().template head<nx>() = x0;
     }
     inline void initial_conditions(const Eigen::Ref<const state_t>& x0_lb,
                                    const Eigen::Ref<const state_t>& x0_ub) noexcept
     {
-        m_solver.upper_bound_x().template segment<nx>(varx_size - nx) = x0_ub;
-        m_solver.lower_bound_x().template segment<nx>(varx_size - nx) = x0_lb;
+        m_solver.upper_bound_x().template head<nx>() = x0_ub;
+        m_solver.lower_bound_x().template head<nx>() = x0_lb;
     }
 
     /** set state and control bounds */
     // state
     inline void x_lower_bound(const Eigen::Ref<const state_t>& xlb) noexcept
     {
-        m_solver.lower_bound_x().template head<varx_size - nx>() = xlb.replicate(num_nodes - 1, 1);
+        m_solver.lower_bound_x().template segment<varx_size - nx>(nx) = xlb.replicate(num_nodes - 1, 1);
     }
     inline void x_upper_bound(const Eigen::Ref<const state_t>& xub) noexcept
     {
-        m_solver.upper_bound_x().template head<varx_size - nx>() = xub.replicate(num_nodes - 1, 1);
+        m_solver.upper_bound_x().template segment<varx_size - nx>(nx) = xub.replicate(num_nodes - 1, 1);
     }
     inline void state_bounds(const Eigen::Ref<const state_t>& xlb,
                              const Eigen::Ref<const state_t>& xub) noexcept
     {
-        m_solver.lower_bound_x().template head<varx_size - nx>() = xlb.replicate(num_nodes - 1, 1);
-        m_solver.upper_bound_x().template head<varx_size - nx>() = xub.replicate(num_nodes - 1, 1);
+        m_solver.lower_bound_x().template segment<varx_size - nx>(nx) = xlb.replicate(num_nodes - 1, 1);
+        m_solver.upper_bound_x().template segment<varx_size - nx>(nx) = xub.replicate(num_nodes - 1, 1);
     }
     inline void state_trajectory_bounds(const Eigen::Ref<const traj_state_t>& xlb,
                                         const Eigen::Ref<const traj_state_t>& xub) noexcept
@@ -123,17 +123,17 @@ public:
 
     inline void x_final_lower_bound(const Eigen::Ref<const state_t>& xlb) noexcept
     {
-        m_solver.lower_bound_x().template head<nx>() = xlb;
+        m_solver.lower_bound_x().template segment<nx>(varx_size - nx) = xlb;
     }
     inline void x_final_upper_bound(const Eigen::Ref<const state_t>& xub) noexcept
     {
-        m_solver.upper_bound_x().template head<nx>() = xub;
+        m_solver.upper_bound_x().template segment<nx>(varx_size - nx) = xub;
     }
     inline void final_state_bounds(const Eigen::Ref<const state_t>& xlb,
                                    const Eigen::Ref<const state_t>& xub) noexcept
     {
-        m_solver.lower_bound_x().template head<nx>() = xlb;
-        m_solver.upper_bound_x().template head<nx>() = xub;
+        m_solver.lower_bound_x().template segment<nx>(varx_size - nx) = xlb;
+        m_solver.upper_bound_x().template segment<nx>(varx_size - nx) = xub;
     }
 
     // control
@@ -236,11 +236,11 @@ public:
     inline Eigen::Matrix<scalar_t, nx, num_nodes> solution_x_reshaped() const noexcept
     {
         traj_state_t opt_x = m_solver.primal_solution().template head<varx_size>();
-        return Eigen::Map<Eigen::Matrix<scalar_t, nx, num_nodes>>(opt_x.data(), nx, num_nodes).rowwise().reverse();
+        return Eigen::Map<Eigen::Matrix<scalar_t, nx, num_nodes>>(opt_x.data(), nx, num_nodes);
     }
     inline state_t solution_x_at(const int &k) const noexcept
     {
-        return m_solver.primal_solution().template segment<nx>(varx_size - (k + 1) * nx);
+        return m_solver.primal_solution().template segment<nx>(k * nx);
     }
     inline state_t solution_x_at(const scalar_t& t) const noexcept
     {
@@ -262,11 +262,11 @@ public:
     inline Eigen::Matrix<scalar_t, nu, num_nodes> solution_u_reshaped() const noexcept
     {
         traj_control_t opt_u = m_solver.primal_solution().template segment<varu_size>(varx_size);
-        return Eigen::Map<Eigen::Matrix<scalar_t, nu, num_nodes>>(opt_u.data(), nu, num_nodes).rowwise().reverse();
+        return Eigen::Map<Eigen::Matrix<scalar_t, nu, num_nodes>>(opt_u.data(), nu, num_nodes);
     }
     inline control_t solution_u_at(const int &k) const noexcept
     {
-        return m_solver.primal_solution().template segment<nu>(varx_size + varu_size - (k + 1) * nu);
+        return m_solver.primal_solution().template segment<nu>(varx_size + k * nu);
     }
     inline control_t solution_u_at(const scalar_t& t) const noexcept
     {

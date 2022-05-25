@@ -121,6 +121,11 @@ Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Chebyshev()
     m_QuadWeights = QuadWeights();
     m_ComD        = CompDiffMatrix();
 
+//    std::cout << "m_Points: " << m_Points << "\n";
+//    std::cout << "m_D: " << casadi::DM::densify(m_D) << "\n";
+//    std::cout << "mComD: " << casadi::DM::densify(m_ComD) << "\n";
+//    std::cout << "m_QuadWeights: " << casadi::DM::densify(m_QuadWeights) << "\n";
+
     /** create discretized states and controls */
     m_X  = casadi::SX::sym("X", (NumSegments * PolyOrder + 1) * NX );
     m_U  = casadi::SX::sym("U", (NumSegments * PolyOrder + 1) * NU );
@@ -190,7 +195,8 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::DiffMatr
     BaseClass dX = XM - XM.T();
     BaseClass Dn  = BaseClass::mtimes(c, (1 / c).T() ) / (dX + (BaseClass::eye(PolyOrder + 1)));      /** off-diagonal entries */
 
-    return Dn - BaseClass::diag( BaseClass::sum1(Dn.T() ));               /**  diagonal entries */
+    BaseClass D = Dn - BaseClass::diag( BaseClass::sum1(Dn.T() ));   /**  diagonal entries */
+    return D(casadi::Slice(1, D.size1()), casadi::Slice());
 }
 
 /** @brief compute weights for Clenshaw-Curtis quadrature / ref {L. Trefethen "Spectral Methods in Matlab"}*/
@@ -246,7 +252,7 @@ template<class BaseClass,
          int ND>
 BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CompDiffMatrix(const int &DIM)
 {
-    int comp_rows = NumSegments * PolyOrder + 1;
+    int comp_rows = NumSegments * PolyOrder;
     int comp_cols = NumSegments * PolyOrder + 1;
 
     BaseClass CompDiff = BaseClass::zeros(comp_rows, comp_cols);
@@ -260,11 +266,8 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::CompDiff
     }
     else
     {
-        /** insert first matrix */
-        CompDiff(casadi::Slice(CompDiff.size1() - D0.size1(), CompDiff.size1()),
-                 casadi::Slice(CompDiff.size2() - D0.size2(), CompDiff.size2())) = D0;
         /** fill in diagonal terms */
-        for(int k = 0; k < (NumSegments - 1) * PolyOrder; k += PolyOrder)
+        for(int k = 0; k < NumSegments * PolyOrder; k += PolyOrder)
         {
             CompDiff(casadi::Slice(k, k + PolyOrder), casadi::Slice(k, k + PolyOrder + 1)) =
                     D(casadi::Slice(0, PolyOrder), casadi::Slice(0, D.size2()));
@@ -288,12 +291,12 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Collocat
 {
     /** evaluate RHS at the collocation points */
     int DIMX = m_X.size1();
-    BaseClass F_XU = BaseClass::zeros(DIMX);
+    BaseClass F_XU = BaseClass::zeros(DIMX - NX);
     casadi::SXVector tmp;
-    int j = 0;
+    int j = NU;
     double t_scale = (tf - t0) / (2 * NumSegments);
 
-    for (int i = 0; i <= DIMX - NX; i += NX)
+    for (int i = NX; i <= DIMX - NX; i += NX)
     {
         if((NP == 0) && (ND == 0))
         {
@@ -308,7 +311,7 @@ BaseClass Chebyshev<BaseClass, PolyOrder, NumSegments, NX, NU, NP, ND>::Collocat
                                             m_P, m_DT});
         }
 
-        F_XU(casadi::Slice(i, i + NX)) = t_scale * tmp[0];
+        F_XU(casadi::Slice(i-NX, i)) = t_scale * tmp[0];
         j += NU;
     }
 

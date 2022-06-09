@@ -16,6 +16,8 @@
 #include "autodiff/AutoDiffScalar.h"
 #include "utils/helpers.hpp"
 #include "solvers/bfgs.hpp"
+#include "quadratures/clenshaw_curtis.hpp"
+#include "quadratures/legendre_gauss_lobatto.hpp"
 #include "iostream"
 #include <type_traits>
 
@@ -61,6 +63,7 @@ public:
     }
     ~ContinuousOCP() = default;
 
+    using Quadrature = polympc::LegendreGaussLobatto<Approximation::POLY_ORDER, typename Approximation::scalar_t>;
     static const bool CollocLast = false;
 
     enum
@@ -151,13 +154,13 @@ public:
         const scalar_t t_shift  = t_length / 2;
         for(Eigen::Index i = 0; i < NUM_SEGMENTS; ++i)
             time_nodes.template segment<POLY_ORDER + 1>(i * POLY_ORDER) =  (t_length/2) * m_nodes +
-                    (t_start + t_shift + i * t_length) * Approximation::nodes_t::Ones();
+                    (t_start + t_shift + i * t_length) * Quadrature::nodes_t::Ones();
     }
 
     /** compute collocation parameters */
-    const typename Approximation::diff_mat_t  m_D     = Approximation::compute_diff_matrix();
-    const typename Approximation::nodes_t     m_nodes = Approximation::compute_nodes();
-    const typename Approximation::q_weights_t m_quad_weights = Approximation::compute_int_weights();
+    const typename Quadrature::diff_mat_t  m_D     = Quadrature::compute_diff_matrix();
+    const typename Quadrature::nodes_t     m_nodes = Quadrature::compute_nodes();
+    const typename Quadrature::q_weights_t m_quad_weights = Quadrature::compute_int_weights();
     time_t time_nodes = time_t::Zero();
 
     /** NLP variables */
@@ -316,7 +319,7 @@ public:
         {
             if (CollocLast)
             {
-                m_DiffMat = Eigen::KroneckerProductSparse<typename Approximation::diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
+                m_DiffMat = Eigen::KroneckerProductSparse<typename Quadrature::diff_mat_t, Eigen::SparseMatrix<scalar_t>>(m_D, E);
             }
             else
             {

@@ -18,6 +18,7 @@
 #include "solvers/bfgs.hpp"
 #include "quadratures/clenshaw_curtis.hpp"
 #include "quadratures/legendre_gauss_lobatto.hpp"
+#include "quadratures/legendre_gauss_radau.hpp"
 #include "iostream"
 #include <type_traits>
 
@@ -364,14 +365,15 @@ public:
         {
             // all points are collocated
             m_jac_inner_nnz. template head<VARX_SIZE + VARU_SIZE>() = Eigen::VectorXi::Constant(VARX_SIZE + VARU_SIZE, NX);
+            m_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
         }
         else
         {
             // last points are not collocated
             m_jac_inner_nnz. template head<VARX_SIZE - NX>() = Eigen::VectorXi::Constant(VARX_SIZE - NX, NX);
             m_jac_inner_nnz. template segment<VARU_SIZE - NU>(VARX_SIZE) = Eigen::VectorXi::Constant(VARU_SIZE - NU, NX);
+            m_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE - NX);
         }
-        m_jac_inner_nnz. template tail<VARP_SIZE>() = Eigen::VectorXi::Constant(VARP_SIZE, VARX_SIZE);
 
         // add diff matrix entries
         for(Eigen::Index i = 0; i < NUM_NODES; i++)
@@ -1548,7 +1550,7 @@ void ContinuousOCP<OCP, Approximation, MatrixFormat>::_cost_grad_hess_sparse(con
                 /** dudp */
                 for(Eigen::Index j = 0; j < NP; ++j)
                 {
-                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, VARX_SIZE + (k + shift) * NU);
+                    add_n_sparse(hes.col(j + NX + NU).data() + NX, NU, cost_hessian, VARX_SIZE + VARU_SIZE + j, (shift + 1) * NX + (k + shift) * NU);
                 }
                 /** dp^2 */
                 /**

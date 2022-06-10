@@ -64,7 +64,7 @@ public:
     }
     ~ContinuousOCP() = default;
 
-    using Quadrature = polympc::LegendreGaussLobatto<Approximation::POLY_ORDER, typename Approximation::scalar_t>;
+    using Quadrature = polympc::LegendreGaussRadau<Approximation::POLY_ORDER, typename Approximation::scalar_t>;
     static const bool CollocLast = false;
 
     enum

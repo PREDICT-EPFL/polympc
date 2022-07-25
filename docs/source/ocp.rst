@@ -265,7 +265,7 @@ using *PolyMPC*.
             polympc::ignore_unused_var(t);
             polympc::ignore_unused_var(d);
 
-            lagrange = x.dot(Q.template cast<T>() * x) + u.dot(R.template cast<T>() * u);
+            lagrange = x.dot(Q * x) + u.dot(R * u);
         }
 
         template<typename T>
@@ -278,7 +278,7 @@ using *PolyMPC*.
             polympc::ignore_unused_var(d);
             polympc::ignore_unused_var(u);
 
-            mayer = x.dot(QN.template cast<T>() * x);
+            mayer = x.dot(QN * x);
         }
     };
 
@@ -377,7 +377,7 @@ will explain in the next section how to chenge these values.
         polympc::ignore_unused_var(t);
         polympc::ignore_unused_var(d);
 
-        lagrange = x.dot(Q.template cast<T>() * x) + u.dot(R.template cast<T>() * u);
+        lagrange = x.dot(Q * x) + u.dot(R * u);
     }
 
     template<typename T>
@@ -390,14 +390,8 @@ will explain in the next section how to chenge these values.
         polympc::ignore_unused_var(d);
         polympc::ignore_unused_var(u);
 
-        mayer = x.dot(QN.template cast<T>() * x);
+        mayer = x.dot(QN * x);
      }
-
-
-.. NOTE::
-
-   Inconvenience of using :func:`template cast<T>()` has to do with certain current limitations of forward-mode automatic differentiation code in Eigen. In case, the exact
-   second order derivatives are not required by the nonlinear solver, i.e. BFGS approximation is used, the :func:`cast` function is not required.
 
 
 **Generic Inequality Constraints**

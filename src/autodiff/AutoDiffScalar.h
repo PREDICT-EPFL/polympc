@@ -513,6 +513,18 @@ struct ScalarBinaryOpTraits<typename DerType::Scalar,AutoDiffScalar<DerType>, Bi
   typedef AutoDiffScalar<DerType> ReturnType;
 };
 
+template<typename DerType, typename BinOp>
+struct ScalarBinaryOpTraits<AutoDiffScalar<DerType>, typename DerType::Scalar::Scalar, BinOp>
+{
+  typedef AutoDiffScalar<DerType> ReturnType;
+};
+
+template<typename DerType, typename BinOp>
+struct ScalarBinaryOpTraits<typename DerType::Scalar::Scalar, AutoDiffScalar<DerType>, BinOp>
+{
+  typedef AutoDiffScalar<DerType> ReturnType;
+};
+
 
 // The following is an attempt to let Eigen's known about expression template, but that's more tricky!
 

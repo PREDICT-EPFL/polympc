@@ -14,6 +14,9 @@ if(BUILD_EXAMPLES AND ${CASADI_FOUND})
     add_library(mobile_robot mobile_robot.cpp mobile_robot.hpp)
     target_link_libraries(mobile_robot ${CASADI_LIBRARIES})
 
+    add_executable(mobile_robot_test mobile_robot_test.cpp)
+    target_link_libraries(mobile_robot_test ${CASADI_LIBRARIES})
+
     add_executable(robot_control_test robot_control_test.cpp)
     target_link_libraries(robot_control_test mobile_robot Eigen3::Eigen)
 

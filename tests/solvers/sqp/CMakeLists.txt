@@ -20,5 +20,10 @@ if(BUILD_TESTS OR SQP_TESTS)
       target_link_libraries(sqp_base_test OsqpEigen::OsqpEigen)
   endif()
 
+  #codegen test
+  file(GLOB CASADI_CODEGEN "casadi_codegen/*.cpp" "casadi_codegen/*.h")
+  add_executable(codegen_test codegen_test.cpp ${CASADI_CODEGEN})
+  target_link_libraries(codegen_test Eigen3::Eigen)
+
 
 endif()

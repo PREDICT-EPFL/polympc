@@ -14,8 +14,8 @@ static constexpr int NU = 2; // number of input signals
 static constexpr int NP = 0; // number of unknown parameters (can be optimised)
 static constexpr int ND = 0; // number of user specified parameters (changed excusively by the user)
 
-static constexpr int POLY_ORDER = 2;
-static constexpr int NUM_SEGMENTS = 1;
+static constexpr int POLY_ORDER = 5;
+static constexpr int NUM_SEGMENTS = 2;
 
 using Approximation  = Chebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;     // standard collocation
 using Approximation2 = MSChebyshev<casadi::SX, POLY_ORDER, NUM_SEGMENTS, NX, NU, NP, ND>;   // ZOH controls in segments

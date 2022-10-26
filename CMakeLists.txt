@@ -60,13 +60,7 @@ endif()
 #add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB
 
 
-#if(ARM_ENABLE_VECTORIZATION AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" )
-#    message(STATUS "EIGEN: ARM VECTORIZATION ENABLED")
-#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon")
-#endif()
-
-
-include_directories(src src/examples ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
+include_directories(src src/examples ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})
 
 add_subdirectory(src cmake)
 add_subdirectory(examples)

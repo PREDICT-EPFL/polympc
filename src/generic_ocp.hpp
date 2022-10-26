@@ -13,6 +13,7 @@
 #include "chebyshev.hpp"
 #include "chebyshev_ms.hpp"
 #include "chebyshev_soft.hpp"
+#include <iostream>
 
 enum PENALTY { QUADRATIC, EXACT };
 enum OPERATOR_OUTPUT {NORM_DIFF_VALUE = 5};
@@ -64,6 +65,19 @@ protected:
     casadi::SX final_inequality_constraints(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
     {
         return static_cast<OCP*>(this)->final_inequality_constraints_impl(x,u,p,d);
+    }
+
+    /** default implementations for path and terminal constraints */
+    casadi::SX inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
+    {
+        std::cout << "default inequality constraints \n";
+        return casadi::SX();
+    }
+
+    casadi::SX final_inequality_constraints_impl(const casadi::SX &x, const casadi::SX &u, const casadi::SX &p, const casadi::SX &d)
+    {
+        std::cout << "default final inequality constraints \n";
+        return casadi::SX();
     }
 
     /** regularization of an expression derivative*/
@@ -177,6 +191,9 @@ public:
             OPTS[it->first] = it->second;
         }
     }
+
+    // generate C code for nlp functions evaluation
+    void generate_nlp_code();
 
     void solve(const casadi::DM &lbx0, const casadi::DM &ubx0,
                const casadi::DM &X0 = casadi::DM(), const casadi::DM &LAM_X0 = casadi::DM(), const casadi::DM &LAM_G0 = casadi::DM());
@@ -548,6 +565,54 @@ void GenericOCP<OCP, Approximation>::setup()
     ARG["x0"] = casadi::DM ::zeros(opt_var.size1(), 1);
 }
 
+/** generate NLP problem */
+template<typename OCP, typename Approximation>
+void GenericOCP<OCP, Approximation>::generate_nlp_code()
+{
+    casadi::SX cost = NLP["f"];
+    casadi::SX opt_var = NLP["x"];
+    casadi::SX constraints = NLP["g"];
+    casadi::SX vard = NLP["p"];
+
+    /** code-generate sensitivities */
+    /** cost */
+    casadi::Dict cg_options = {{"with_header", true}, {"cpp", true}, {"indent", 4}};
+
+    casadi::Function cost_function = casadi::Function("fcost", {opt_var}, {cost});
+    casadi::SX cost_gradient = casadi::SX::jacobian(cost, opt_var);
+    casadi::SX cost_hessian = casadi::SX::jacobian(cost_gradient, opt_var);
+
+    casadi::Function cost_grad_function = casadi::Function("fcost_gradient", {opt_var}, {cost_gradient});
+    casadi::Function cost_hess_function = casadi::Function("fcost_hessian", {opt_var}, {cost_hessian});
+
+    auto cost_str = cost_function.generate("fcost.cpp", cg_options);
+    cost_str = cost_grad_function.generate("fcost_gradient.cpp", cg_options);
+    cost_str = cost_hess_function.generate("fcost_hessian.cpp", cg_options);
+
+    /** lagrangian */
+    casadi::SX lambda = casadi::SX::sym("lambda", constraints.size1());
+    casadi::SX lagrangian = cost + casadi::SX::dot(lambda, constraints);
+    casadi::SX lagrangian_gradient = casadi::SX::jacobian(lagrangian, opt_var);
+    casadi::SX lagrangian_hessian  = casadi::SX::jacobian(lagrangian_gradient, opt_var);
+
+    casadi::Function lagrangian_function = casadi::Function("flagrangian", {opt_var, lambda}, {lagrangian});
+    casadi::Function lagrangian_gradient_function = casadi::Function("flagrangian_gradient", {opt_var, lambda}, {lagrangian_gradient});
+    casadi::Function lagrangian_hessian_function = casadi::Function("flagrangian_hessian", {opt_var, lambda}, {lagrangian_hessian});
+
+    auto lagrangian_str = lagrangian_function.generate("flagrangian.cpp",cg_options);
+    lagrangian_str = lagrangian_gradient_function.generate("flagrangian_gradient.cpp", cg_options);
+    lagrangian_str = lagrangian_hessian_function.generate("flagrangian_hessian.cpp", cg_options);
+
+    /** constraints */
+    casadi::Function constraint_function = casadi::Function("fconstraint", {opt_var}, {constraints});
+    auto constr_str = constraint_function.generate("fconstraints.cpp", cg_options);
+
+    casadi::SX constraints_jac = casadi::SX::jacobian(constraints, opt_var);
+    casadi::Function constraints_jac_function = casadi::Function("fconstraints_jacobian", {opt_var}, {constraints_jac});
+    auto constr_jac_str = constraints_jac_function.generate("fconstraints_jacobian.cpp", cg_options);
+}
+
+// solve
 template<typename OCP, typename Approximation>
 void GenericOCP<OCP, Approximation>::solve(const casadi::DM &lbx0, const casadi::DM &ubx0,
                                            const casadi::DM &X0, const casadi::DM &LAM_X0, const casadi::DM &LAM_G0)

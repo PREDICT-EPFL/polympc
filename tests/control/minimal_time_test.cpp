@@ -153,8 +153,6 @@ public:
         this->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
         polympc::ignore_unused_var(x_step);
     }
-
-
 };
 
 

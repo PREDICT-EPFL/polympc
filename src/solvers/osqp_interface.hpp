@@ -66,7 +66,7 @@ public:
             osqp_solver.updateLinearConstraintsMatrix(m_A);
             osqp_solver.updateBounds(x_lower_bound, x_upper_bound);
 
-            osqp_solver.solve();
+            osqp_solver.solveProblem();
         }
         else
         {
@@ -79,7 +79,7 @@ public:
             osqp_solver.data()->setUpperBound(x_upper_bound);
 
             osqp_solver.initSolver();
-            osqp_solver.solve();
+            osqp_solver.solveProblem();
         }
 
         this->m_x = osqp_solver.getSolution();
@@ -127,7 +127,7 @@ public:
 
 
             osqp_solver.setWarmStart(x_guess, y_guess);
-            osqp_solver.solve();
+            osqp_solver.solveProblem();
         }
         else
         {
@@ -141,7 +141,7 @@ public:
 
             osqp_solver.initSolver();
             osqp_solver.setWarmStart(x_guess, y_guess);
-            osqp_solver.solve();
+            osqp_solver.solveProblem();
         }
 
         this->m_x = osqp_solver.getSolution();
@@ -219,7 +219,7 @@ private:
         osqp_solver.settings()->setVerbosity(this->m_settings.verbose);
         osqp_solver.settings()->setWarmStart(this->m_settings.warm_start);
         osqp_solver.settings()->setAdaptiveRho(this->m_settings.adaptive_rho);
-        osqp_solver.settings()->setMaxIteraction(this->m_settings.max_iter);
+        osqp_solver.settings()->setMaxIteration(this->m_settings.max_iter);
         osqp_solver.settings()->setCheckTermination(this->m_settings.check_termination);
         osqp_solver.settings()->setAbsoluteTolerance(this->m_settings.eps_abs);
         osqp_solver.settings()->setRelativeTolerance(this->m_settings.eps_rel);
@@ -234,8 +234,8 @@ private:
         osqp_solver.settings()->setLinearSystemSolver(this->m_settings.osqp_linear_solver);
         osqp_solver.settings()->setScaledTerimination(this->m_settings.scaled_termination);
         osqp_solver.settings()->setAdaptiveRhoFraction(this->m_settings.adaptive_rho_fraction);
-        osqp_solver.settings()->setPrimalInfeasibilityTollerance(this->m_settings.eps_prim_inf);
-        osqp_solver.settings()->setDualInfeasibilityTollerance(this->m_settings.eps_dual_inf);
+        osqp_solver.settings()->setPrimalInfeasibilityTolerance(this->m_settings.eps_prim_inf);
+        osqp_solver.settings()->setDualInfeasibilityTolerance(this->m_settings.eps_dual_inf);
     }
 
 };

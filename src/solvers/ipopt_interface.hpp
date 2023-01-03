@@ -481,8 +481,8 @@ public:
 
         m_info.status = status;
         m_info.iter = (int) m_app->Statistics()->IterationCount();
-        Ipopt::Number complementarity, kkt_error;
-        m_app->Statistics()->Infeasibilities(m_dual_norm, m_max_violation, complementarity, kkt_error);
+        Ipopt::Number complementarity, kkt_error, bounds_violation;
+        m_app->Statistics()->Infeasibilities(m_dual_norm, m_max_violation, bounds_violation, complementarity, kkt_error);
         m_cost = (scalar_t) m_app->Statistics()->FinalObjective();
     }
 

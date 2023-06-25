@@ -25,6 +25,7 @@ if(${CASADI_FOUND})
 else()
     message(WARNING "CasADi is not found, the corresponding interface and examples will not be built")
     set(CASADI_INCLUDE_DIR "")
+    set(CASADI_FOUND False)
 endif()
 
 option(BUILD_TESTS "Build all tests in PolyMPC project" OFF)

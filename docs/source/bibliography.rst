@@ -47,3 +47,6 @@ References
 
 .. [Listov2020] P. Listov, C. Jones "PolyMPC: An efficient and extensible tool for real‐time nonlinear
    model predictive tracking and path following for fast mechatronic systems", Optimal Control Applications and Methods, 2020.
+
+.. [Linsen2022] R. Linsen, P. Listov, A. Lajarte, R. Schwan, C. Jones "Optimal Thrust Vector Control of an Electric Small-Scale Rocket Prototype",
+   2022 International Conference on Robotics and Automation (ICRA), 2022

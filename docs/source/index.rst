@@ -27,3 +27,7 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+**Contacts**
+
+Petr Listov - plistov@gmail.com

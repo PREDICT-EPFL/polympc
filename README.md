@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.com/PREDICT-EPFL/polympc.svg?branch=master)](https://travis-ci.com/PREDICT-EPFL/polympc)
 
+[![Documentation Status](https://readthedocs.org/projects/polympc/badge/?version=latest)](https://polympc.readthedocs.io/en/latest/?badge=latest)
+
 PolyMPC: An Efficient and Extensible Tool for Real-Time Nonlinear Model Predictive Tracking and Path Following for Fast Mechatronic Systems. Developed at the Automatic Control laboratory EPFL as part of the AWESCO project.
 
 ## Documentation

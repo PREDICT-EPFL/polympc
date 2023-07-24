@@ -14,7 +14,6 @@
 #include <iomanip>
 #include <iostream>
 #include <chrono>
-#include "control/simple_robot_model.hpp"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2

@@ -1,17 +1,15 @@
 #include "solvers/sqp_base.hpp"
+#include "solvers/box_admm.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "control/continuous_ocp.hpp"
-#include "control/mpc_wrapper.hpp"
 #include "polynomials/splines.hpp"
 
 #include <iomanip>
 #include <iostream>
 #include <chrono>
 
-#include "control/simple_robot_model.hpp"
-#include "solvers/box_admm.hpp"
-
 #include "unsupported/Eigen/SparseExtra"
+#include "gtest/gtest.h"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -150,7 +148,7 @@ using sparse_admm_t = boxADMM<ParkingOCPSparse::VAR_SIZE, ParkingOCPSparse::NUM_
 using sparse_solver_t = sparse_admm_t::linear_solver_t;
 
 
-int main(void)
+TEST(ControlTests, CompareDenseSparse)
 {
     using namespace polympc;
 
@@ -194,24 +192,18 @@ int main(void)
     sparse_nlp.lagrangian_gradient_hessian(svar, sp, slam, slagrangian, slag_gradient, slag_hessian, scost_gradient, sconstr, seq_jac);
 
     // compare Hessians
-    Eigen::MatrixXd H = slag_hessian.toDense();
-    Eigen::MatrixXd dH = lag_hessian - H;
-    std::cout << "dH: \n" << dH << "\n";
+    EXPECT_TRUE(lag_hessian.isApprox(slag_hessian.toDense()));
 
-    //compare Jacobians
-    Eigen::MatrixXd J = seq_jac.toDense();
-    Eigen::MatrixXd dJ = eq_jac - J;
-    std::cout << "dJ: \n" << dJ<< "\n";
+    // compare Jacobians
+    EXPECT_TRUE(eq_jac.isApprox(seq_jac.toDense()));
 
-    //compare cost Gradients
-    Eigen::MatrixXd dG = scost_gradient - cost_gradient;
-    std::cout << "dG: \n" << dG.transpose() << "\n";
+    // compare cost Gradients
+    EXPECT_TRUE(cost_gradient.isApprox(scost_gradient));
 
-    //compare constraints
-    Eigen::MatrixXd dC = constr - sconstr;
-    std::cout << "dC: \n" << dC.transpose() << "\n";
+    // compare constraints
+    EXPECT_TRUE(constr.isApprox(sconstr));
 
-    //compare KKT systems
+    // compare KKT systems
     dense_admm_t  dense_qp;
     sparse_admm_t sparse_qp;
 
@@ -240,8 +232,8 @@ int main(void)
     dense_qp.construct_kkt_matrix(lag_hessian, eq_jac);
     sparse_qp.construct_kkt_matrix(slag_hessian, seq_jac);
 
-    Eigen::MatrixXd sK = sparse_qp.m_K.toDense();
-    std::cout << "dH: \n" << sK - dense_qp.m_K << "\n";
+    // compare KKT matrices
+    EXPECT_TRUE(dense_qp.m_K.isApprox(sparse_qp.m_K.toDense()));
 
     dense_solver_t  dense_ldlt;
     sparse_solver_t sparse_ldlt;
@@ -252,13 +244,13 @@ int main(void)
 
     Eigen::MatrixXd dL = dense_ldlt.matrixL();
     Eigen::MatrixXd sL = sparse_ldlt.matrixL().toDense();
-    std::cout << "diffL: \n" << (dL - sL).norm() << "\n";
-    std::cout << "diffD: \n" << (dense_ldlt.vectorD() - sparse_ldlt.vectorD()).transpose() << "\n";
+    //std::cout << "diffL: \n" << (dL - sL).norm() << "\n";
+    //std::cout << "diffD: \n" << (dense_ldlt.vectorD() - sparse_ldlt.vectorD()).transpose() << "\n";
 
-    std::cout << "pdm: " << dense_ldlt.isPositive() << "\n";
+    //std::cout << "pdm: " << dense_ldlt.isPositive() << "\n";
     Eigen::EigenSolver<dense_admm_t::kkt_mat_t> eig_solver;
     eig_solver.compute(dense_qp.m_K);
-    std::cout << "K eigen values: " << eig_solver.eigenvalues().real().transpose() << "\n";
+    //std::cout << "K eigen values: " << eig_solver.eigenvalues().real().transpose() << "\n";
 
     // solve test
     dense_admm_t::kkt_vec_t rhs, xd, xs;
@@ -267,11 +259,6 @@ int main(void)
     xd = dense_ldlt.solve(rhs);
     xs = sparse_ldlt.solve(rhs);
 
-    std::cout << "X diff: \n" << (xd - xs).transpose() << "\n";
-
-    std::cout << "x: " << xs.transpose() << "\n";
-    std::cout << "rhs: " << rhs.transpose() << "\n";
-
-
-    return EXIT_SUCCESS;
+    // compare soltions
+    EXPECT_TRUE(xd.isApprox(xs));
 }

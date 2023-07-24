@@ -10,8 +10,6 @@
 #ifndef OSQP_INTERFACE_HPP
 #define OSQP_INTERFACE_HPP
 
-#ifdef POLYMPC_FOUND_OSQP_EIGEN
-
 #include "solvers/qp_base.hpp"
 #include "OsqpEigen/OsqpEigen.h"
 
@@ -243,6 +241,3 @@ private:
 } // polympc namespace
 
 #endif
-
-
-#endif // OSQP_INTERFACE_HPP

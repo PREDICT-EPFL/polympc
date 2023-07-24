@@ -13,6 +13,8 @@
 #include "polynomials/splines.hpp"
 #include "solvers/box_admm.hpp"
 
+#include "gtest/gtest.h"
+
 #include <iomanip>
 #include <iostream>
 #include <chrono>
@@ -47,7 +49,8 @@ public:
         xs << 2.1402105301746182e00, 1.0903043613077321e00, 1.1419108442079495e02, 1.1290659291045561e02;
         us << 14.19, -1113.50;
 
-        set_time_limits(0, 150);
+        // the proces is slow, thus we set the prediction horizon to 100 seconds
+        set_time_limits(0, 100);
     }
 
     Eigen::Matrix<scalar_t, 4,4> Q;
@@ -97,8 +100,7 @@ public:
                                    const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
                                    const scalar_t &t, T &lagrange) noexcept
     {
-        lagrange = (x - xs.template cast<T>()).dot(Q.template cast<T>() * (x - xs.template cast<T>())) +
-                   (u - us.template cast<T>()).dot(R.template cast<T>() * (u - us.template cast<T>()));
+        lagrange = (x - xs).dot(Q * (x - xs)) + (u - us).dot(R * (u - us));
     }
 
     template<typename T>
@@ -106,7 +108,7 @@ public:
                                 const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
                                 const scalar_t &t, T &mayer) noexcept
     {
-        mayer = (x - xs.template cast<T>()).dot(P.template cast<T>() * (x - xs.template cast<T>()));
+        mayer = (x - xs).dot(P * (x - xs));
     }
 };
 
@@ -132,14 +134,14 @@ public:
 
 
 
-int main(void)
+TEST(ControlTests, CSTRStabilisationTest)
 {
     using admm = boxADMM<cstr_ocp::VAR_SIZE, cstr_ocp::NUM_EQ, cstr_ocp::scalar_t,
                  cstr_ocp::MATRIXFMT, linear_solver_traits<cstr_ocp::MATRIXFMT>::default_solver>;
 
     MySolver<cstr_ocp, admm> solver;
-    solver.settings().max_iter = 10;
-    solver.settings().line_search_max_iter = 10;
+    solver.settings().max_iter = 20;
+    solver.settings().line_search_max_iter = 20;
     Eigen::Matrix<double, 4, 1> init_cond; init_cond << 1.0, 0.5, 100.0, 100.0;
     Eigen::Matrix<double, 2, 1> lbu, ubu;
     lbu << 3.0, -9000.0;
@@ -156,13 +158,11 @@ int main(void)
     polympc::time_point stop = polympc::get_time();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << solver.info().status.value << "\n";
-    std::cout << "Num iterations: " << solver.info().iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
-    std::cout << "Size of the solver: " << sizeof (solver) << "\n";
-
-    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+    // std::cout << "Solve status: " << solver.info().status.value << "\n";
+    // std::cout << "Num iterations: " << solver.info().iter << "\n";
+    // std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    // std::cout << "Size of the solver: " << sizeof (solver) << "\n";
+    // std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
     // warm started iteration
     init_cond << 1.1, 0.508, 100.5, 100.1;
@@ -174,11 +174,10 @@ int main(void)
     stop = polympc::get_time();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << solver.info().status.value << "\n";
-    std::cout << "Num iterations: " << solver.info().iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    EXPECT_TRUE(solver.info().status.value == sqp_status_t::SOLVED);
 
-    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
-
-    return EXIT_SUCCESS;
+    // std::cout << "Solve status: " << solver.info().status.value << "\n";
+    // std::cout << "Num iterations: " << solver.info().iter << "\n";
+    // std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    // std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 }

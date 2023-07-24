@@ -8,19 +8,19 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "solvers/sqp_base.hpp"
+#include "solvers/box_admm.hpp"
+#include "solvers/admm.hpp"
+#include "solvers/qp_preconditioners.hpp"
 #include "polynomials/ebyshev.hpp"
+#include "polynomials/splines.hpp"
 #include "control/continuous_ocp.hpp"
 #include "control/mpc_wrapper.hpp"
-#include "polynomials/splines.hpp"
 
 #include <iomanip>
 #include <iostream>
 #include <chrono>
 
-#include "control/simple_robot_model.hpp"
-#include "solvers/box_admm.hpp"
-#include "solvers/admm.hpp"
-#include "solvers/qp_preconditioners.hpp"
+#include "gtest/gtest.h"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    3
@@ -104,25 +104,6 @@ public:
         this->problem.hessian_update_impl(hessian, x_step, grad_step);
     }
 
-    /**
-    EIGEN_STRONG_INLINE void update_linearisation_dense_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
-                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
-                                                             Eigen::Ref<nlp_variable_t> cost_grad, Eigen::Ref<nlp_hessian_t> lag_hessian,
-                                                             Eigen::Ref<nlp_jacobian_t> A,Eigen::Ref<nlp_constraints_t> b) noexcept
-    {
-        this->linearisation_dense_impl(x, p, lam, cost_grad, lag_hessian, A, b);
-        polympc::ignore_unused_var(x_step);
-    }
-
-    EIGEN_STRONG_INLINE void update_linearisation_sparse_impl(const Eigen::Ref<const nlp_variable_t>& x, const Eigen::Ref<const parameter_t>& p,
-                                                             const Eigen::Ref<const nlp_variable_t>& x_step, const Eigen::Ref<const nlp_dual_t>& lam,
-                                                             Eigen::Ref<nlp_variable_t> cost_grad, nlp_hessian_t& lag_hessian,
-                                                             nlp_jacobian_t& A, Eigen::Ref<nlp_constraints_t> b) noexcept
-    {
-        this->linearisation_sparse_impl(x, p, lam, cost_grad, lag_hessian, A, b);
-        polympc::ignore_unused_var(x_step);
-    }
-    */
 };
 
 
@@ -136,7 +117,7 @@ using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
 
-int main(void)
+TEST(ControlTests, MPCWrapperTest)
 {
     using mpc_t = MPC<RobotOCP, MySolver, box_admm_solver>;
     mpc_t mpc;
@@ -155,56 +136,64 @@ int main(void)
     mpc.control_bounds(lbu, ubu);
     mpc.initial_conditions(x0);
 
-    polympc::time_point start = polympc::get_time();
+    // polympc::time_point start = polympc::get_time();
     mpc.solve();
-    polympc::time_point stop = polympc::get_time();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // polympc::time_point stop = polympc::get_time();
+    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "MPC status: " << mpc.info().status.value << "\n";
-    std::cout << "Num iterations: " << mpc.info().iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    int first_solve_iter = mpc.info().iter;
+    EXPECT_TRUE(mpc.info().status.value == sqp_status_t::SOLVED);
 
-    std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
-    std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
+    // std::cout << "MPC status: " << mpc.info().status.value << "\n";
+    // std::cout << "Num iterations: " << mpc.info().iter << "\n";
+    // std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+
+    // std::cout << "Solution X: " << mpc.solution_x().transpose() << "\n";
+    // std::cout << "Solution U: " << mpc.solution_u().transpose() << "\n";
 
     // warm started iteration
     x0 << 0.3, 0.4, 0.5;
     mpc.initial_conditions(x0, x0);
 
-    start = polympc::get_time();
+    // start = polympc::get_time();
     mpc.solve();
-    stop = polympc::get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // stop = polympc::get_time();
+    // duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << mpc.info().status.value << "\n";
-    std::cout << "Num iterations: " << mpc.info().iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+    int second_solve_iter = mpc.info().iter;
 
-    std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
-    std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
+    EXPECT_LT(second_solve_iter, first_solve_iter);
+    EXPECT_TRUE(mpc.info().status.value == sqp_status_t::SOLVED);
+
+    // std::cout << "Solve status: " << mpc.info().status.value << "\n";
+    // std::cout << "Num iterations: " << mpc.info().iter << "\n";
+    // std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+
+    // std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
+    // std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
 
     // sample x solution at collocation points [0, 5, 10]
-    std::cout << "x[0]: " << mpc.solution_x_at(0).transpose() << "\n";
-    std::cout << "x[5]: " << mpc.solution_x_at(5).transpose() << "\n";
-    std::cout << "x[10]: " << mpc.solution_x_at(10).transpose() << "\n";
+    mpc_t::state_t x_0 = mpc.solution_x_at(0);
+    mpc_t::state_t x_5 = mpc.solution_x_at(5);
+    mpc_t::state_t x_10 = mpc.solution_x_at(10);
 
-    std::cout << " ------------------------------------------------ \n";
+    // sample x solution at the time instants corresponding to the 0th, 5th and 10th grid points (using polynomial interpolation)
+    mpc_t::state_t x_t0 = mpc.solution_x_at(0.0);
+    mpc_t::state_t x_t5 = mpc.solution_x_at(0.666);
+    mpc_t::state_t x_t10 = mpc.solution_x_at(1.333);
 
-    //sample control at collocation points
-    std::cout << "u[0]: " << mpc.solution_u_at(0).transpose() << "\n";
-    std::cout << "u[1]: " << mpc.solution_u_at(1).transpose() << "\n";
+    EXPECT_TRUE(x_0.isApprox(x_t0, 1e-3));
+    EXPECT_TRUE(x_5.isApprox(x_t5, 1e-3));
+    EXPECT_TRUE(x_10.isApprox(x_t10, 1e-3));
 
-    std::cout << " ------------------------------------------------ \n";
+    // sample control at collocation points 0 and 1
+    mpc_t::control_t u_0 = mpc.solution_u_at(0);
+    mpc_t::control_t u_1 = mpc.solution_u_at(1);
 
-    // sample state at time 't'
-    std::cout << "x(0.0): " << mpc.solution_x_at(0.0).transpose() << "\n";
-    std::cout << "x(0.5): " << mpc.solution_x_at(0.5).transpose() << "\n";
+    // sample u solution at the time instants corresponding to the 0th and 1st grid points (using polynomial interpolation)
+    mpc_t::control_t u_t0 = mpc.solution_u_at(0.0);
+    mpc_t::control_t u_t1 = mpc.solution_u_at(0.063);
 
-    std::cout << " ------------------------------------------------ \n";
-
-    //  sample control at time 't'
-    std::cout << "u(0.0): " << mpc.solution_u_at(0.0).transpose() << "\n";
-    std::cout << "u(0.5): " << mpc.solution_u_at(0.5).transpose() << "\n";
-
-    return EXIT_SUCCESS;
+    EXPECT_TRUE(u_0.isApprox(u_t0, 1e-3));
+    EXPECT_TRUE(u_1.isApprox(u_t1, 1e-3));
 }

@@ -8,6 +8,7 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "solvers/sqp_base.hpp"
+#include "solvers/box_admm.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "control/continuous_ocp.hpp"
 #include "control/mpc_wrapper.hpp"
@@ -17,8 +18,7 @@
 #include <iostream>
 #include <chrono>
 
-#include "control/simple_robot_model.hpp"
-#include "solvers/box_admm.hpp"
+#include "gtest/gtest.h"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    2
@@ -48,19 +48,6 @@ public:
 
         polympc::ignore_unused_var(t);
     }
-
-    /**
-    template<typename T>
-    inline void lagrange_term_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
-                                   const Eigen::Ref<const parameter_t<T>> p, const Eigen::Ref<const static_parameter_t> d,
-                                   const scalar_t &t, T &lagrange) noexcept
-    {
-        Eigen::Matrix<T,3,3> Qm = Q.toDenseMatrix().template cast<T>();
-        Eigen::Matrix<T,2,2> Rm = R.toDenseMatrix().template cast<T>();
-
-        lagrange = x.dot(Qm * x) + u.dot(Rm * u);
-    }
-    */
 
     template<typename T>
     inline void mayer_term_impl(const Eigen::Ref<const state_t<T>> x, const Eigen::Ref<const control_t<T>> u,
@@ -156,11 +143,11 @@ public:
 };
 
 
-int main(void)
+TEST(ControlTests, MinimumTimeValetParkingTest)
 {
     using mpc_t = MPC<ParkingOCP, Solver>;
     mpc_t mpc;
-    mpc.settings().max_iter = 10;
+    mpc.settings().max_iter = 20;
     mpc.settings().line_search_max_iter = 10;
 
     // problem data
@@ -183,18 +170,19 @@ int main(void)
 
     mpc.initial_conditions(x0);
 
-    polympc::time_point start = polympc::get_time();
+//    polympc::time_point start = polympc::get_time();
     mpc.solve();
-    polympc::time_point stop = polympc::get_time();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+//    polympc::time_point stop = polympc::get_time();
+//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "MPC status: " << mpc.info().status.value << "\n";
-    std::cout << "Num iterations: " << mpc.info().iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
-    std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
-    std::cout << "Solution P: \n" << mpc.solution_p() << "\n";
-    std::cout << "Solution Y: \n" << mpc.solver().dual_solution().transpose() << "\n";
+//    std::cout << "MPC status: " << mpc.info().status.value << "\n";
+//    std::cout << "Num iterations: " << mpc.info().iter << "\n";
+//    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+//    std::cout << "Solution X: \n" << mpc.solution_x_reshaped() << "\n";
+//    std::cout << "Solution U: \n" << mpc.solution_u_reshaped() << "\n";
+//    std::cout << "Solution P: \n" << mpc.solution_p() << "\n";
+//    std::cout << "Solution Y: \n" << mpc.solver().dual_solution().transpose() << "\n";
 
-    return EXIT_SUCCESS;
+    EXPECT_TRUE(mpc.info().status.value == sqp_status_t::SOLVED);
+    EXPECT_LT(mpc.info().iter, mpc.settings().max_iter);
 }

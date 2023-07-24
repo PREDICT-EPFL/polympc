@@ -7,7 +7,6 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "solvers/sqp_base.hpp"
 #include "polynomials/ebyshev.hpp"
 #include "control/continuous_ocp.hpp"
 #include "polynomials/splines.hpp"
@@ -16,16 +15,13 @@
 #include <iostream>
 #include <chrono>
 
-#include "control/simple_robot_model.hpp"
 #include "solvers/box_admm.hpp"
 #include "solvers/admm.hpp"
 #include "solvers/qp_preconditioners.hpp"
 #include "solvers/line_search.hpp"
+#include "solvers/sqp_base.hpp"
 
-#ifdef POLYMPC_FOUND_OSQP_EIGEN
-#include "solvers/osqp_interface.hpp"
-#include "solvers/qpmad_interface.hpp"
-#endif
+#include "gtest/gtest.h"
 
 #define test_POLY_ORDER 5
 #define test_NUM_SEG    3
@@ -114,7 +110,7 @@ public:
 
     LSFilter<scalar_t> filter;
 
-    /** change step size selection algorithm  : filter line search */
+    /** change step size selection algorithm  : filter line search instead of the default l1-merit function */
     scalar_t step_size_selection_impl(const Ref<const nlp_variable_t>& p) noexcept
     {
         const scalar_t tau = this->m_settings.tau; // line search step decrease, 0 < tau < settings.tau
@@ -184,7 +180,7 @@ using box_admm_solver = boxADMM<RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::
 using preconditioner_t = polympc::RuizEquilibration<RobotOCP::scalar_t, RobotOCP::VAR_SIZE, RobotOCP::NUM_EQ, RobotOCP::MATRIXFMT>;
 
 
-int main(void)
+TEST(ControlTests, ValetParkingTest)
 {
     MySolver<RobotOCP, box_admm_solver, preconditioner_t> solver;
     solver.get_problem().set_Q_coeff(1.0);
@@ -204,135 +200,42 @@ int main(void)
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
 
-    polympc::time_point start = polympc::get_time();
+    // polympc::time_point start = polympc::get_time();
     solver.solve();
-    polympc::time_point stop = polympc::get_time();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // polympc::time_point stop = polympc::get_time();
+    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << solver.info().status.value << "\n";
-    std::cout << "Num iterations: " << solver.info().iter << "\n";
-    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
-              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
-    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    std::cout << "Size of the solver: " << sizeof (solver) << "\n";
-    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+//    std::cout << "Solve status: " << solver.info().status.value << "\n";
+//    std::cout << "Num iterations: " << solver.info().iter << "\n";
+//    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+//              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
+//    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
+//    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+//    std::cout << "Size of the solver: " << sizeof (solver) << "\n";
+//    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+
+    EXPECT_TRUE(solver.info().status.value == sqp_status_t::SOLVED);
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 
     // warm started iteration
     init_cond << 0.3, 0.4, 0.45;
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
 
-    start = polympc::get_time();
+    // start = polympc::get_time();
     solver.solve();
-    stop = polympc::get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // stop = polympc::get_time();
+    // duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << solver.info().status.value << "\n";
-    std::cout << "Num iterations: " << solver.info().iter << "\n";
-    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
-              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
-    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+//    std::cout << "Solve status: " << solver.info().status.value << "\n";
+//    std::cout << "Num iterations: " << solver.info().iter << "\n";
+//    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+//              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
+//    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
+//    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+//    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
-
-
-    /**
-    MySolver<RobotOCP, admm_solver>::nlp_hessian_t H((int)RobotOCP::VAR_SIZE, (int)RobotOCP::VAR_SIZE);
-    MySolver<RobotOCP, admm_solver>::nlp_variable_t h, lbx, ubx;
-    MySolver<RobotOCP, admm_solver>::nlp_eq_jacobian_t A_eq((int)RobotOCP::NUM_EQ, (int)RobotOCP::VAR_SIZE);
-    MySolver<RobotOCP, admm_solver>::nlp_constraints_t b_eq;
-    MySolver<RobotOCP, admm_solver>::nlp_constraints_t Alb, Aub;
-    Eigen::Matrix<RobotOCP::scalar_t, RobotOCP::DUAL_SIZE, RobotOCP::VAR_SIZE> A;
-    solver.parameters()(0) = 2.0;
-
-    // compute QP
-    solver.linearisation(solver.m_x, solver.m_p, solver.m_lam, h, H, A_eq, b_eq);
-    lbx = solver.lower_bound_x() - solver.m_x;
-    ubx = solver.upper_bound_x() - solver.m_x;
-    //lbx = MySolver<RobotOCP, admm_solver>::nlp_variable_t::Constant(-MySolver<RobotOCP, admm_solver>::INF);
-    //ubx = MySolver<RobotOCP, admm_solver>::nlp_variable_t::Constant( MySolver<RobotOCP, admm_solver>::INF);
-    Aub = -b_eq;
-    Alb = -b_eq;
-
-    preconditioner_t preconditioner;
-    preconditioner.compute(H, h, A_eq, Alb, Aub, lbx, ubx);
-
-    // instantiate OSQP and QPMAD solvers
-    osqp_solver_t osqp_solver;
-    //osqp_solver.settings().scaling = 10;
-    //osqp_solver.settings().scaled_termination = true;
-    qpmad_solver_t qpmad_solver;
-
-    // create new ADMM solver
-    admm_solver new_admm;
-    auto start = get_time();
-    new_admm.solve(H, h, A_eq, Alb, Aub, lbx, ubx);
-    auto stop = get_time();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    std::cout << "QP status: " << new_admm.info().status << " iterations: " << new_admm.info().iter
-              << " size: " << sizeof (new_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
-    new_admm.solve(H, h, A_eq, Alb, Aub, lbx, ubx);
-
-    auto admm_primal = new_admm.primal_solution();
-    auto admm_dual   = new_admm.dual_solution();
-
-    preconditioner.unscale(H, h, A_eq, Alb, Aub, lbx, ubx);
-
-    // create box ADMM solver
-    box_admm_solver box_admm;
-    start = get_time();
-    box_admm.solve(H, h, A_eq, Alb, Aub, lbx, ubx);
-    stop = get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-    std::cout << "Box QP status: " << box_admm.info().status << " iterations: " << box_admm.info().iter
-              << " size: " << sizeof (box_admm) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
-    auto b_admm_primal = box_admm.primal_solution();
-    auto b_admm_dual   = box_admm.dual_solution();
-
-    preconditioner.unscale(admm_primal, admm_dual);
-
-
-    // solve with OSQP
-    start = get_time();
-    osqp_solver.solve(H, h, A_eq, Alb, Aub, lbx, ubx);
-    stop = get_time();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-    std::cout << "OSQP status: " << osqp_solver.info().status << " iterations: " << osqp_solver.info().iter
-              << " size: " << sizeof (osqp_solver) << " time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-
-    auto osqp_primal = osqp_solver.primal_solution();
-    auto osqp_dual   = osqp_solver.dual_solution();
-
-    std::cout << "Box ADMM (dual): \n" << b_admm_dual.transpose() << "\n";
-    std::cout << "OSQP (dual): \n" << osqp_dual.transpose() << "\n";
-    std::cout << "Solvers error: " <<  (admm_primal - b_admm_primal).template lpNorm<Eigen::Infinity>() << "\n";
-    std::cout << "Solvers error (dual): " <<  (b_admm_dual - osqp_dual).template lpNorm<Eigen::Infinity>() << "\n";
-    std::cout << "Dual residual: " << (admm_dual - osqp_dual).template lpNorm<Eigen::Infinity>() << "\n";
-    */
-
-    /** test filter */
-    /**
-    LSFilter<RobotOCP::scalar_t> filter;
-    filter.add(1, 3);
-    filter.add(3, 2.5);
-    filter.add(4, 2);
-    filter.add(5, 1);
-    filter.print();
-
-    std::cout << "Is (6 , 3) acceptable: " << filter.is_acceptable(6, 3) << "\n";
-    std::cout << "Is (2 , 1) acceptable: " << filter.is_acceptable(2, 1) << "\n";
-
-    filter.add(0.5, 2);
-    //filter.add(0.5, 0.5);
-    filter.print();
-    */
-
-    return EXIT_SUCCESS;
+    EXPECT_TRUE(solver.info().status.value == sqp_status_t::SOLVED);
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
 

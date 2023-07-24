@@ -92,9 +92,6 @@ TEST(SQPTestCase, TestConstrainedRosenbrock)
 
     x = solver.primal_solution();
 
-    std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "Solution " << x.transpose() << std::endl;
-
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
@@ -134,9 +131,6 @@ TEST(SQPTestCase, TestRosenbrock) {
     solver.solve(x0, y0);
 
     x = solver.primal_solution();
-
-    std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
@@ -186,9 +180,6 @@ TEST(SQPTestCase, TestSimpleNLP)
     solver.solve(x0, y0);
 
     x = solver.primal_solution();
-
-    std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);
@@ -249,9 +240,6 @@ TEST(SQPTestCase, TestHS071)
     solver.solve(x0, y0);
 
     x = solver.primal_solution();
-
-    std::cout << "iter " << solver.info().iter << std::endl;
-    std::cout << "Solution " << x.transpose() << std::endl;
 
     EXPECT_TRUE(x.isApprox(problem.SOLUTION, 1e-2));
     EXPECT_LT(solver.info().iter, solver.settings().max_iter);

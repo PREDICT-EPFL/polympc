@@ -12,8 +12,8 @@ Information on installation, algorithms and API can be found here: [polympc.rtfd
 
 ## Description
 
-PolyMPC is an open-source software tool for the pseudospectral collocation-based real-time model predictive control.  The tool relies on the CasADi and Eigen frameworks which makes it easier to integrate the tool into existing projects since there is no need to reimplement existing mathematical models using some framework-specific modeling language. Furthermore, a user is not tied to using the implemented predictive controllers but rather is free to utilize each of the software modules independently. Namely, to obtain the functors to evaluate collocated differential equations, approximated integral together with their derivatives, or simply use available integration routines.
+PolyMPC an open-source C++ library for real-time embedded nonlinear optimal control that combines high computational performance, modularity and a simple and intuitive user interface. PolyMPC is a lightweight collection of optimised and loosely coupled tools for nonlinear optimisation and optimal control which includes several quadratic programming (QP) and nonlinear programming (NLP) solvers, quasi-Newton Hessian approximation and Hessian regularisation methods, a polynomial interpolation and approximation module and an implementation of the Chebyshev pseudospectral collocation method, a continuous algebraic Riccati equation (CARE) solver, linear quadratic regulator (LQR), and more.
 
 
 ## Contact
-plistov@gmail.com
+Petr Listov - plistov@gmail.com

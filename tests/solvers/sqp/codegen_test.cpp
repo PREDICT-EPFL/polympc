@@ -28,6 +28,9 @@
 #include <iomanip>
 #include <functional>
 
+// test
+#include "gtest/gtest.h"
+
 static void allocate_sparse_matrix_codegen(casadi_int& rows, casadi_int& cols, casadi_int& nnz, int* &outter, int* &inner,
                                            casadi_real** &values, const std::function<const casadi_int*(casadi_int)>& sparsity_info)
 {
@@ -396,47 +399,9 @@ public:
 };
 
 
-
-int main(void)
+TEST(SQPTestCase, TestCodegenRobotProblem)
 {
-    MobileRobotCG problem;
-
-    MobileRobotCG::nlp_variable_t x = MobileRobotCG::nlp_variable_t::Ones();
-    MobileRobotCG::nlp_dual_t lam = MobileRobotCG::nlp_dual_t::Ones();
-    MobileRobotCG::nlp_eq_constraints_t ge;
-    MobileRobotCG::nlp_jacobian_t jac_ge;
-    MobileRobotCG::static_parameter_t p;
-    MobileRobotCG::scalar_t cost = 0.0;
-    MobileRobotCG::scalar_t lagrangian = 0.0;
-    MobileRobotCG::nlp_variable_t lag_gradient, cost_gradient;
-    MobileRobotCG::nlp_hessian_t cost_hessian, lag_hessian;
-
-
-    problem.cost(x, p, cost);
-    std::cout << "cost: " << cost << "\n";
-
-    problem.cost_gradient(x, p, cost, cost_gradient);
-    std::cout << "cost gradient: " << cost_gradient.transpose() << "\n";
-
-    problem.cost_gradient_hessian(x, p, cost, cost_gradient, cost_hessian);
-    //std::cout << "cost hessian: \n" << cost_hessian << "\n";
-
-    problem.equalities(x, p, ge);
-    //problem.constraints_linearised(x, p, ge, jac_ge);
-    std::cout << "eq constraints: " << ge.transpose() << "\n";
-    //std::cout << "Jacobian: \n" << jac_ge << "\n";
-
-    problem.lagrangian(x, p, lam, lagrangian);
-    std::cout << "lagrangian: " << lagrangian << "\n";
-
-    problem.lagrangian_gradient(x,p,lam, lagrangian, lag_gradient);
-    std::cout << "lagrangian gradient: " << lag_gradient.transpose() << "\n";
-
-    problem.lagrangian_gradient_hessian(x,p,lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, ge, jac_ge);
-    std::cout << "lagrangian hessian: \n" << lag_hessian << "\n";
-
     /** Test the SQP solver */
-
     Solver<MobileRobotCG> solver;
     solver.settings().max_iter = 10;
     solver.settings().line_search_max_iter = 10;
@@ -451,23 +416,23 @@ int main(void)
     solver.upper_bound_x().segment(30, 3) = init_cond;
     solver.lower_bound_x().segment(30, 3) = init_cond;
 
-    polympc::time_point start = polympc::get_time();
+    //polympc::time_point start = polympc::get_time();
     solver.solve();
-    polympc::time_point stop = polympc::get_time();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    //polympc::time_point stop = polympc::get_time();
+    //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    std::cout << "Solve status: " << solver.info().status.value << "\n";
-    std::cout << "Num iterations: " << solver.info().iter << "\n";
-    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
-              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
-    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
-    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
-    std::cout << "Size of the solver: " << sizeof (solver) << "\n";
-    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
+//    std::cout << "Solve status: " << solver.info().status.value << "\n";
+//    std::cout << "Num iterations: " << solver.info().iter << "\n";
+//    std::cout << "Primal residual: " << solver.primal_norm() << " | dual residual: " << solver.dual_norm()
+//              << " | constraints  violation: " << solver.constr_violation() << " | cost: " << solver.cost() <<"\n";
+//    std::cout << "Num of QP iter: " << solver.info().qp_solver_iter << "\n";
+//    std::cout << "Solve time: " << std::setprecision(9) << static_cast<double>(duration.count()) << "[mc] \n";
+//    std::cout << "Size of the solver: " << sizeof (solver) << "\n";
+//    std::cout << "Solution: " << solver.primal_solution().transpose() << "\n";
 
-    return EXIT_SUCCESS;
+    EXPECT_TRUE(solver.info().status.value == sqp_status_t::SOLVED);
+    EXPECT_LT(solver.info().iter, solver.settings().max_iter);
 }
-
 
 
 

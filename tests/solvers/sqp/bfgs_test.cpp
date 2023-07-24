@@ -39,7 +39,6 @@ TEST(BFGSTestCase, Test2D_posdef) {
         EXPECT_TRUE(is_posdef(B));
     }
 
-    std::cout << "B\n" << B << std::endl;
     EXPECT_TRUE(B.isApprox(H, 1e-3));
 }
 
@@ -63,7 +62,6 @@ TEST(BFGSTestCase, Test2D_indefinite) {
 
         EXPECT_TRUE(is_posdef(B));
     }
-    std::cout << "B\n" << B << std::endl;
 }
 
 #if 0 // suspended for now, see issue #13

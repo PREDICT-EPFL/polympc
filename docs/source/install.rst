@@ -11,12 +11,6 @@ For the latest version, clone the git repository
 
 .. code-block:: bash
 
-    git clone https://gitlab.epfl.ch/listov/polympc.git
-
-Or on our GitHub mirror
-
-.. code-block:: bash
-
     git clone https://github.com/LA-EPFL/polympc.git
 
 .. _section-dependencies:
